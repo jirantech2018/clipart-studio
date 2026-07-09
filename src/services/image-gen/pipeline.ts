@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { primaryAdapter, applyDiversityHint, mergePrompt } from '@/services/image-gen';
 import { putObject } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
+import { taggingAdapter } from '@/services/tagging';
 
 import type { GenerationJob, SchoolProfile } from '@/types/domain';
 
@@ -73,5 +74,47 @@ export async function runOne({
 
   if (error) throw new Error(`insert images failed: ${error.message}`);
 
+  // Best-effort auto-tagging. Failure MUST NOT fail the image itself — the user
+  // already paid a credit and got the R2 asset. Log and move on.
+  await runTagging({
+    supabase,
+    imageId,
+    prompt: job.prompt,
+    schoolContext: schoolProfile?.styleDesc ?? null,
+  }).catch((err: unknown) => {
+    console.error(
+      `[pipeline] tagging failed for image ${imageId}:`,
+      err instanceof Error ? err.stack ?? err.message : err,
+    );
+  });
+
   return { imageId, r2Key, order };
+}
+
+interface RunTaggingParams {
+  supabase: ReturnType<typeof createSupabaseServiceClient>;
+  imageId: string;
+  prompt: string;
+  schoolContext: string | null;
+}
+
+async function runTagging({
+  supabase,
+  imageId,
+  prompt,
+  schoolContext,
+}: RunTaggingParams): Promise<void> {
+  const result = await taggingAdapter().tag({ prompt, schoolContext });
+
+  if (result.tags.length > 0) {
+    const rows = result.tags.map((tag) => ({ image_id: imageId, tag }));
+    const { error: tagErr } = await supabase.from('image_tags').insert(rows);
+    if (tagErr) throw new Error(`insert image_tags failed: ${tagErr.message}`);
+  }
+
+  if (result.categories.length > 0) {
+    const rows = result.categories.map((category) => ({ image_id: imageId, category }));
+    const { error: catErr } = await supabase.from('image_categories').insert(rows);
+    if (catErr) throw new Error(`insert image_categories failed: ${catErr.message}`);
+  }
 }

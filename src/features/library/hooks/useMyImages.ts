@@ -12,6 +12,8 @@ export type LibrarySort = 'newest' | 'oldest';
 
 export interface LibraryImage extends Image {
   thumbnailUrl: string;
+  tags: string[];
+  categories: string[];
 }
 
 interface ListResponse {

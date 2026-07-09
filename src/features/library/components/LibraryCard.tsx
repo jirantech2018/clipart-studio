@@ -70,6 +70,30 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
         <p className="line-clamp-2 text-xs text-muted-foreground" title={image.prompt}>
           {image.prompt}
         </p>
+        {image.categories.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {image.categories.map((cat) => (
+              <span
+                key={cat}
+                className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+              >
+                {cat}
+              </span>
+            ))}
+          </div>
+        )}
+        {image.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {image.tags.slice(0, 5).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2">
           <Button
             type="button"

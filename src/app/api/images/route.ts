@@ -1,5 +1,5 @@
-// Design Ref: §5.4 Library Page — filter bar (전체/저장됨/Pending/공개중), sort (최신/오래된)
-// Plan SC: FR-08 saved library, FR-11 pending 24h TTL badge
+// Design Ref: §5.4 Library Page — filter bar + sort + card metadata (tags, categories)
+// Uses PostgREST embedded resource syntax so tags/categories come back in one round-trip.
 
 import { z } from 'zod';
 
@@ -16,13 +16,17 @@ const querySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-interface ImageWithThumb extends Image {
+interface ImageWithMeta extends Image {
   thumbnailUrl: string;
+  tags: string[];
+  categories: string[];
 }
 
-function rowToImage(row: Record<string, unknown>): ImageWithThumb {
+function rowToImage(row: Record<string, unknown>): ImageWithMeta {
   const r2Key = row.r2_key as string;
   const thumbnailKey = (row.thumbnail_r2_key as string) ?? r2Key;
+  const rawTags = (row.image_tags as Array<{ tag: string }> | null) ?? [];
+  const rawCats = (row.image_categories as Array<{ category: string }> | null) ?? [];
   return {
     id: row.id as string,
     userId: row.user_id as string,
@@ -44,6 +48,8 @@ function rowToImage(row: Record<string, unknown>): ImageWithThumb {
     pendingExpiresAt: (row.pending_expires_at as string) ?? null,
     createdAt: row.created_at as string,
     thumbnailUrl: publicUrl(thumbnailKey),
+    tags: rawTags.map((t) => t.tag),
+    categories: rawCats.map((c) => c.category),
   };
 }
 
@@ -70,13 +76,12 @@ export async function GET(request: Request) {
   const { filter, sort, limit, offset } = parsed.data;
   let query = supabase
     .from('images')
-    .select('*', { count: 'exact' })
+    .select('*, image_tags(tag), image_categories(category)', { count: 'exact' })
     .eq('user_id', user.id);
 
   // All library images are 'saved' by policy (no pending/discarded lifecycle).
   query = query.eq('status', 'saved');
   if (filter === 'public') query = query.eq('is_public', true);
-  // 'all' — no additional filter beyond owner-scoped saved images
 
   query = query
     .order('created_at', { ascending: sort === 'oldest' })
