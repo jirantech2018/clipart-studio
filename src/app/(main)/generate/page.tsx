@@ -22,7 +22,11 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
   if (!user) redirect('/login');
 
   const [{ data: profile }, { data: schoolProfile }] = await Promise.all([
-    supabase.from('profiles').select('credits').eq('id', user.id).single(),
+    supabase
+      .from('profiles')
+      .select('credits, credits_reset_at')
+      .eq('id', user.id)
+      .single(),
     supabase.from('school_profiles').select('school_name').eq('user_id', user.id).maybeSingle(),
   ]);
 
@@ -54,6 +58,7 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
           hasSchoolProfile={!!schoolProfile}
           schoolName={(schoolProfile?.school_name as string) ?? null}
           initialCredits={profile?.credits ?? 0}
+          creditsResetAt={(profile?.credits_reset_at as string) ?? null}
           parent={parent}
         />
       </div>

@@ -3,6 +3,7 @@
 // Design Ref: §5.4 Community card — thumbnail + AuthorBadge + tags/categories + download
 // Non-Negotiable Rule 3: AI 라벨 필수
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -16,6 +17,7 @@ import { requestDownload } from '@/features/library/hooks/useMyImages';
 import type { CommunityImage } from '@/features/community/hooks/useCommunity';
 
 export function CommunityCard({ image }: { image: CommunityImage }) {
+  const queryClient = useQueryClient();
   const [downloading, setDownloading] = useState(false);
 
   async function handleDownload() {
@@ -30,6 +32,8 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      // Bump download_count in the UI so popular sort feels responsive.
+      queryClient.invalidateQueries({ queryKey: ['community'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '다운로드 실패');
     } finally {

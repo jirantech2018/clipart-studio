@@ -3,6 +3,7 @@
 // Design Ref: §5.4 Onboarding Wizard checklist
 // Plan SC: FR-03 (Optional School Profile branch) + account_type selection
 
+import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -14,6 +15,19 @@ import { cn } from '@/lib/utils';
 import { ACCOUNT_TYPE_LABELS } from '@/types/domain';
 
 import type { AccountType } from '@/types/domain';
+
+function BackButton({ onClick, label = '이전' }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
 
 const ACCOUNT_ORDER: AccountType[] = ['teacher', 'student', 'school', 'school_staff', 'general'];
 const DESCRIPTIONS: Record<AccountType, string> = {
@@ -50,69 +64,78 @@ export function OnboardingWizard() {
 
   if (step === 'account') {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>당신은 어떤 사용자인가요?</CardTitle>
-          <CardDescription>선택은 언제든 프로필에서 변경할 수 있습니다</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {ACCOUNT_ORDER.map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setAccountType(type)}
-              className={cn(
-                'flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent',
-                accountType === type && 'border-primary bg-accent',
-              )}
+      <div className="space-y-3">
+        <BackButton onClick={() => router.push('/')} label="홈으로" />
+        <Card>
+          <CardHeader>
+            <CardTitle>당신은 어떤 사용자인가요?</CardTitle>
+            <CardDescription>선택은 언제든 프로필에서 변경할 수 있습니다</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {ACCOUNT_ORDER.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setAccountType(type)}
+                className={cn(
+                  'flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent',
+                  accountType === type && 'border-primary bg-accent',
+                )}
+              >
+                <div className="flex-1">
+                  <p className="font-medium">{ACCOUNT_TYPE_LABELS[type]}</p>
+                  <p className="text-sm text-muted-foreground">{DESCRIPTIONS[type]}</p>
+                </div>
+              </button>
+            ))}
+            <Button
+              className="w-full"
+              disabled={!accountType || saving}
+              onClick={() => saveAccountType('ask-school')}
             >
-              <div className="flex-1">
-                <p className="font-medium">{ACCOUNT_TYPE_LABELS[type]}</p>
-                <p className="text-sm text-muted-foreground">{DESCRIPTIONS[type]}</p>
-              </div>
-            </button>
-          ))}
-          <Button
-            className="w-full"
-            disabled={!accountType || saving}
-            onClick={() => saveAccountType('ask-school')}
-          >
-            다음
-          </Button>
-        </CardContent>
-      </Card>
+              다음
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (step === 'ask-school') {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>학교 컨텍스트가 있으신가요?</CardTitle>
-          <CardDescription>
-            학교 스타일을 프롬프트에 자동 주입하는 기능을 사용할지 결정합니다.
-            나중에 추가할 수도 있습니다.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3">
-          <Button variant="outline" onClick={() => router.push('/')}>
-            나중에 설정
-          </Button>
-          <Button onClick={() => setStep('school-form')}>지금 등록</Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-3">
+        <BackButton onClick={() => setStep('account')} />
+        <Card>
+          <CardHeader>
+            <CardTitle>학교 컨텍스트가 있으신가요?</CardTitle>
+            <CardDescription>
+              학교 스타일을 프롬프트에 자동 주입하는 기능을 사용할지 결정합니다.
+              나중에 추가할 수도 있습니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <Button variant="outline" onClick={() => router.push('/')}>
+              나중에 설정
+            </Button>
+            <Button onClick={() => setStep('school-form')}>지금 등록</Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (step === 'school-form') {
     return (
-      <SchoolProfileForm
-        initial={null}
-        onSaved={() => {
-          toast.success('School Profile이 등록되었습니다');
-          router.push('/');
-        }}
-      />
+      <div className="space-y-3">
+        <BackButton onClick={() => setStep('ask-school')} />
+        <SchoolProfileForm
+          initial={null}
+          onSaved={() => {
+            toast.success('School Profile이 등록되었습니다');
+            router.push('/');
+          }}
+        />
+      </div>
     );
   }
 

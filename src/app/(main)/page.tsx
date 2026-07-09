@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { buttonVariants } from '@/components/ui/button';
 import { HomeSection } from '@/features/community/components/HomeSection';
+import { TutorialOverlay } from '@/features/onboarding/components/TutorialOverlay';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -49,6 +50,7 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-10">
+      <TutorialOverlay />
       <section className="space-y-4 pt-8 text-center">
         <h1 className="text-4xl font-bold tracking-tight">
           찾고, 없으면 만들고, 만들면 계정의 자산이 됩니다

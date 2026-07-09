@@ -39,13 +39,30 @@ interface GenerationFormProps {
   hasSchoolProfile: boolean;
   schoolName: string | null;
   initialCredits: number;
+  creditsResetAt?: string | null;
   parent?: ParentInfo | null;
+}
+
+function formatResetDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function daysUntil(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / (24 * 3_600_000));
 }
 
 export function GenerationForm({
   hasSchoolProfile,
   schoolName,
   initialCredits,
+  creditsResetAt,
   parent,
 }: GenerationFormProps) {
   const router = useRouter();
@@ -222,6 +239,23 @@ export function GenerationForm({
               선택한 청크 수만큼 스타일/구도 힌트를 추가로 주입합니다.
             </p>
           </div>
+
+          {insufficient && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-900 dark:text-amber-200">
+              지금 배치({batchSize}장)를 만들 크레딧이 부족해요.{' '}
+              {creditsResetAt && daysUntil(creditsResetAt) !== null ? (
+                <>
+                  <span className="font-semibold">
+                    {formatResetDate(creditsResetAt)}
+                  </span>
+                  (D-{daysUntil(creditsResetAt)})에 30 크레딧이 다시 지급됩니다.
+                </>
+              ) : (
+                <>다음 리셋 예정일은 프로필에서 확인할 수 있어요.</>
+              )}
+              {batchSize > 5 && ' 배치 크기를 5로 낮추면 지금 바로 생성할 수 있어요.'}
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
             <div className="text-sm">
