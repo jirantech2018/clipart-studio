@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, Image as ImageIcon, School, Sparkles, Users } from 'lucide-react';
+import { Home, Image as ImageIcon, School, Shield, Sparkles, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -13,7 +13,12 @@ const NAV_ITEMS = [
   { href: '/generate', label: 'AI 생성', icon: Sparkles },
 ];
 
-export function AppSidebar({ hasSchoolProfile }: { hasSchoolProfile: boolean }) {
+interface AppSidebarProps {
+  hasSchoolProfile: boolean;
+  isAdmin: boolean;
+}
+
+export function AppSidebar({ hasSchoolProfile, isAdmin }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -53,6 +58,21 @@ export function AppSidebar({ hasSchoolProfile }: { hasSchoolProfile: boolean }) 
           <School className="h-4 w-4" aria-hidden="true" />
           {hasSchoolProfile ? 'School Profile' : 'School Profile 추가'}
         </Link>
+
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className={cn(
+              'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              pathname === '/admin'
+                ? 'bg-accent text-accent-foreground'
+                : 'text-primary hover:bg-accent',
+            )}
+          >
+            <Shield className="h-4 w-4" aria-hidden="true" />
+            관리자 · 학습 공간
+          </Link>
+        )}
       </nav>
     </aside>
   );

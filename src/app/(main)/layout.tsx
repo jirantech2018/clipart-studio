@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { AppHeader } from '@/components/layout/AppHeader';
 import { AppSidebar } from '@/components/layout/AppSidebar';
+import { isAdmin } from '@/lib/admin';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
 import type { PropsWithChildren } from 'react';
@@ -38,7 +39,7 @@ export default async function MainLayout({ children }: PropsWithChildren) {
         creditsResetAt={profile?.credits_reset_at ?? null}
       />
       <div className="flex flex-1">
-        <AppSidebar hasSchoolProfile={!!schoolProfile} />
+        <AppSidebar hasSchoolProfile={!!schoolProfile} isAdmin={isAdmin(user.email)} />
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>

@@ -61,8 +61,15 @@ export async function runOne({
 }: RunOneParams): Promise<PipelineResult> {
   const adapter = primaryAdapter();
 
+  // Admin-controlled global directive (Korean-context enforcement). Prepended to
+  // every prompt including chaining (i2i) — the base image handles style, this
+  // handles semantic guidance (ethnicity, setting details, symbols like 태극기).
+  const settingsClient = createSupabaseServiceClient();
+  const adminPrompt = await fetchAdminSystemPrompt(settingsClient);
+
   const merged = mergePrompt(job.prompt, schoolProfile, job.schoolProfileApplied);
-  const finalPrompt = isDiversityChunk ? applyDiversityHint(merged, order) : merged;
+  const withAdmin = adminPrompt ? `${adminPrompt}\n\n${merged}` : merged;
+  const finalPrompt = isDiversityChunk ? applyDiversityHint(withAdmin, order) : withAdmin;
 
   const chaining = !!job.referenceImageId;
   if (chaining && !referenceImage) {
@@ -121,6 +128,17 @@ export async function runOne({
   });
 
   return { imageId, r2Key, order };
+}
+
+async function fetchAdminSystemPrompt(
+  supabase: ReturnType<typeof createSupabaseServiceClient>,
+): Promise<string> {
+  const { data } = await supabase
+    .from('admin_settings')
+    .select('system_prompt')
+    .eq('id', 1)
+    .maybeSingle();
+  return ((data?.system_prompt as string) ?? '').trim();
 }
 
 interface RunTaggingParams {
