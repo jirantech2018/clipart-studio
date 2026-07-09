@@ -53,3 +53,47 @@ export const ACCOUNT_TYPE_BADGE: Record<AccountType, string> = {
   school_staff: '🏫',
   general: '👤',
 };
+
+export interface Image {
+  id: string;
+  userId: string;
+  prompt: string;
+  negativePrompt: string | null;
+  model: ImageModel;
+  seed: number | null;
+  r2Key: string;
+  thumbnailR2Key: string | null;
+  isPublic: boolean;
+  isUpscaled: boolean;
+  upscaledFromId: string | null;
+  parentImageId: string | null;
+  batchId: string | null;
+  generationMode: GenerationMode;
+  referenceImageId: string | null;
+  schoolProfileApplied: boolean;
+  status: ImageStatus;
+  pendingExpiresAt: string | null;
+  createdAt: string;
+}
+
+export interface GenerationJob {
+  id: string;
+  userId: string;
+  prompt: string;
+  batchSize: number;
+  diversityLevel: number;
+  referenceImageId: string | null;
+  schoolProfileApplied: boolean;
+  reservedCredits: number;
+  refundedCredits: number;
+  status: JobStatus;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+// Valid batch sizes (5 stepping, max 30 per D6)
+export const BATCH_SIZES = [5, 10, 15, 20, 25, 30] as const;
+export type BatchSize = (typeof BATCH_SIZES)[number];
+export const CHUNK_SIZE = 5;
+
