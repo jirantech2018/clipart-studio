@@ -60,12 +60,12 @@ export const openaiImageGen: ImageGenAdapter = {
   model: 'gpt-image-1',
   async generate(input: GenerateInput): Promise<GenerateOutput> {
     const seed = input.seed ?? randomSeed();
+    // gpt-image-1 returns b64_json by default and rejects response_format.
     const body = {
       model: 'gpt-image-1',
       prompt: input.prompt,
       n: 1,
       size: '1024x1024',
-      response_format: 'b64_json',
     };
     // Note: gpt-image-1 currently ignores explicit seeds; we still record one
     // for local traceability and for compatibility with adapters that honor it.

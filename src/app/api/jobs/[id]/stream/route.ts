@@ -97,79 +97,115 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     async start(controller) {
       let succeeded = 0;
       let failed = 0;
+      let fatal: Error | null = null;
 
-      const totalSlots = job.batchSize;
-      const chunkCount = Math.ceil(totalSlots / CHUNK_SIZE);
+      try {
+        const totalSlots = job.batchSize;
+        const chunkCount = Math.ceil(totalSlots / CHUNK_SIZE);
 
-      for (let chunk = 0; chunk < chunkCount; chunk += 1) {
-        const chunkStart = chunk * CHUNK_SIZE;
-        const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalSlots);
-        const isDiversity = chunk < job.diversityLevel;
+        for (let chunk = 0; chunk < chunkCount; chunk += 1) {
+          const chunkStart = chunk * CHUNK_SIZE;
+          const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalSlots);
+          const isDiversity = chunk < job.diversityLevel;
 
-        const results = await Promise.allSettled(
-          Array.from({ length: chunkEnd - chunkStart }, (_, i) =>
-            runOne({
-              job,
-              order: chunkStart + i,
-              schoolProfile,
-              isDiversityChunk: isDiversity,
-            }),
-          ),
-        );
-
-        for (const [i, result] of results.entries()) {
-          const order = chunkStart + i;
-          if (result.status === 'fulfilled') {
-            succeeded += 1;
-            controller.enqueue(
-              sseEvent('image_ready', {
-                imageId: result.value.imageId,
-                thumbnailUrl: publicUrl(result.value.r2Key),
-                order,
+          const results = await Promise.allSettled(
+            Array.from({ length: chunkEnd - chunkStart }, (_, i) =>
+              runOne({
+                job,
+                order: chunkStart + i,
+                schoolProfile,
+                isDiversityChunk: isDiversity,
               }),
-            );
-          } else {
-            failed += 1;
-            const err = result.reason as Error;
-            controller.enqueue(
-              sseEvent('chunk_failed', {
-                order,
-                error: err?.message ?? 'unknown',
-                refundedCredits: 1,
-              }),
-            );
-            await refundCredits(job.userId, 1);
+            ),
+          );
+
+          for (const [i, result] of results.entries()) {
+            const order = chunkStart + i;
+            if (result.status === 'fulfilled') {
+              succeeded += 1;
+              controller.enqueue(
+                sseEvent('image_ready', {
+                  imageId: result.value.imageId,
+                  thumbnailUrl: publicUrl(result.value.r2Key),
+                  order,
+                }),
+              );
+            } else {
+              failed += 1;
+              const err = result.reason as Error;
+              console.error(
+                `[jobs/${job.id}/stream] runOne failed at order ${order}:`,
+                err?.stack ?? err,
+              );
+              controller.enqueue(
+                sseEvent('chunk_failed', {
+                  order,
+                  error: err?.message ?? 'unknown',
+                  refundedCredits: 1,
+                }),
+              );
+              await refundCredits(job.userId, 1);
+            }
           }
         }
+      } catch (err) {
+        fatal = err as Error;
+        console.error(`[jobs/${job.id}/stream] fatal error:`, fatal?.stack ?? fatal);
+      } finally {
+        // Refund any slots we never got to (e.g. fatal error mid-batch)
+        const untouched = job.batchSize - succeeded - failed;
+        if (untouched > 0) {
+          try {
+            await refundCredits(job.userId, untouched);
+          } catch (refundErr) {
+            console.error(
+              `[jobs/${job.id}/stream] refund failed for ${untouched} untouched slots:`,
+              refundErr,
+            );
+          }
+          failed += untouched;
+        }
+
+        // Always resolve job.status so the partial-unique index unblocks retries
+        const finalStatus = fatal
+          ? 'failed'
+          : failed === 0
+            ? 'done'
+            : succeeded === 0
+              ? 'failed'
+              : 'partial';
+
+        const { data: finalProfile } = await service
+          .from('profiles')
+          .select('credits')
+          .eq('id', job.userId)
+          .single();
+
+        await service
+          .from('generation_jobs')
+          .update({
+            status: finalStatus,
+            refunded_credits: failed,
+            error: fatal?.message ?? null,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
+
+        try {
+          controller.enqueue(
+            sseEvent('done', {
+              jobId: job.id,
+              completed: succeeded,
+              failed,
+              refundedCredits: failed,
+              finalRemainingCredits: finalProfile?.credits ?? null,
+            }),
+          );
+          controller.close();
+        } catch {
+          // Client already disconnected — ignore enqueue/close errors
+        }
       }
-
-      // Read final remaining credits after all refunds
-      const { data: finalProfile } = await service
-        .from('profiles')
-        .select('credits')
-        .eq('id', job.userId)
-        .single();
-
-      const finalStatus = failed === 0 ? 'done' : succeeded === 0 ? 'failed' : 'partial';
-      await service
-        .from('generation_jobs')
-        .update({
-          status: finalStatus,
-          refunded_credits: failed,
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', job.id);
-
-      controller.enqueue(
-        sseEvent('done', {
-          jobId: job.id,
-          completed: succeeded,
-          failed,
-          refundedCredits: failed,
-          finalRemainingCredits: finalProfile?.credits ?? null,
-        }),
-      );
-      controller.close();
     },
   });
 

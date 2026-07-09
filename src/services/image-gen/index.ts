@@ -11,8 +11,20 @@ import type { SchoolProfile } from '@/types/domain';
 export type { ImageGenAdapter, GenerateInput, GenerateOutput } from './adapter';
 export { ImageGenError } from './adapter';
 
-/** Primary adapter used unless caller specifies otherwise. */
+/**
+ * Primary adapter used unless caller specifies otherwise.
+ * Selection order:
+ *   1. IMAGE_GEN_PRIMARY env ('openai' | 'flux') — explicit override
+ *   2. OPENAI_API_KEY present → OpenAI (Design §8.1 1순위)
+ *   3. REPLICATE_API_TOKEN present → FLUX fallback
+ *   4. OpenAI (will throw on generate() with a clear error)
+ */
 export function primaryAdapter(): ImageGenAdapter {
+  const override = process.env.IMAGE_GEN_PRIMARY?.toLowerCase();
+  if (override === 'flux') return fluxImageGen;
+  if (override === 'openai') return openaiImageGen;
+  if (process.env.OPENAI_API_KEY) return openaiImageGen;
+  if (process.env.REPLICATE_API_TOKEN) return fluxImageGen;
   return openaiImageGen;
 }
 
