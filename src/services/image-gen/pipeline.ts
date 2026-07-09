@@ -10,8 +10,6 @@ import { createSupabaseServiceClient } from '@/services/supabase/server';
 
 import type { GenerationJob, SchoolProfile } from '@/types/domain';
 
-const PENDING_TTL_HOURS = 24;
-
 export interface PipelineResult {
   imageId: string;
   r2Key: string;
@@ -26,7 +24,7 @@ interface RunOneParams {
 }
 
 /**
- * Generate one image, upload to R2, insert an images row (status='pending').
+ * Generate one image, upload to R2, insert an images row (status='saved').
  * Throws on any step failure — caller refunds credit for this slot.
  */
 export async function runOne({
@@ -55,11 +53,13 @@ export async function runOne({
     contentType: gen.contentType,
   });
 
+  // Policy: generated images become permanent library assets on creation.
+  // No pending/discarded lifecycle — user cannot delete, no TTL cleanup.
   const supabase = createSupabaseServiceClient();
   const { error } = await supabase.from('images').insert({
     id: imageId,
     user_id: job.userId,
-    prompt: job.prompt, // store user's original, not merged
+    prompt: job.prompt,
     model: gen.model,
     seed: gen.seed,
     r2_key: r2Key,
@@ -67,8 +67,8 @@ export async function runOne({
     generation_mode: job.referenceImageId ? 'img2img' : 'text2img',
     reference_image_id: job.referenceImageId,
     school_profile_applied: job.schoolProfileApplied,
-    status: 'pending',
-    pending_expires_at: new Date(Date.now() + PENDING_TTL_HOURS * 3600_000).toISOString(),
+    status: 'saved',
+    pending_expires_at: null,
   });
 
   if (error) throw new Error(`insert images failed: ${error.message}`);

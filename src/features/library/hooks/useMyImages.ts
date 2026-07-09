@@ -1,0 +1,71 @@
+'use client';
+
+// Design Ref: §5.4 Library Page — filter + sort + card action mutations
+// Plan SC: FR-08 saved library, FR-13 publish toggle, FR-19 delete
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import type { Image } from '@/types/domain';
+
+export type LibraryFilter = 'all' | 'public';
+export type LibrarySort = 'newest' | 'oldest';
+
+export interface LibraryImage extends Image {
+  thumbnailUrl: string;
+}
+
+interface ListResponse {
+  images: LibraryImage[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+async function fetchImages(filter: LibraryFilter, sort: LibrarySort): Promise<ListResponse> {
+  const params = new URLSearchParams({ filter, sort });
+  const res = await fetch(`/api/images?${params.toString()}`);
+  if (!res.ok) throw new Error('이미지 목록을 불러오지 못했습니다');
+  const json = (await res.json()) as { data: ListResponse };
+  return json.data;
+}
+
+export function useMyImages(filter: LibraryFilter, sort: LibrarySort) {
+  return useQuery({
+    queryKey: ['images', filter, sort],
+    queryFn: () => fetchImages(filter, sort),
+  });
+}
+
+export function usePublishToggle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, isPublic }: { id: string; isPublic: boolean }) => {
+      const res = await fetch(`/api/images/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '공개 설정 변경 실패');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['images'] });
+    },
+  });
+}
+
+export async function requestDownload(id: string): Promise<string> {
+  const res = await fetch(`/api/images/${id}/download`, { method: 'POST' });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as {
+      error?: { message?: string };
+    } | null;
+    throw new Error(json?.error?.message ?? '다운로드 실패');
+  }
+  const json = (await res.json()) as { data: { downloadUrl: string } };
+  return json.data.downloadUrl;
+}
