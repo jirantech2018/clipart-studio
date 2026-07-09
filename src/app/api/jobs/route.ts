@@ -1,6 +1,9 @@
 // Design Ref: §4.2 POST /api/jobs
 // Plan SC: FR-05 batch request, FR-12 credit reserve, NFR one active job per user
 
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 import { ZodError } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';

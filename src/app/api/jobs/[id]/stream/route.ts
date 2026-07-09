@@ -1,6 +1,11 @@
 // Design Ref: §2.2 Batch generation data flow + §4.2 SSE spec
 // Plan SC: FR-20 SSE streaming, FR-06 diversity, FR-17 school profile inject
 // Behavior: chunk-parallel generation, per-slot refund on failure, final job status update.
+//
+// Vercel serverless functions default to 10s on Hobby plan; force the maximum
+// available (60s Hobby / 300s Pro) so a full 5-image chunk can finish streaming.
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 import { publicUrl } from '@/services/r2/upload';
 import { fetchReferenceImage, runOne } from '@/services/image-gen/pipeline';
