@@ -11,7 +11,7 @@ import {
 } from '@/services/supabase/server';
 
 const patchSchema = z.object({
-  systemPrompt: z.string().max(4000, '시스템 프롬프트는 4000자 이내로 작성해주세요'),
+  systemPrompt: z.string().max(50000, '시스템 프롬프트가 너무 깁니다 (5만자 초과)'),
 });
 
 async function requireAdmin() {

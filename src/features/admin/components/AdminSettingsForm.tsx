@@ -70,7 +70,7 @@ export function AdminSettingsForm({
           className="font-mono text-sm"
         />
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{prompt.length.toLocaleString()} / 4,000자</span>
+          <span>{prompt.length.toLocaleString()}자</span>
           {updatedAt && (
             <span>마지막 저장: {new Date(updatedAt).toLocaleString('ko-KR')}</span>
           )}
