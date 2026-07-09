@@ -11,7 +11,7 @@ import { apiError, apiOk } from '@/lib/api-error';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
-import type { Image, ImageStatus } from '@/types/domain';
+import type { AccountType, Image, ImageStatus } from '@/types/domain';
 
 const querySchema = z.object({
   q: z.string().trim().min(1, '검색어를 입력해주세요').max(100),
@@ -24,15 +24,25 @@ interface SearchImage extends Image {
   thumbnailUrl: string;
   tags: string[];
   categories: string[];
-  authorType: 'me' | 'other';
+  isMine: boolean;
+  authorType: AccountType;
+  authorSchoolName: string | null;
 }
 
-function rowToImage(row: Record<string, unknown>, currentUserId: string): SearchImage {
+function rowToImage(
+  row: Record<string, unknown>,
+  currentUserId: string,
+  authorMap: Map<string, { authorType: AccountType; authorSchoolName: string | null }>,
+): SearchImage {
   const r2Key = row.r2_key as string;
   const thumbnailKey = (row.thumbnail_r2_key as string) ?? r2Key;
   const rawTags = (row.image_tags as Array<{ tag: string }> | null) ?? [];
   const rawCats = (row.image_categories as Array<{ category: string }> | null) ?? [];
   const ownerId = row.user_id as string;
+  const author = authorMap.get(ownerId) ?? {
+    authorType: 'general' as AccountType,
+    authorSchoolName: null,
+  };
   return {
     id: row.id as string,
     userId: ownerId,
@@ -56,7 +66,9 @@ function rowToImage(row: Record<string, unknown>, currentUserId: string): Search
     thumbnailUrl: publicUrl(thumbnailKey),
     tags: rawTags.map((t) => t.tag),
     categories: rawCats.map((c) => c.category),
-    authorType: ownerId === currentUserId ? 'me' : 'other',
+    isMine: ownerId === currentUserId,
+    authorType: author.authorType,
+    authorSchoolName: author.authorSchoolName,
   };
 }
 
@@ -129,7 +141,33 @@ export async function GET(request: Request) {
     return apiError('INTERNAL_ERROR', '검색 실패', { details: error.message });
   }
 
-  const images = (data ?? []).map((row) => rowToImage(row, user.id));
+  // Batch-fetch author metadata for all distinct user_ids in the result page.
+  // Two parallel queries; both scoped by ids so payloads stay small.
+  const rows = data ?? [];
+  const authorIds = Array.from(new Set(rows.map((r) => r.user_id as string)));
+  const authorMap = new Map<
+    string,
+    { authorType: AccountType; authorSchoolName: string | null }
+  >();
+  if (authorIds.length > 0) {
+    const [profRes, spRes] = await Promise.all([
+      supabase.from('profiles').select('id, account_type').in('id', authorIds),
+      supabase.from('school_profiles').select('user_id, school_name').in('user_id', authorIds),
+    ]);
+    const schoolByUser = new Map<string, string | null>();
+    for (const row of spRes.data ?? []) {
+      schoolByUser.set(row.user_id as string, (row.school_name as string) ?? null);
+    }
+    for (const row of profRes.data ?? []) {
+      const id = row.id as string;
+      authorMap.set(id, {
+        authorType: row.account_type as AccountType,
+        authorSchoolName: schoolByUser.get(id) ?? null,
+      });
+    }
+  }
+
+  const images = rows.map((row) => rowToImage(row, user.id, authorMap));
   return apiOk({
     images,
     total: count ?? images.length,

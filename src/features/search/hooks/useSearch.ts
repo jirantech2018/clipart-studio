@@ -4,7 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { Image } from '@/types/domain';
+import type { AccountType, Image } from '@/types/domain';
 
 export type SearchScope = 'mine' | 'community' | 'all';
 
@@ -12,7 +12,9 @@ export interface SearchImage extends Image {
   thumbnailUrl: string;
   tags: string[];
   categories: string[];
-  authorType: 'me' | 'other';
+  isMine: boolean;
+  authorType: AccountType;
+  authorSchoolName: string | null;
 }
 
 interface SearchResponse {

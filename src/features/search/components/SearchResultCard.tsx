@@ -6,6 +6,7 @@
 import Link from 'next/link';
 
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
+import { AuthorBadge } from '@/features/community/components/AuthorBadge';
 
 import type { SearchImage } from '@/features/search/hooks/useSearch';
 
@@ -26,18 +27,18 @@ export function SearchResultCard({ image }: { image: SearchImage }) {
         />
         <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
           <AIGeneratedBadge />
-          <span
-            className={
-              image.authorType === 'me'
-                ? 'rounded-full bg-primary/80 px-2 py-0.5 text-[10px] font-medium text-primary-foreground'
-                : 'rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground'
-            }
-          >
-            {image.authorType === 'me' ? '내 이미지' : 'Community'}
-          </span>
+          {image.isMine && (
+            <span className="rounded-full bg-primary/80 px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
+              내 이미지
+            </span>
+          )}
         </div>
       </Link>
       <div className="space-y-1.5 p-3">
+        <AuthorBadge
+          authorType={image.authorType}
+          authorSchoolName={image.authorSchoolName}
+        />
         <p className="line-clamp-2 text-xs text-muted-foreground" title={image.prompt}>
           {image.prompt}
         </p>
