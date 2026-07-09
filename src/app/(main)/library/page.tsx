@@ -18,9 +18,6 @@ export default async function LibraryPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">내 라이브러리</h1>
-        <p className="text-sm text-muted-foreground">
-          저장한 이미지들. Pending 상태는 24시간 안에 저장 안 하면 자동 삭제됩니다.
-        </p>
       </div>
       <LibraryGrid />
     </div>
