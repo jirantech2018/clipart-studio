@@ -3,7 +3,11 @@
 // Design Ref: §5.4 Library Page — filter + sort + card action mutations
 // Plan SC: FR-08 saved library, FR-13 publish toggle, FR-19 delete
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import type { Image } from '@/types/domain';
 
@@ -23,8 +27,19 @@ interface ListResponse {
   offset: number;
 }
 
-async function fetchImages(filter: LibraryFilter, sort: LibrarySort): Promise<ListResponse> {
-  const params = new URLSearchParams({ filter, sort });
+const PAGE_SIZE = 24;
+
+async function fetchImagesPage(
+  filter: LibraryFilter,
+  sort: LibrarySort,
+  offset: number,
+): Promise<ListResponse> {
+  const params = new URLSearchParams({
+    filter,
+    sort,
+    limit: String(PAGE_SIZE),
+    offset: String(offset),
+  });
   const res = await fetch(`/api/images?${params.toString()}`);
   if (!res.ok) throw new Error('이미지 목록을 불러오지 못했습니다');
   const json = (await res.json()) as { data: ListResponse };
@@ -32,9 +47,15 @@ async function fetchImages(filter: LibraryFilter, sort: LibrarySort): Promise<Li
 }
 
 export function useMyImages(filter: LibraryFilter, sort: LibrarySort) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['images', filter, sort],
-    queryFn: () => fetchImages(filter, sort),
+    queryFn: ({ pageParam }) => fetchImagesPage(filter, sort, pageParam as number),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + p.images.length, 0);
+      if (fetched >= lastPage.total) return undefined;
+      return fetched;
+    },
   });
 }
 

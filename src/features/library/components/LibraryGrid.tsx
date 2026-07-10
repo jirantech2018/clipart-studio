@@ -1,25 +1,44 @@
 'use client';
 
-// Design Ref: §5.4 Library Page — image grid with filter/sort state + empty state
-// Client component so filter/sort don't trigger full page navigation.
+// Infinite-scroll variant: fetches 24 images per page and appends more when
+// a sentinel below the grid enters the viewport.
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LibraryCard } from '@/features/library/components/LibraryCard';
 import { LibraryFilters } from '@/features/library/components/LibraryFilters';
 import { useMyImages } from '@/features/library/hooks/useMyImages';
+import { useIntersection } from '@/lib/hooks/useIntersection';
 
 import type { LibraryFilter, LibrarySort } from '@/features/library/hooks/useMyImages';
 
 export function LibraryGrid() {
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('newest');
-  const { data, isLoading, isError, refetch } = useMyImages(filter, sort);
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useMyImages(filter, sort);
 
-  const images = data?.images ?? [];
+  const images = data?.pages.flatMap((p) => p.images) ?? [];
+
+  const onSentinel = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const sentinelRef = useIntersection(onSentinel, {
+    enabled: hasNextPage && !isFetchingNextPage,
+  });
 
   return (
     <div className="space-y-4">
@@ -63,11 +82,24 @@ export function LibraryGrid() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          {images.map((image) => (
-            <LibraryCard key={image.id} image={image} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            {images.map((image) => (
+              <LibraryCard key={image.id} image={image} />
+            ))}
+            {isFetchingNextPage &&
+              Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={`skeleton-${i}`}
+                  className="aspect-square animate-pulse rounded-lg bg-muted"
+                  aria-hidden="true"
+                />
+              ))}
+          </div>
+          {hasNextPage && (
+            <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
+          )}
+        </>
       )}
     </div>
   );

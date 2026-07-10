@@ -1,24 +1,43 @@
 'use client';
 
-// Design Ref: §5.4 Community feed — filters + grid + loading/error/empty states.
+// Infinite-scroll workspace grid. Sentinel below the grid triggers the next page.
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CommunityCard } from '@/features/community/components/CommunityCard';
 import { CommunityFilters } from '@/features/community/components/CommunityFilters';
 import { useCommunity } from '@/features/community/hooks/useCommunity';
+import { useIntersection } from '@/lib/hooks/useIntersection';
 
 import type { CommunitySort } from '@/features/community/hooks/useCommunity';
 
 export function CommunityGrid() {
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<CommunitySort>('newest');
-  const { data, isLoading, isError, refetch } = useCommunity(category, sort);
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useCommunity(category, sort);
 
-  const images = data?.images ?? [];
+  const images = data?.pages.flatMap((p) => p.images) ?? [];
+
+  const onSentinel = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const sentinelRef = useIntersection(onSentinel, {
+    enabled: hasNextPage && !isFetchingNextPage,
+  });
 
   return (
     <div className="space-y-4">
@@ -66,11 +85,24 @@ export function CommunityGrid() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          {images.map((image) => (
-            <CommunityCard key={image.id} image={image} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            {images.map((image) => (
+              <CommunityCard key={image.id} image={image} />
+            ))}
+            {isFetchingNextPage &&
+              Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={`skeleton-${i}`}
+                  className="aspect-square animate-pulse rounded-lg bg-muted"
+                  aria-hidden="true"
+                />
+              ))}
+          </div>
+          {hasNextPage && (
+            <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
+          )}
+        </>
       )}
     </div>
   );
