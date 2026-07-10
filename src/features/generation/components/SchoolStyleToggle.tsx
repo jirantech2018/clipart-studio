@@ -24,7 +24,7 @@ export function SchoolStyleToggle({
     <label className="flex cursor-pointer items-center justify-between rounded-md border border-input bg-background p-3 hover:bg-accent/40">
       <span className="flex items-center gap-2 text-sm font-medium">
         <School className="h-4 w-4" aria-hidden="true" />
-        학교 스타일 적용
+        학교설정 적용
         {schoolName && (
           <span className="text-xs font-normal text-muted-foreground">({schoolName})</span>
         )}

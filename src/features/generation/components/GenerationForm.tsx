@@ -169,8 +169,8 @@ export function GenerationForm({
             <Label htmlFor="prompt">프롬프트</Label>
             <Textarea
               id="prompt"
-              rows={3}
-              placeholder="예: 이순신 장군이 갑옷을 입고 서 있는 모습"
+              rows={4}
+              placeholder={'예: 운동장에서 뛰는 초등학생\n벚꽃 아래에서 책을 읽는 학생'}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               disabled={inFlight}
@@ -193,7 +193,7 @@ export function GenerationForm({
           />
 
           <div className="space-y-2">
-            <Label>배치 크기</Label>
+            <Label>몇 장 만들어 볼까요?</Label>
             <div className="grid grid-cols-6 gap-1.5">
               {BATCH_SIZES.map((size) => (
                 <button
@@ -209,17 +209,17 @@ export function GenerationForm({
                     inFlight && 'cursor-not-allowed opacity-50',
                   )}
                 >
-                  {size}
+                  {size}장
                 </button>
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              5장 단위 청크로 병렬 생성됩니다.
+              여러 장을 만들수록 원하는 이미지를 찾기 쉬워집니다.
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label>다양성 강화</Label>
+            <Label>다양한 느낌으로 만들어 보기</Label>
             <div className="flex items-center gap-3">
               <input
                 type="range"
@@ -236,7 +236,7 @@ export function GenerationForm({
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              선택한 청크 수만큼 스타일/구도 힌트를 추가로 주입합니다.
+              같은 내용을 다양한 구도와 스타일로 만들어 드립니다.
             </p>
           </div>
 
@@ -260,13 +260,14 @@ export function GenerationForm({
           <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
             <div className="text-sm">
               <div>
-                보유 크레딧: <span className="font-semibold tabular-nums">{credits}</span>
+                이번 생성에{' '}
+                <span className="font-semibold tabular-nums">{batchSize}</span> 크레딧이
+                사용됩니다.
               </div>
               <div className="text-muted-foreground">
-                이번 요청: <span className="tabular-nums">-{batchSize}</span>
-                {' → '}
-                남게 될 잔액:{' '}
-                <span className="tabular-nums">{Math.max(0, credits - batchSize)}</span>
+                생성 후{' '}
+                <span className="tabular-nums">{Math.max(0, credits - batchSize)}</span>{' '}
+                크레딧이 남습니다.
               </div>
             </div>
             <Button type="submit" disabled={disabled} className="min-w-[10rem]">
@@ -274,7 +275,7 @@ export function GenerationForm({
                 ? '생성 중…'
                 : insufficient
                   ? '크레딧 부족'
-                  : `생성 시작 (-${batchSize})`}
+                  : '이미지 만들기'}
             </Button>
           </div>
         </form>
