@@ -45,8 +45,8 @@ export function AppHeader({
           <Link
             href="/profile"
             className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent"
-            aria-label="프로필"
-            title="프로필"
+            aria-label="계정정보"
+            title="계정정보"
           >
             <User className="h-4 w-4" aria-hidden="true" />
           </Link>

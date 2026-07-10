@@ -1,11 +1,14 @@
+// Account info page. School Profile lives on /settings now.
+
 import { redirect } from 'next/navigation';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SchoolProfileSection } from '@/features/profile/components/SchoolProfileSection';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 import { ACCOUNT_TYPE_LABELS } from '@/types/domain';
 
 import type { AccountType } from '@/types/domain';
+
+export const dynamic = 'force-dynamic';
 
 const MONTHLY_RESET_AMOUNT = 30;
 
@@ -37,18 +40,13 @@ export default async function ProfilePage() {
     .select('*')
     .eq('id', user.id)
     .single();
-  const { data: schoolProfile } = await supabase
-    .from('school_profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle();
 
   const resetIso = (profile?.credits_reset_at as string) ?? null;
   const remaining = daysUntil(resetIso);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="text-3xl font-bold">프로필</h1>
+      <h1 className="text-3xl font-bold">계정정보</h1>
 
       <Card>
         <CardHeader>
@@ -77,8 +75,6 @@ export default async function ProfilePage() {
           )}
         </CardContent>
       </Card>
-
-      <SchoolProfileSection initialProfile={schoolProfile ?? null} />
     </div>
   );
 }
