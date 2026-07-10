@@ -62,14 +62,14 @@ export function SchoolProfileForm({
       return;
     }
     const { data } = (await res.json()) as { data: SchoolProfile };
-    toast.success('School Profile을 저장했습니다');
+    toast.success('학교설정을 저장했습니다');
     onSaved?.(data);
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isEdit ? 'School Profile 수정' : 'School Profile 등록'}</CardTitle>
+        <CardTitle>{isEdit ? '학교설정 수정' : '학교설정 등록'}</CardTitle>
         <CardDescription>
           입력한 정보는 이미지 생성 시 <span className="font-medium">🏫 학교 스타일 적용</span>{' '}
           토글을 켜면 자동으로 프롬프트에 병합됩니다.

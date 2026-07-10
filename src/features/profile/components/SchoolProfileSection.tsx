@@ -37,7 +37,7 @@ export function SchoolProfileSection({
   const [editing, setEditing] = useState(false);
 
   async function handleDelete() {
-    if (!confirm('School Profile을 삭제하시겠습니까?')) return;
+    if (!confirm('학교설정을 삭제하시겠습니까?')) return;
     const res = await fetch('/api/school-profile', { method: 'DELETE' });
     if (!res.ok) {
       toast.error('삭제 실패');
@@ -52,13 +52,13 @@ export function SchoolProfileSection({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>School Profile</CardTitle>
+          <CardTitle>학교설정</CardTitle>
           <CardDescription>
             학교 컨텍스트가 있으신가요? 등록하면 이미지 생성 시 학교 스타일을 자동 주입할 수 있습니다.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={() => setEditing(true)}>School Profile 추가하기</Button>
+          <Button onClick={() => setEditing(true)}>학교설정 추가하기</Button>
         </CardContent>
       </Card>
     );

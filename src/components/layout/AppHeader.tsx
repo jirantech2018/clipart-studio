@@ -1,5 +1,6 @@
 'use client';
 
+import { User } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -43,9 +44,11 @@ export function AppHeader({
           <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
           <Link
             href="/profile"
-            className="rounded-md px-3 py-1.5 text-sm font-medium hover:bg-accent"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent"
+            aria-label="프로필"
+            title="프로필"
           >
-            프로필
+            <User className="h-4 w-4" aria-hidden="true" />
           </Link>
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             로그아웃

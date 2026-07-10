@@ -56,7 +56,7 @@ export function AppSidebar({ hasSchoolProfile, isAdmin }: AppSidebarProps) {
           )}
         >
           <School className="h-4 w-4" aria-hidden="true" />
-          {hasSchoolProfile ? 'School Profile' : 'School Profile 추가'}
+          {hasSchoolProfile ? '학교설정' : '학교설정 추가'}
         </Link>
 
         {isAdmin && (

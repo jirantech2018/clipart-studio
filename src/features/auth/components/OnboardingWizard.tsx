@@ -131,7 +131,7 @@ export function OnboardingWizard() {
         <SchoolProfileForm
           initial={null}
           onSaved={() => {
-            toast.success('School Profile이 등록되었습니다');
+            toast.success('학교설정이 등록되었습니다');
             router.push('/');
           }}
         />
