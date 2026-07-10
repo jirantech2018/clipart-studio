@@ -55,10 +55,12 @@ export default async function HomePage() {
       <TutorialOverlay />
       <section className="space-y-6 pt-8 text-center">
         <h1 className="text-4xl font-bold tracking-tight">
-          찾고, 없으면 만들고, 만들면 계정의 자산이 됩니다
+          학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
         </h1>
-        <p className="text-lg text-muted-foreground">
-          여기서 이미지를 찾아보세요. 원하는 결과가 없다면 AI로 직접 만들면 됩니다.
+        <p className="whitespace-pre-line text-lg text-muted-foreground">
+          {`원하는 이미지를 검색하고,
+없다면 AI로 새롭게 만들 수 있습니다.
+만든 이미지는 내 라이브러리에 저장되어 언제든 다시 사용할 수 있습니다.`}
         </p>
         <div className="mx-auto max-w-xl px-4">
           <Suspense fallback={null}>
