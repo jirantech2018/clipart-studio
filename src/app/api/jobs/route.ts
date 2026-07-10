@@ -71,6 +71,7 @@ export async function POST(request: Request) {
       diversity_level: body.diversityLevel,
       reference_image_id: body.referenceImageId ?? null,
       school_profile_applied: body.schoolProfileApplied,
+      aspect_ratio: body.aspectRatio,
       reserved_credits: body.batchSize,
       status: 'queued',
     })

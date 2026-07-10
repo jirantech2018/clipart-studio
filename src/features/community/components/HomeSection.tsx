@@ -15,6 +15,8 @@ export interface HomeImage {
   authorType: AccountType;
   authorSchoolName: string | null;
   downloadCount: number;
+  width: number;
+  height: number;
 }
 
 interface HomeSectionProps {
@@ -54,15 +56,18 @@ export function HomeSection({
           {emptyLabel}
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <div className="columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-6">
           {images.map((image) => (
             <Link
               key={image.id}
               href={`/image/${image.id}`}
-              className="group relative block overflow-hidden rounded-md border bg-card"
+              className="group relative mb-3 block break-inside-avoid overflow-hidden rounded-md border bg-card"
               title={image.prompt}
             >
-              <div className="relative aspect-square w-full bg-muted">
+              <div
+                className="relative w-full bg-muted"
+                style={{ aspectRatio: `${image.width} / ${image.height}` }}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={image.thumbnailUrl}

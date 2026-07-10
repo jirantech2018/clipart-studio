@@ -88,13 +88,13 @@ export const openaiImageGen: ImageGenAdapter = {
   async generate(input: GenerateInput): Promise<GenerateOutput> {
     const seed = input.seed ?? randomSeed();
 
+    const size = input.size ?? '1024x1024';
+
     let payload: ImagePayload;
     if (input.mode === 'img2img') {
       if (!input.referenceImage) {
         throw new ImageGenError('img2img requires referenceImage bytes', false);
       }
-      // gpt-image-1 edits API: PNG or WebP file, up to 25MB, square. Our generated
-      // images are 1024x1024 so the size constraint is already satisfied.
       const ref = input.referenceImage;
       const ext = ref.contentType === 'image/webp' ? 'webp' : 'png';
       const filename = `reference.${ext}`;
@@ -103,7 +103,7 @@ export const openaiImageGen: ImageGenAdapter = {
       form.append('model', 'gpt-image-1');
       form.append('prompt', input.prompt);
       form.append('n', '1');
-      form.append('size', '1024x1024');
+      form.append('size', size);
       form.append('image', blob, filename);
       payload = await callEdits(form);
     } else {
@@ -112,7 +112,7 @@ export const openaiImageGen: ImageGenAdapter = {
         model: 'gpt-image-1',
         prompt: input.prompt,
         n: 1,
-        size: '1024x1024',
+        size,
       });
     }
 

@@ -26,6 +26,8 @@ interface CommunityImage {
   parentImageId: string | null;
   generationMode: string;
   schoolProfileApplied: boolean;
+  width: number;
+  height: number;
   createdAt: string;
   thumbnailUrl: string;
   tags: string[];
@@ -49,6 +51,8 @@ function rowToImage(row: Record<string, unknown>): CommunityImage {
     parentImageId: (row.parent_image_id as string) ?? null,
     generationMode: row.generation_mode as string,
     schoolProfileApplied: row.school_profile_applied as boolean,
+    width: (row.width as number) ?? 1024,
+    height: (row.height as number) ?? 1024,
     createdAt: row.created_at as string,
     thumbnailUrl: publicUrl(thumbnailKey),
     tags: rawTags.map((t) => t.tag),

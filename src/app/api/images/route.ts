@@ -46,6 +46,8 @@ function rowToImage(row: Record<string, unknown>): ImageWithMeta {
     schoolProfileApplied: row.school_profile_applied as boolean,
     status: row.status as ImageStatus,
     pendingExpiresAt: (row.pending_expires_at as string) ?? null,
+    width: (row.width as number) ?? 1024,
+    height: (row.height as number) ?? 1024,
     createdAt: row.created_at as string,
     thumbnailUrl: publicUrl(thumbnailKey),
     tags: rawTags.map((t) => t.tag),

@@ -50,7 +50,7 @@ export function LibraryGrid() {
       />
 
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+        <div className="columns-2 gap-3 sm:columns-3 xl:columns-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
@@ -83,15 +83,17 @@ export function LibraryGrid() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="columns-2 gap-3 sm:columns-3 xl:columns-4">
             {images.map((image) => (
-              <LibraryCard key={image.id} image={image} />
+              <div key={image.id} className="mb-3 break-inside-avoid">
+                <LibraryCard image={image} />
+              </div>
             ))}
             {isFetchingNextPage &&
               Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={`skeleton-${i}`}
-                  className="aspect-square animate-pulse rounded-lg bg-muted"
+                  className="mb-3 aspect-square animate-pulse break-inside-avoid rounded-lg bg-muted"
                   aria-hidden="true"
                 />
               ))}

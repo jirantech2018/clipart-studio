@@ -23,10 +23,15 @@ import { SchoolStyleToggle } from '@/features/generation/components/SchoolStyleT
 import { useAuthStore } from '@/lib/store/authStore';
 import { useGenerationStore } from '@/lib/store/generationStore';
 import { cn } from '@/lib/utils';
-import { BATCH_SIZES } from '@/types/domain';
+import {
+  ASPECT_RATIOS,
+  ASPECT_RATIO_DIMENSIONS,
+  ASPECT_RATIO_LABELS,
+  BATCH_SIZES,
+} from '@/types/domain';
 import { createJobSchema } from '@/types/schemas';
 
-import type { BatchSize } from '@/types/domain';
+import type { AspectRatio, BatchSize } from '@/types/domain';
 import type { FormEvent } from 'react';
 
 interface ParentInfo {
@@ -77,6 +82,7 @@ export function GenerationForm({
   const [batchSize, setBatchSize] = useState<BatchSize>(5);
   const [diversityLevel, setDiversityLevel] = useState(0);
   const [schoolProfileApplied, setSchoolProfileApplied] = useState(hasSchoolProfile);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('square');
 
   const createJob = useCreateJob();
 
@@ -93,6 +99,7 @@ export function GenerationForm({
       referenceImageId: parent?.id ?? null,
       schoolProfileApplied,
       generationMode: chaining ? 'img2img' : 'text2img',
+      aspectRatio,
     });
     if (!parsed.success) {
       const first = parsed.error.issues[0];
@@ -183,6 +190,45 @@ export function GenerationForm({
                 <PresetChips value={prompt} onChange={setPrompt} disabled={inFlight} />
               </div>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>이미지 비율</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {ASPECT_RATIOS.map((r) => {
+                const dims = ASPECT_RATIO_DIMENSIONS[r];
+                const previewRatio = `${dims.width} / ${dims.height}`;
+                const active = aspectRatio === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    disabled={inFlight}
+                    onClick={() => setAspectRatio(r)}
+                    aria-pressed={active}
+                    className={cn(
+                      'flex flex-col items-center gap-1 rounded-md border py-2 text-xs font-medium transition-colors',
+                      active
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-input bg-background text-muted-foreground hover:bg-accent',
+                      inFlight && 'cursor-not-allowed opacity-50',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'w-6 rounded-sm border',
+                        active
+                          ? 'border-primary bg-primary/30'
+                          : 'border-current bg-current/20',
+                      )}
+                      style={{ aspectRatio: previewRatio }}
+                      aria-hidden="true"
+                    />
+                    <span>{ASPECT_RATIO_LABELS[r]}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <SchoolStyleToggle

@@ -10,6 +10,8 @@ export interface LineageNode {
   prompt: string;
   thumbnailUrl: string;
   parentImageId: string | null;
+  width?: number;
+  height?: number;
 }
 
 export interface LineageResponse {

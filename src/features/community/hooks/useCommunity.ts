@@ -17,6 +17,8 @@ export interface CommunityImage {
   parentImageId: string | null;
   generationMode: string;
   schoolProfileApplied: boolean;
+  width: number;
+  height: number;
   createdAt: string;
   thumbnailUrl: string;
   tags: string[];

@@ -16,6 +16,8 @@ export interface ImageDetail {
   generationMode: string;
   referenceImageId: string | null;
   schoolProfileApplied: boolean;
+  width: number;
+  height: number;
   createdAt: string;
   fullUrl: string;
   thumbnailUrl: string;

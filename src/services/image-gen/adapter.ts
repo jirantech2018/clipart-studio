@@ -16,6 +16,8 @@ export interface GenerateInput {
   /** Reference image for img2img. Required when mode === 'img2img'. */
   referenceImage?: ReferenceImage;
   mode: GenerationMode;
+  /** Exact 'WxH' string the API expects (e.g. '1024x1024', '1536x1024'). */
+  size?: string;
 }
 
 export interface GenerateOutput {

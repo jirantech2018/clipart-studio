@@ -32,6 +32,7 @@ function jobFromRow(row: Record<string, unknown>): GenerationJob {
     diversityLevel: row.diversity_level as number,
     referenceImageId: (row.reference_image_id as string) ?? null,
     schoolProfileApplied: row.school_profile_applied as boolean,
+    aspectRatio: (row.aspect_ratio as GenerationJob['aspectRatio']) ?? 'square',
     reservedCredits: row.reserved_credits as number,
     refundedCredits: row.refunded_credits as number,
     status: row.status as GenerationJob['status'],

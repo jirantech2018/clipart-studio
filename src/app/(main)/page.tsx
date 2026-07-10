@@ -28,21 +28,25 @@ function rowToHomeImage(row: Record<string, unknown>): HomeImage {
     authorType: row.author_type as AccountType,
     authorSchoolName: (row.author_school_name as string) ?? null,
     downloadCount: Number(row.download_count ?? 0),
+    width: (row.width as number) ?? 1024,
+    height: (row.height as number) ?? 1024,
   };
 }
+
+const HOME_SELECT = 'id, prompt, r2_key, thumbnail_r2_key, author_type, author_school_name, download_count, width, height, created_at';
 
 export default async function HomePage() {
   const supabase = createSupabaseServerClient();
   const [popularRes, recentRes] = await Promise.all([
     supabase
       .from('community_images')
-      .select('id, prompt, r2_key, thumbnail_r2_key, author_type, author_school_name, download_count, created_at')
+      .select(HOME_SELECT)
       .order('download_count', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(HOME_LIMIT),
     supabase
       .from('community_images')
-      .select('id, prompt, r2_key, thumbnail_r2_key, author_type, author_school_name, download_count, created_at')
+      .select(HOME_SELECT)
       .order('created_at', { ascending: false })
       .limit(HOME_LIMIT),
   ]);

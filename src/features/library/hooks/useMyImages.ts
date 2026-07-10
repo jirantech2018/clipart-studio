@@ -20,6 +20,8 @@ export interface LibraryImage extends Image {
   categories: string[];
 }
 
+export type { AspectRatio } from '@/types/domain';
+
 interface ListResponse {
   images: LibraryImage[];
   total: number;

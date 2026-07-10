@@ -40,7 +40,10 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
   }
 
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-lg border bg-muted shadow-sm">
+    <div
+      className="group relative overflow-hidden rounded-lg border bg-muted shadow-sm"
+      style={{ aspectRatio: `${image.width} / ${image.height}` }}
+    >
       <Link
         href={`/image/${image.id}`}
         className="block h-full w-full"

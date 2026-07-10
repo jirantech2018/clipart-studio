@@ -73,6 +73,8 @@ export interface Image {
   schoolProfileApplied: boolean;
   status: ImageStatus;
   pendingExpiresAt: string | null;
+  width: number;
+  height: number;
   createdAt: string;
 }
 
@@ -84,12 +86,35 @@ export interface GenerationJob {
   diversityLevel: number;
   referenceImageId: string | null;
   schoolProfileApplied: boolean;
+  aspectRatio: AspectRatio;
   reservedCredits: number;
   refundedCredits: number;
   status: JobStatus;
   error: string | null;
   createdAt: string;
   completedAt: string | null;
+}
+
+// gpt-image-1 supports these three sizes. The user picks the semantic label,
+// pipeline.ts maps it to the WxH string expected by the API.
+export type AspectRatio = 'square' | 'landscape' | 'portrait';
+export const ASPECT_RATIOS = ['square', 'landscape', 'portrait'] as const;
+
+export const ASPECT_RATIO_LABELS: Record<AspectRatio, string> = {
+  square: '정사각',
+  landscape: '가로형',
+  portrait: '세로형',
+};
+
+export const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
+  square: { width: 1024, height: 1024 },
+  landscape: { width: 1536, height: 1024 },
+  portrait: { width: 1024, height: 1536 },
+};
+
+export function aspectRatioSizeString(ratio: AspectRatio): string {
+  const { width, height } = ASPECT_RATIO_DIMENSIONS[ratio];
+  return `${width}x${height}`;
 }
 
 // Valid batch sizes (5 stepping, max 30 per D6)

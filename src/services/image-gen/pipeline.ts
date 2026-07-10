@@ -8,6 +8,7 @@ import { primaryAdapter, applyDiversityHint, mergePrompt } from '@/services/imag
 import { publicUrl, putObject } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 import { taggingAdapter } from '@/services/tagging';
+import { ASPECT_RATIO_DIMENSIONS, aspectRatioSizeString } from '@/types/domain';
 
 import type { ReferenceImage } from '@/services/image-gen';
 import type { GenerationJob, SchoolProfile } from '@/types/domain';
@@ -76,10 +77,14 @@ export async function runOne({
     throw new Error('chaining job requires referenceImage bytes');
   }
 
+  const size = aspectRatioSizeString(job.aspectRatio);
+  const dims = ASPECT_RATIO_DIMENSIONS[job.aspectRatio];
+
   const gen = await adapter.generate({
     prompt: finalPrompt,
     mode: chaining ? 'img2img' : 'text2img',
     referenceImage: referenceImage ?? undefined,
+    size,
   });
 
   const imageId = randomUUID();
@@ -109,6 +114,8 @@ export async function runOne({
     school_profile_applied: job.schoolProfileApplied,
     status: 'saved',
     pending_expires_at: null,
+    width: dims.width,
+    height: dims.height,
   });
 
   if (error) throw new Error(`insert images failed: ${error.message}`);

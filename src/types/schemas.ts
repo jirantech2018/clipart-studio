@@ -40,6 +40,8 @@ export type SchoolProfileInput = z.infer<typeof schoolProfileSchema>;
 // Generation Job creation (POST /api/jobs)
 export const generationModeSchema = z.enum(['text2img', 'img2img', 'upscale']);
 
+export const aspectRatioSchema = z.enum(['square', 'landscape', 'portrait']);
+
 export const createJobSchema = z.object({
   prompt: z.string().min(2, '프롬프트는 최소 2자').max(500, '프롬프트는 500자 이내'),
   batchSize: z
@@ -50,6 +52,7 @@ export const createJobSchema = z.object({
   referenceImageId: z.string().uuid().nullable().optional(),
   schoolProfileApplied: z.boolean().default(true),
   generationMode: generationModeSchema.default('text2img'),
+  aspectRatio: aspectRatioSchema.default('square'),
 });
 
 export type CreateJobInput = z.infer<typeof createJobSchema>;

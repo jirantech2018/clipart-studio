@@ -35,6 +35,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     generationMode: row.generation_mode as string,
     referenceImageId: (row.reference_image_id as string) ?? null,
     schoolProfileApplied: row.school_profile_applied as boolean,
+    width: (row.width as number) ?? 1024,
+    height: (row.height as number) ?? 1024,
     createdAt: row.created_at as string,
     fullUrl: publicUrl(row.r2_key as string),
     thumbnailUrl: publicUrl((row.thumbnail_r2_key as string) ?? (row.r2_key as string)),
