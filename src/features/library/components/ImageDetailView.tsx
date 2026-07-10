@@ -114,13 +114,13 @@ export function ImageDetailView({ id }: { id: string }) {
 
         <aside className="space-y-4">
           <section className="space-y-1">
-            <h2 className="text-lg font-semibold">프롬프트</h2>
+            <h2 className="text-lg font-semibold">만들고 싶었던 내용</h2>
             <p className="text-sm text-muted-foreground">{image.prompt}</p>
           </section>
 
           {image.categories.length > 0 && (
             <section className="space-y-1">
-              <h3 className="text-sm font-medium">카테고리</h3>
+              <h3 className="text-sm font-medium">분류</h3>
               <div className="flex flex-wrap gap-1">
                 {image.categories.map((c) => (
                   <span
@@ -136,7 +136,7 @@ export function ImageDetailView({ id }: { id: string }) {
 
           {image.tags.length > 0 && (
             <section className="space-y-1">
-              <h3 className="text-sm font-medium">태그</h3>
+              <h3 className="text-sm font-medium">관련 키워드</h3>
               <div className="flex flex-wrap gap-1">
                 {image.tags.map((t) => (
                   <span
@@ -151,9 +151,25 @@ export function ImageDetailView({ id }: { id: string }) {
           )}
 
           <section className="space-y-1 text-xs text-muted-foreground">
-            <div>모델: {image.model}</div>
-            {image.seed !== null && <div>Seed: {image.seed}</div>}
-            <div>생성일: {new Date(image.createdAt).toLocaleString('ko-KR')}</div>
+            <div>
+              생성일:{' '}
+              {new Date(image.createdAt).toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </div>
+            <details className="pt-1">
+              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                세부정보
+              </summary>
+              <div className="mt-1 space-y-0.5 pl-1 text-[11px]">
+                <div>모델: {image.model}</div>
+                {image.seed !== null && <div>Seed: {image.seed}</div>}
+              </div>
+            </details>
           </section>
 
           <div className="space-y-2 pt-2">
@@ -161,7 +177,7 @@ export function ImageDetailView({ id }: { id: string }) {
               href={`/generate?parent=${image.id}`}
               className={cn(buttonVariants({ size: 'default' }), 'w-full')}
             >
-              <Sparkles className="mr-1 h-4 w-4" />이 이미지로 생성 (i2i)
+              <Sparkles className="mr-1 h-4 w-4" />이 이미지로 다시 만들기
             </Link>
             <div className="flex gap-2">
               <Button
