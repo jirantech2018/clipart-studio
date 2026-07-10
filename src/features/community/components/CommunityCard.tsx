@@ -1,7 +1,7 @@
 'use client';
 
-// Design Ref: §5.4 Community card — thumbnail + AuthorBadge + tags/categories + download
-// Non-Negotiable Rule 3: AI 라벨 필수
+// Design intent: pure gallery card for the workspace grid. Metadata lives on
+// the detail page. Actions (download) + download count appear on hover.
 
 import { useQueryClient } from '@tanstack/react-query';
 import { Download, Loader2 } from 'lucide-react';
@@ -24,7 +24,6 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
     setDownloading(true);
     try {
       await downloadImageFile(image.id);
-      // Bump download_count in the UI so popular sort feels responsive.
       queryClient.invalidateQueries({ queryKey: ['community'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '다운로드 실패');
@@ -34,11 +33,12 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
   }
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border bg-card shadow-sm">
+    <div className="group relative aspect-square overflow-hidden rounded-lg border bg-muted shadow-sm">
       <Link
         href={`/image/${image.id}`}
-        aria-label="상세 보기"
-        className="relative block aspect-square w-full bg-muted"
+        className="block h-full w-full"
+        title={image.prompt}
+        aria-label={image.prompt}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -47,57 +47,29 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
           className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
           loading="lazy"
         />
-        <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
-          <AIGeneratedBadge />
-        </div>
       </Link>
 
-      <div className="space-y-2 p-3">
+      <div className="pointer-events-none absolute right-2 top-2">
+        <AIGeneratedBadge />
+      </div>
+
+      <div className="absolute bottom-2 right-2 flex items-center gap-1.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         {image.downloadCount > 0 && (
-          <div className="flex justify-end">
-            <span
-              className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground"
-              title="다운로드 횟수"
-            >
-              <Download className="h-3 w-3" aria-hidden="true" />
-              {image.downloadCount}
-            </span>
-          </div>
-        )}
-        <p className="line-clamp-2 text-xs text-muted-foreground" title={image.prompt}>
-          {image.prompt}
-        </p>
-        {image.categories.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {image.categories.map((cat) => (
-              <span
-                key={cat}
-                className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
-              >
-                {cat}
-              </span>
-            ))}
-          </div>
-        )}
-        {image.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {image.tags.slice(0, 4).map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
-              >
-                #{tag}
-              </span>
-            ))}
-          </div>
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-1 text-[11px] tabular-nums text-muted-foreground shadow-md"
+            title="다운로드 횟수"
+          >
+            <Download className="h-3 w-3" aria-hidden="true" />
+            {image.downloadCount}
+          </span>
         )}
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="secondary"
           onClick={handleDownload}
           disabled={downloading}
-          className="w-full"
+          className="h-8 px-2 shadow-md"
         >
           {downloading ? (
             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
