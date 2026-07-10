@@ -2,10 +2,12 @@
 // Server component: fetch the two lists in parallel from community_images view.
 
 import Link from 'next/link';
+import { Suspense } from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
 import { HomeSection } from '@/features/community/components/HomeSection';
 import { TutorialOverlay } from '@/features/onboarding/components/TutorialOverlay';
+import { SearchBar } from '@/features/search/components/SearchBar';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -51,13 +53,18 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-6xl space-y-10">
       <TutorialOverlay />
-      <section className="space-y-4 pt-8 text-center">
+      <section className="space-y-6 pt-8 text-center">
         <h1 className="text-4xl font-bold tracking-tight">
           찾고, 없으면 만들고, 만들면 계정의 자산이 됩니다
         </h1>
         <p className="text-lg text-muted-foreground">
-          상단 검색창에서 이미지를 찾아보세요. 원하는 결과가 없다면 AI로 직접 만들면 됩니다.
+          여기서 이미지를 찾아보세요. 원하는 결과가 없다면 AI로 직접 만들면 됩니다.
         </p>
+        <div className="mx-auto max-w-xl px-4">
+          <Suspense fallback={null}>
+            <SearchBar className="w-full" />
+          </Suspense>
+        </div>
         <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
           <Link href="/generate" className={buttonVariants({ size: 'lg' })}>
             AI로 이미지 만들기
