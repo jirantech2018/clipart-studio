@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 import { Button } from '@/components/ui/button';
-import { requestDownload, usePublishToggle } from '@/features/library/hooks/useMyImages';
+import { downloadImageFile, usePublishToggle } from '@/features/library/hooks/useMyImages';
 
 import type { LibraryImage } from '@/features/library/hooks/useMyImages';
 
@@ -23,14 +23,7 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
     if (downloading) return;
     setDownloading(true);
     try {
-      const url = await requestDownload(image.id);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `clipart-${image.id}.png`;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      await downloadImageFile(image.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '다운로드 실패');
     } finally {

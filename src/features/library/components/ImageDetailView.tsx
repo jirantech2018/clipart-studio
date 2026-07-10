@@ -14,7 +14,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LineageTree } from '@/features/library/components/LineageTree';
 import {
-  requestDownload,
+  downloadImageFile,
   usePublishToggle,
 } from '@/features/library/hooks/useMyImages';
 import { useImageDetail } from '@/features/library/hooks/useImageDetail';
@@ -58,14 +58,7 @@ export function ImageDetailView({ id }: { id: string }) {
     if (downloading) return;
     setDownloading(true);
     try {
-      const url = await requestDownload(image.id);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `clipart-${image.id}.png`;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      await downloadImageFile(image.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '다운로드 실패');
     } finally {

@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 import { Button } from '@/components/ui/button';
-import { requestDownload } from '@/features/library/hooks/useMyImages';
+import { downloadImageFile } from '@/features/library/hooks/useMyImages';
 
 import type { CommunityImage } from '@/features/community/hooks/useCommunity';
 
@@ -23,14 +23,7 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
     if (downloading) return;
     setDownloading(true);
     try {
-      const url = await requestDownload(image.id);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `clipart-${image.id}.png`;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      await downloadImageFile(image.id);
       // Bump download_count in the UI so popular sort feels responsive.
       queryClient.invalidateQueries({ queryKey: ['community'] });
     } catch (err) {
