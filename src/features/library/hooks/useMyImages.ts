@@ -83,7 +83,12 @@ export function usePublishToggle() {
   });
 }
 
-export async function requestDownload(id: string): Promise<string> {
+/**
+ * Downloads the image file. The server route proxies the R2 bytes with
+ * Content-Disposition: attachment so the browser saves rather than opens it,
+ * and it logs the download_events row for the reuse-rate KPI.
+ */
+export async function downloadImageFile(id: string): Promise<void> {
   const res = await fetch(`/api/images/${id}/download`, { method: 'POST' });
   if (!res.ok) {
     const json = (await res.json().catch(() => null)) as {
@@ -91,33 +96,28 @@ export async function requestDownload(id: string): Promise<string> {
     } | null;
     throw new Error(json?.error?.message ?? '다운로드 실패');
   }
-  const json = (await res.json()) as { data: { downloadUrl: string } };
-  return json.data.downloadUrl;
-}
 
-/**
- * Downloads the image as a real file save even when the R2 URL is cross-origin
- * (where <a download> is otherwise ignored by browsers). Also logs the download
- * event server-side via requestDownload().
- */
-export async function downloadImageFile(id: string): Promise<void> {
-  const url = await requestDownload(id);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`이미지 다운로드 실패: ${res.status}`);
   const blob = await res.blob();
+  const filename =
+    parseFilenameFromContentDisposition(res.headers.get('content-disposition')) ??
+    `clipart-${id}.${blob.type === 'image/webp' ? 'webp' : 'png'}`;
+
   const objectUrl = URL.createObjectURL(blob);
   try {
-    const extFromUrl = url.split('?')[0]?.split('.').pop()?.toLowerCase();
-    const ext = extFromUrl === 'webp' ? 'webp' : 'png';
     const a = document.createElement('a');
     a.href = objectUrl;
-    a.download = `clipart-${id}.${ext}`;
+    a.download = filename;
     a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   } finally {
-    // Give the browser a tick to start the download before we revoke.
     setTimeout(() => URL.revokeObjectURL(objectUrl), 500);
   }
+}
+
+function parseFilenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = /filename="([^"]+)"/i.exec(header);
+  return match?.[1] ?? null;
 }

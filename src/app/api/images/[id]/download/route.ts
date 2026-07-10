@@ -1,8 +1,13 @@
-// Design Ref: §4.2 POST /api/images/:id/download — logs event, returns public URL
-// Plan SC: KPI reuse-rate depends on download_events. Non-owner public images can also be downloaded.
-// Uses service client for download_events insert (dl_insert has no policy — service-role only).
+// Streams the actual image bytes from R2 through this Route Handler.
+// Doing this server-side sidesteps R2 CORS restrictions (public buckets don't
+// send Access-Control-Allow-Origin by default) and guarantees that the browser
+// treats the response as a file download via Content-Disposition: attachment.
+// Also logs the download_events row for the reuse-rate KPI.
 
-import { apiError, apiOk } from '@/lib/api-error';
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+import { apiError } from '@/lib/api-error';
 import { publicUrl } from '@/services/r2/upload';
 import {
   createSupabaseServerClient,
@@ -19,7 +24,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   // RLS ensures we only see own images or is_public=TRUE ones.
   const { data: image } = await supabase
     .from('images')
-    .select('id, user_id, r2_key, status, is_public')
+    .select('id, user_id, r2_key, status, is_public, model')
     .eq('id', params.id)
     .maybeSingle();
 
@@ -35,15 +40,45 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     });
   }
 
+  // Log the download event (best-effort; a failure here shouldn't block the download).
   const service = createSupabaseServiceClient();
-  await service.from('download_events').insert({
-    user_id: user.id,
-    image_id: image.id,
-    event_type: 'download',
-  });
+  await service
+    .from('download_events')
+    .insert({
+      user_id: user.id,
+      image_id: image.id,
+      event_type: 'download',
+    })
+    .then((result) => {
+      if (result.error) {
+        console.error('[download] download_events insert failed', result.error);
+      }
+    });
 
-  return apiOk({
-    downloadUrl: publicUrl(image.r2_key),
-    imageId: image.id,
+  // Fetch the actual bytes from R2. Server-to-server: no CORS involved.
+  const r2Key = image.r2_key as string;
+  const upstreamUrl = publicUrl(r2Key);
+  const upstream = await fetch(upstreamUrl);
+  if (!upstream.ok || !upstream.body) {
+    return apiError('INTERNAL_ERROR', '이미지 파일을 가져오지 못했어요', {
+      status: upstream.status,
+    });
+  }
+
+  const ext = r2Key.split('.').pop()?.toLowerCase() ?? 'png';
+  const contentType =
+    upstream.headers.get('content-type') ??
+    (ext === 'webp' ? 'image/webp' : 'image/png');
+  const contentLength = upstream.headers.get('content-length');
+
+  const filename = `clipart-${image.id}.${ext === 'webp' ? 'webp' : 'png'}`;
+
+  const headers = new Headers({
+    'Content-Type': contentType,
+    'Content-Disposition': `attachment; filename="${filename}"`,
+    'Cache-Control': 'private, no-store',
   });
+  if (contentLength) headers.set('Content-Length', contentLength);
+
+  return new Response(upstream.body, { status: 200, headers });
 }
