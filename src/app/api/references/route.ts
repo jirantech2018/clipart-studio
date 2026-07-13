@@ -9,11 +9,14 @@ export const maxDuration = 30;
 import { randomUUID } from 'node:crypto';
 
 import { apiError, apiOk } from '@/lib/api-error';
-import { normalizeReferenceImage } from '@/services/image-gen/normalize';
+// normalizeReferenceImage (sharp)는 POST에서만 필요하므로 handler 내부에서
+// 동적으로 로드한다. 정적 import로 두면 sharp 로드 실패가 GET까지 500으로
+//번지는 문제가 있었다.
 import { publicUrl, putObject } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 import { REFERENCE_IMAGE_SLOT_LIMIT } from '@/types/domain';
 
+import type { NormalizedReference } from '@/services/image-gen/normalize';
 import type { ReferenceImageSlot } from '@/types/domain';
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 사용자 원본 상한 (정규화 전)
@@ -109,10 +112,12 @@ export async function POST(request: Request) {
 
   const rawBytes = Buffer.from(await file.arrayBuffer());
 
-  let normalized;
+  let normalized: NormalizedReference;
   try {
+    const { normalizeReferenceImage } = await import('@/services/image-gen/normalize');
     normalized = await normalizeReferenceImage(rawBytes);
   } catch (err) {
+    console.error('[references] normalize failed', err);
     return apiError(
       'VALIDATION_ERROR',
       err instanceof Error ? err.message : '이미지 변환에 실패했어요',
