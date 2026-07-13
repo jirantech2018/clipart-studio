@@ -16,8 +16,16 @@ import { publicUrl, putObject } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 import { REFERENCE_IMAGE_SLOT_LIMIT } from '@/types/domain';
 
-import type { NormalizedReference } from '@/services/image-gen/normalize';
 import type { ReferenceImageSlot } from '@/types/domain';
+
+// 인라인 타입 — normalize.ts를 어떤 형태로도 static import 하지 않기 위해서.
+// 이 파일은 sharp를 dynamic import로만 접근한다.
+interface NormalizedReference {
+  bytes: Buffer;
+  contentType: 'image/png';
+  width: number;
+  height: number;
+}
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 사용자 원본 상한 (정규화 전)
 const ACCEPTED_MIME = new Set([
@@ -54,25 +62,39 @@ function toSlot(row: Row): ReferenceImageSlot {
 }
 
 export async function GET() {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
+  try {
+    const supabase = createSupabaseServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError) {
+      console.error('[references GET] auth error', authError);
+      return apiError('INTERNAL_ERROR', `auth: ${authError.message}`);
+    }
+    if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
 
-  const { data, error } = await supabase
-    .from('reference_images')
-    .select('id, user_id, r2_key, filename, width, height, created_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('reference_images')
+      .select('id, user_id, r2_key, filename, width, height, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-  if (error) return apiError('INTERNAL_ERROR', '참조 이미지를 불러오지 못했어요');
+    if (error) {
+      console.error('[references GET] db error', error);
+      return apiError('INTERNAL_ERROR', `db: ${error.message} (code=${error.code ?? ''})`);
+    }
 
-  const rows = (data ?? []) as Row[];
-  return apiOk({
-    slots: rows.map(toSlot),
-    limit: REFERENCE_IMAGE_SLOT_LIMIT,
-  });
+    const rows = (data ?? []) as Row[];
+    return apiOk({
+      slots: rows.map(toSlot),
+      limit: REFERENCE_IMAGE_SLOT_LIMIT,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error('[references GET] uncaught', err);
+    return apiError('INTERNAL_ERROR', `uncaught: ${message}`);
+  }
 }
 
 export async function POST(request: Request) {
