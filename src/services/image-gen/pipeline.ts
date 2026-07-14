@@ -5,12 +5,14 @@
 import { randomUUID } from 'node:crypto';
 
 import { primaryAdapter, applyDiversityHint, mergePrompt } from '@/services/image-gen';
+import { assembleFinalPrompt } from '@/services/prompt-structuring';
 import { publicUrl, putObject } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 import { taggingAdapter } from '@/services/tagging';
 import { ASPECT_RATIO_DIMENSIONS, aspectRatioSizeString } from '@/types/domain';
 
 import type { ReferenceImage } from '@/services/image-gen';
+import type { StructuredPrompt } from '@/services/prompt-structuring';
 import type { GenerationJob, SchoolProfile } from '@/types/domain';
 
 export interface PipelineResult {
@@ -26,6 +28,8 @@ interface RunOneParams {
   isDiversityChunk: boolean;
   /** Preloaded reference bytes for chaining; caller fetches once per batch. */
   referenceImage?: ReferenceImage | null;
+  /** Preloaded structured prompt for the batch; caller runs structurePrompt() once. */
+  structuredPrompt?: StructuredPrompt | null;
 }
 
 /**
@@ -68,6 +72,7 @@ export async function runOne({
   schoolProfile,
   isDiversityChunk,
   referenceImage,
+  structuredPrompt,
 }: RunOneParams): Promise<PipelineResult> {
   const adapter = primaryAdapter();
 
@@ -78,7 +83,13 @@ export async function runOne({
   const adminPrompt = await fetchAdminSystemPrompt(settingsClient);
 
   const merged = mergePrompt(job.prompt, schoolProfile, job.schoolProfileApplied);
-  const withAdmin = adminPrompt ? `${adminPrompt}\n\n${merged}` : merged;
+  // 배치 앞단에서 만들어둔 구조화 결과를 gpt-image-2 가 잘 따르는 라벨링된 텍스트로
+  // 조립한다. structuredPrompt 가 없거나 비어있으면 assembleFinalPrompt 가 원본 그대로
+  // 돌려주므로 이전 동작과 동등한 fallback 을 유지한다.
+  const structured = structuredPrompt
+    ? assembleFinalPrompt(merged, structuredPrompt)
+    : merged;
+  const withAdmin = adminPrompt ? `${adminPrompt}\n\n${structured}` : structured;
   const finalPrompt = isDiversityChunk ? applyDiversityHint(withAdmin, order) : withAdmin;
 
   const chaining = !!job.referenceImageId;

@@ -10,9 +10,11 @@ export const maxDuration = 60;
 import { publicUrl } from '@/services/r2/upload';
 import { fetchReferenceImage, fetchReferenceImageByKey, runOne } from '@/services/image-gen/pipeline';
 import { refundCredits } from '@/services/credit';
+import { structurePrompt } from '@/services/prompt-structuring';
 import { createSupabaseServerClient, createSupabaseServiceClient } from '@/services/supabase/server';
 
 import type { ReferenceImage } from '@/services/image-gen';
+import type { StructuredPrompt } from '@/services/prompt-structuring';
 import type { GenerationJob, SchoolProfile } from '@/types/domain';
 
 const CHUNK_SIZE = 5;
@@ -118,6 +120,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           referenceImage = await fetchReferenceImageByKey(job.customReferenceR2Key);
         }
 
+        // 배치당 1회만 gpt-4o-mini 호출해 프롬프트를 구조화. 30장 배치도 이 비용은 상수.
+        // 실패 시 structurePrompt 가 빈 구조체를 돌려주고, pipeline 은 원본 프롬프트로 fallback.
+        const structuredPrompt: StructuredPrompt = await structurePrompt({
+          prompt: job.prompt,
+          hasReferenceImage: !!referenceImage,
+          schoolContext: schoolProfile?.styleDesc ?? null,
+        });
+
         const totalSlots = job.batchSize;
         const chunkCount = Math.ceil(totalSlots / CHUNK_SIZE);
 
@@ -134,6 +144,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
                 schoolProfile,
                 isDiversityChunk: isDiversity,
                 referenceImage,
+                structuredPrompt,
               }),
             ),
           );
