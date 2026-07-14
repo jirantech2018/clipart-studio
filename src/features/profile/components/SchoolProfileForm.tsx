@@ -100,26 +100,6 @@ export function SchoolProfileForm({
             </div>
           </Field>
 
-          <Field label="대표 색상" error={formState.errors.primaryColor?.message}>
-            <Input {...register('primaryColor')} placeholder="#3B82F6" />
-          </Field>
-
-          <Field label="캐릭터 설명">
-            <Textarea
-              {...register('mascotDesc')}
-              placeholder="교모를 쓴 사자, 파란 옷"
-              rows={2}
-            />
-          </Field>
-
-          <Field label="스타일 설명">
-            <Textarea
-              {...register('styleDesc')}
-              placeholder="따뜻한 파스텔톤, 어린이 친화적"
-              rows={2}
-            />
-          </Field>
-
           <Field label="기본 프롬프트">
             <Textarea
               {...register('basePrompt')}
