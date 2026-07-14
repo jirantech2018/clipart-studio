@@ -267,7 +267,7 @@ export function GenerationForm({
 
           <div className="space-y-2">
             <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-[repeat(4,1fr)_1.6fr] gap-1.5">
               {BATCH_SIZE_PRESETS.map((size) => (
                 <button
                   key={size}
