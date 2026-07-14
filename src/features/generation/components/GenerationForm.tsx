@@ -195,16 +195,22 @@ export function GenerationForm({
           )}
 
           <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-            <div className="text-sm">
+            <div className="space-y-2">
               <div>
-                이번 생성에{' '}
-                <span className="font-semibold tabular-nums">{batchSize}</span> 크레딧이
-                사용됩니다.
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  생성 후
+                </div>
+                <div className="text-base font-semibold tabular-nums">
+                  {Math.max(0, credits - batchSize)} 크레딧 남음
+                </div>
               </div>
-              <div className="text-muted-foreground">
-                생성 후{' '}
-                <span className="tabular-nums">{Math.max(0, credits - batchSize)}</span>{' '}
-                크레딧이 남습니다.
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  이번 생성
+                </div>
+                <div className="text-base font-semibold tabular-nums">
+                  {batchSize} 크레딧 사용
+                </div>
               </div>
             </div>
             <Button type="submit" disabled={disabled} className="min-w-[10rem]">
