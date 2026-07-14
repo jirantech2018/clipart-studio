@@ -200,7 +200,7 @@ export function GenerationForm({
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   생성 후
                 </div>
-                <div className="text-base font-semibold tabular-nums">
+                <div className="text-sm font-semibold tabular-nums">
                   {Math.max(0, credits - batchSize)} 크레딧 남음
                 </div>
               </div>
@@ -208,7 +208,7 @@ export function GenerationForm({
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   이번 생성
                 </div>
-                <div className="text-base font-semibold tabular-nums">
+                <div className="text-sm font-semibold tabular-nums">
                   {batchSize} 크레딧 사용
                 </div>
               </div>
