@@ -85,7 +85,6 @@ export function GenerationForm({
 
   const [prompt, setPrompt] = useState<string>(parent?.prompt ?? '');
   const [batchSize, setBatchSize] = useState<number>(5);
-  const [diversityLevel, setDiversityLevel] = useState(0);
   const [schoolProfileApplied, setSchoolProfileApplied] = useState(hasSchoolProfile);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('square');
   const customReferenceId = useReferenceStore((s) => s.selectedReferenceId);
@@ -118,7 +117,7 @@ export function GenerationForm({
     const parsed = createJobSchema.safeParse({
       prompt,
       batchSize,
-      diversityLevel,
+      diversityLevel: 0,
       referenceImageId: parent?.id ?? null,
       customReferenceId: !chaining ? customReferenceId : null,
       schoolProfileApplied,
@@ -404,28 +403,6 @@ export function GenerationForm({
             checked={schoolProfileApplied}
             onChange={setSchoolProfileApplied}
           />
-
-          <div className="space-y-2">
-            <Label>다양한 느낌으로 만들어 보기</Label>
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={0}
-                max={Math.min(6, Math.floor(batchSize / 5))}
-                step={1}
-                value={diversityLevel}
-                disabled={inFlight}
-                onChange={(e) => setDiversityLevel(Number(e.target.value))}
-                className="flex-1"
-              />
-              <span className="w-16 text-right text-sm tabular-nums">
-                {diversityLevel === 0 ? '기본' : `앞 ${diversityLevel * 5}장`}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              같은 내용을 다양한 구도와 스타일로 만들어 드립니다.
-            </p>
-          </div>
 
         </form>
       </CardContent>
