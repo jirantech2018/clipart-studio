@@ -1,4 +1,4 @@
-// Design Ref: §8.1 AI (1순위) OpenAI gpt-image-1
+// Design Ref: §8.1 AI (1순위) OpenAI gpt-image-2 (upgraded from gpt-image-1 on 2026-04-21 release)
 // Supports text2img (/v1/images/generations) and img2img (/v1/images/edits).
 // Uses fetch directly (no SDK) to keep bundle lean and to make it trivial to
 // swap the base URL for a proxy.
@@ -84,7 +84,7 @@ async function toBytes(payload: ImagePayload): Promise<Buffer> {
 }
 
 export const openaiImageGen: ImageGenAdapter = {
-  model: 'gpt-image-1',
+  model: 'gpt-image-2',
   async generate(input: GenerateInput): Promise<GenerateOutput> {
     const seed = input.seed ?? randomSeed();
 
@@ -100,16 +100,16 @@ export const openaiImageGen: ImageGenAdapter = {
       const filename = `reference.${ext}`;
       const blob = new Blob([new Uint8Array(ref.bytes)], { type: ref.contentType });
       const form = new FormData();
-      form.append('model', 'gpt-image-1');
+      form.append('model', 'gpt-image-2');
       form.append('prompt', input.prompt);
       form.append('n', '1');
       form.append('size', size);
       form.append('image', blob, filename);
       payload = await callEdits(form);
     } else {
-      // gpt-image-1 returns b64_json by default and rejects response_format.
+      // gpt-image-2 returns b64_json by default and rejects response_format.
       payload = await callGenerations({
-        model: 'gpt-image-1',
+        model: 'gpt-image-2',
         prompt: input.prompt,
         n: 1,
         size,
@@ -121,7 +121,7 @@ export const openaiImageGen: ImageGenAdapter = {
       imageBytes,
       contentType: 'image/png',
       seed,
-      model: 'gpt-image-1',
+      model: 'gpt-image-2',
     };
   },
 };

@@ -6,7 +6,7 @@ export type SchoolLevel = 'elementary' | 'middle' | 'high';
 export type ImageStatus = 'pending' | 'saved' | 'discarded';
 export type GenerationMode = 'text2img' | 'img2img' | 'upscale';
 export type JobStatus = 'queued' | 'running' | 'partial' | 'done' | 'failed';
-export type ImageModel = 'gpt-image-1' | 'flux-schnell';
+export type ImageModel = 'gpt-image-2' | 'gpt-image-1' | 'flux-schnell';
 
 export interface Profile {
   id: string;

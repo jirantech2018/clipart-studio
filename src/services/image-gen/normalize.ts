@@ -1,4 +1,4 @@
-// gpt-image-1 /images/edits 는 PNG/WebP만 받고 4MB 이하만 허용한다.
+// gpt-image-2 /images/edits 는 PNG/WebP만 받고 4MB 이하만 허용한다.
 // 사용자가 업로드한 임의의 이미지를 그 제약에 맞춰 변환한다:
 //   - JPG/AVIF/HEIC 등 → PNG로 재인코딩
 //   - 4MB 초과 시 긴 변 최대 2048px로 리사이즈
