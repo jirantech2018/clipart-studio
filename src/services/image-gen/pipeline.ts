@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { primaryAdapter, applyDiversityHint, mergePrompt } from '@/services/image-gen';
+import { composeRules } from '@/services/prompt-rules';
 import { assembleFinalPrompt } from '@/services/prompt-structuring';
 import { publicUrl, putObject } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
@@ -13,7 +14,7 @@ import { ASPECT_RATIO_DIMENSIONS, aspectRatioSizeString } from '@/types/domain';
 
 import type { ReferenceImage } from '@/services/image-gen';
 import type { StructuredPrompt } from '@/services/prompt-structuring';
-import type { GenerationJob, SchoolProfile } from '@/types/domain';
+import type { GenerationJob, PromptRule, SchoolProfile } from '@/types/domain';
 
 export interface PipelineResult {
   imageId: string;
@@ -30,6 +31,8 @@ interface RunOneParams {
   referenceImage?: ReferenceImage | null;
   /** Preloaded structured prompt for the batch; caller runs structurePrompt() once. */
   structuredPrompt?: StructuredPrompt | null;
+  /** Active prompt rules loaded by the caller once per batch. Empty array → fallback. */
+  promptRules?: PromptRule[];
 }
 
 /**
@@ -73,24 +76,38 @@ export async function runOne({
   isDiversityChunk,
   referenceImage,
   structuredPrompt,
+  promptRules,
 }: RunOneParams): Promise<PipelineResult> {
   const adapter = primaryAdapter();
 
-  // Admin-controlled global directive (Korean-context enforcement). Prepended to
-  // every prompt including chaining (i2i) — the base image handles style, this
-  // handles semantic guidance (ethnicity, setting details, symbols like 태극기).
-  const settingsClient = createSupabaseServiceClient();
-  const adminPrompt = await fetchAdminSystemPrompt(settingsClient);
-
   const merged = mergePrompt(job.prompt, schoolProfile, job.schoolProfileApplied);
-  // 배치 앞단에서 만들어둔 구조화 결과를 gpt-image-2 가 잘 따르는 라벨링된 텍스트로
-  // 조립한다. structuredPrompt 가 없거나 비어있으면 assembleFinalPrompt 가 원본 그대로
-  // 돌려주므로 이전 동작과 동등한 fallback 을 유지한다.
-  const structured = structuredPrompt
+  // 사용자 자연어를 structurePrompt 결과로 라벨링된 형식으로 재조립. structuredPrompt
+  // 없으면 원본 그대로.
+  const userSection = structuredPrompt
     ? assembleFinalPrompt(merged, structuredPrompt)
     : merged;
-  const withAdmin = adminPrompt ? `${adminPrompt}\n\n${structured}` : structured;
-  const finalPrompt = isDiversityChunk ? applyDiversityHint(withAdmin, order) : withAdmin;
+
+  // 활성 prompt_rules 가 있으면 [Global][Context][Task][User][Negative] 순으로 조합.
+  // 없으면 (마이그레이션 전 or 관리자가 rule 을 아직 만들지 않은 상태) 기존 흐름:
+  //   admin_settings.system_prompt + userSection.
+  let finalPrompt: string;
+  if (promptRules && promptRules.length > 0) {
+    const composed = composeRules({ rules: promptRules, userSection });
+    finalPrompt = composed.prompt;
+    console.log(
+      `[prompt-rules] job=${job.id} order=${order} applied=[${composed.appliedRuleIds.join(',')}] dropped=[${composed.droppedRuleIds.join(',')}] len=${composed.prompt.length}`,
+    );
+  } else {
+    const settingsClient = createSupabaseServiceClient();
+    const legacyAdminPrompt = await fetchAdminSystemPrompt(settingsClient);
+    finalPrompt = legacyAdminPrompt
+      ? `${legacyAdminPrompt}\n\n${userSection}`
+      : userSection;
+  }
+
+  if (isDiversityChunk) {
+    finalPrompt = applyDiversityHint(finalPrompt, order);
+  }
 
   const chaining = !!job.referenceImageId;
   const customReference = !!job.customReferenceR2Key;

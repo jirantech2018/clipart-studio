@@ -63,3 +63,31 @@ export const createJobSchema = z
   });
 
 export type CreateJobInput = z.infer<typeof createJobSchema>;
+
+// Prompt rules — admin CRUD input validation.
+export const promptRuleCategorySchema = z.enum([
+  'global',
+  'school',
+  'location',
+  'style',
+  'task',
+  'context',
+  'negative',
+]);
+
+export const createPromptRuleSchema = z.object({
+  name: z.string().min(1, '이름은 필수입니다').max(200, '이름은 200자 이내'),
+  category: promptRuleCategorySchema,
+  tags: z.array(z.string().min(1).max(50)).max(20).default([]),
+  priority: z.number().int().min(0).max(10000).default(100),
+  enabled: z.boolean().default(true),
+  content: z
+    .string()
+    .min(1, '내용은 필수입니다')
+    .max(20000, '내용은 2만자 이내여야 합니다'),
+});
+
+export const updatePromptRuleSchema = createPromptRuleSchema.partial();
+
+export type CreatePromptRuleInput = z.infer<typeof createPromptRuleSchema>;
+export type UpdatePromptRuleInput = z.infer<typeof updatePromptRuleSchema>;

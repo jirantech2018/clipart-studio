@@ -10,12 +10,13 @@ export const maxDuration = 60;
 import { publicUrl } from '@/services/r2/upload';
 import { fetchReferenceImage, fetchReferenceImageByKey, runOne } from '@/services/image-gen/pipeline';
 import { refundCredits } from '@/services/credit';
+import { loadActiveRules } from '@/services/prompt-rules';
 import { structurePrompt } from '@/services/prompt-structuring';
 import { createSupabaseServerClient, createSupabaseServiceClient } from '@/services/supabase/server';
 
 import type { ReferenceImage } from '@/services/image-gen';
 import type { StructuredPrompt } from '@/services/prompt-structuring';
-import type { GenerationJob, SchoolProfile } from '@/types/domain';
+import type { GenerationJob, PromptRule, SchoolProfile } from '@/types/domain';
 
 const CHUNK_SIZE = 5;
 
@@ -128,6 +129,15 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           schoolContext: schoolProfile?.styleDesc ?? null,
         });
 
+        // 관리자 정의 prompt_rules 를 배치당 1회 로드. 결과가 비면 pipeline 이 legacy
+        // admin_settings.system_prompt 경로로 자동 fallback 하므로 이전 동작 보존.
+        const promptRules: PromptRule[] = await loadActiveRules();
+        console.log(
+          `[prompt-rules] job=${job.id} loaded=${promptRules.length}${
+            promptRules.length === 0 ? ' (fallback to legacy system_prompt)' : ''
+          }`,
+        );
+
         const totalSlots = job.batchSize;
         const chunkCount = Math.ceil(totalSlots / CHUNK_SIZE);
 
@@ -145,6 +155,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
                 isDiversityChunk: isDiversity,
                 referenceImage,
                 structuredPrompt,
+                promptRules,
               }),
             ),
           );

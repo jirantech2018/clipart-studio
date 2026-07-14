@@ -109,6 +109,47 @@ export interface ReferenceImageSlot {
 
 export const REFERENCE_IMAGE_SLOT_LIMIT = 5;
 
+export type PromptRuleCategory =
+  | 'global'
+  | 'school'
+  | 'location'
+  | 'style'
+  | 'task'
+  | 'context'
+  | 'negative';
+
+export const PROMPT_RULE_CATEGORIES: PromptRuleCategory[] = [
+  'global',
+  'school',
+  'location',
+  'style',
+  'task',
+  'context',
+  'negative',
+];
+
+export const PROMPT_RULE_CATEGORY_LABELS: Record<PromptRuleCategory, string> = {
+  global: 'Global',
+  school: 'School',
+  location: 'Location',
+  style: 'Style',
+  task: 'Task',
+  context: 'Context',
+  negative: 'Negative',
+};
+
+export interface PromptRule {
+  id: string;
+  name: string;
+  category: PromptRuleCategory;
+  tags: string[];
+  priority: number;
+  enabled: boolean;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // gpt-image-1 supports these three sizes. The user picks the semantic label,
 // pipeline.ts maps it to the WxH string expected by the API.
 export type AspectRatio = 'square' | 'landscape' | 'portrait';
