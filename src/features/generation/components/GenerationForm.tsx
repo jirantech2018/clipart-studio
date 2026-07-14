@@ -304,7 +304,11 @@ export function GenerationForm({
                     );
                   }}
                   className={cn(
-                    'h-9 w-full rounded-md border border-input bg-background px-2 pr-11 text-sm font-medium',
+                    'h-9 w-full rounded-md border border-input bg-background px-3 pr-12 text-center text-sm font-medium',
+                    // 브라우저 기본 number spinner 제거
+                    '[appearance:textfield]',
+                    '[&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none',
+                    '[&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none',
                     'focus:outline-none focus:ring-2 focus:ring-primary/40',
                     inFlight && 'cursor-not-allowed opacity-50',
                   )}
