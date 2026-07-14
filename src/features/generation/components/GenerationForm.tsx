@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { PresetChips } from '@/features/generation/components/PresetChips';
 import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCreateJob';
+import { usePromptSuggestions } from '@/features/generation/hooks/usePromptSuggestions';
 import { SchoolStyleToggle } from '@/features/generation/components/SchoolStyleToggle';
 import { useReferenceImages } from '@/features/references/hooks/useReferenceImages';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -105,6 +106,11 @@ export function GenerationForm({
   useEffect(() => {
     setDraftAspectRatio(aspectRatio);
   }, [aspectRatio, setDraftAspectRatio]);
+
+  // 프롬프트 기반 AI 추천 힌트 (debounce 800ms). 프롬프트가 짧으면 서버가
+  // 하드코딩 fallback 5개를 즉시 돌려주므로 언제나 chip 은 표시된다.
+  const suggestionQuery = usePromptSuggestions(prompt);
+  const suggestionHints = suggestionQuery.data?.suggestions ?? [];
 
   const createJob = useCreateJob();
 
@@ -348,14 +354,18 @@ export function GenerationForm({
               onChange={(e) => setPrompt(e.target.value)}
               disabled={inFlight}
             />
-            {chaining && (
-              <div className="space-y-1.5 pt-1">
-                <p className="text-xs text-muted-foreground">
-                  프리셋 — 클릭해서 원본 프롬프트에 변형 힌트를 추가하세요
-                </p>
-                <PresetChips value={prompt} onChange={setPrompt} disabled={inFlight} />
-              </div>
-            )}
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs text-muted-foreground">
+                AI 추천 — 클릭해서 프롬프트에 변형 힌트를 덧붙여 보세요
+              </p>
+              <PresetChips
+                hints={suggestionHints}
+                loading={suggestionQuery.isLoading || suggestionQuery.isFetching}
+                value={prompt}
+                onChange={setPrompt}
+                disabled={inFlight}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
