@@ -20,9 +20,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { PresetChips } from '@/features/generation/components/PresetChips';
 import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCreateJob';
 import { SchoolStyleToggle } from '@/features/generation/components/SchoolStyleToggle';
-import { ReferencePicker } from '@/features/references/components/ReferencePicker';
+import { useReferenceImages } from '@/features/references/hooks/useReferenceImages';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useGenerationStore } from '@/lib/store/generationStore';
+import { useReferenceStore } from '@/lib/store/referenceStore';
 import { cn } from '@/lib/utils';
 import {
   ASPECT_RATIOS,
@@ -86,7 +87,13 @@ export function GenerationForm({
   const [diversityLevel, setDiversityLevel] = useState(0);
   const [schoolProfileApplied, setSchoolProfileApplied] = useState(hasSchoolProfile);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('square');
-  const [customReferenceId, setCustomReferenceId] = useState<string | null>(null);
+  const customReferenceId = useReferenceStore((s) => s.selectedReferenceId);
+  const clearCustomReference = useReferenceStore((s) => s.clear);
+  const { data: referenceData } = useReferenceImages();
+  const selectedReference =
+    !chaining && customReferenceId
+      ? referenceData?.slots.find((s) => s.id === customReferenceId) ?? null
+      : null;
 
   const createJob = useCreateJob();
 
@@ -167,6 +174,42 @@ export function GenerationForm({
               <button
                 type="button"
                 onClick={clearParent}
+                disabled={inFlight}
+                className="rounded p-1 text-muted-foreground hover:bg-accent"
+                aria-label="참조 이미지 해제"
+                title="참조 이미지 해제"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
+          {!chaining && selectedReference && (
+            <div className="flex items-start gap-3 rounded-md border bg-muted/30 p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={selectedReference.url}
+                alt="참조 이미지"
+                className="h-16 w-16 shrink-0 rounded object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium">참조 이미지</p>
+                <p
+                  className="line-clamp-2 text-xs text-muted-foreground"
+                  title={selectedReference.filename ?? undefined}
+                >
+                  {selectedReference.filename ?? '저장된 슬롯 이미지'}
+                </p>
+                <Link
+                  href="/settings"
+                  className="text-[10px] text-primary underline-offset-4 hover:underline"
+                >
+                  슬롯 관리
+                </Link>
+              </div>
+              <button
+                type="button"
+                onClick={clearCustomReference}
                 disabled={inFlight}
                 className="rounded p-1 text-muted-foreground hover:bg-accent"
                 aria-label="참조 이미지 해제"
@@ -342,14 +385,6 @@ export function GenerationForm({
               })}
             </div>
           </div>
-
-          {!chaining && (
-            <ReferencePicker
-              value={customReferenceId}
-              onChange={setCustomReferenceId}
-              disabled={inFlight}
-            />
-          )}
 
           <SchoolStyleToggle
             hasSchoolProfile={hasSchoolProfile}

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { GenerationForm } from '@/features/generation/components/GenerationForm';
 import { BatchProgressPanel } from '@/features/generation/components/BatchProgressPanel';
+import { ReferenceLibrarySection } from '@/features/references/components/ReferenceLibrarySection';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -53,7 +54,7 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
-      <div className="min-w-0">
+      <div className="min-w-0 space-y-6">
         <GenerationForm
           hasSchoolProfile={!!schoolProfile}
           schoolName={(schoolProfile?.school_name as string) ?? null}
@@ -61,6 +62,7 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
           creditsResetAt={(profile?.credits_reset_at as string) ?? null}
           parent={parent}
         />
+        {!parent && <ReferenceLibrarySection />}
       </div>
       <div className="min-w-0">
         <BatchProgressPanel />
