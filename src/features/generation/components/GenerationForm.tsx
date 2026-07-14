@@ -238,22 +238,12 @@ export function GenerationForm({
           )}
 
           <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-            <div className="space-y-2">
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  생성 후
-                </div>
-                <div className="text-sm font-semibold tabular-nums">
-                  {Math.max(0, credits - batchSize)} 크레딧 남음
-                </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                생성 후
               </div>
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  이번 생성
-                </div>
-                <div className="text-sm font-semibold tabular-nums">
-                  {batchSize} 크레딧 사용
-                </div>
+              <div className="text-sm font-semibold tabular-nums">
+                {Math.max(0, credits - batchSize)} 크레딧 남음
               </div>
             </div>
             <Button type="submit" disabled={disabled} className="min-w-[10rem]">
@@ -266,7 +256,13 @@ export function GenerationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                <span className="font-semibold text-foreground">{batchSize}</span> 크레딧
+                사용
+              </span>
+            </div>
             <div className="grid grid-cols-[repeat(4,1fr)_1.6fr] gap-1.5">
               {BATCH_SIZE_PRESETS.map((size) => (
                 <button
