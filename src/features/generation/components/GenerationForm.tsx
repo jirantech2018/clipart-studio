@@ -222,6 +222,68 @@ export function GenerationForm({
             </Button>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {BATCH_SIZE_PRESETS.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  disabled={inFlight}
+                  onClick={() => setBatchSize(size)}
+                  className={cn(
+                    'h-9 min-w-[3.5rem] rounded-md border px-3 text-sm font-medium transition-colors',
+                    batchSize === size
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input bg-background hover:bg-accent',
+                    inFlight && 'cursor-not-allowed opacity-50',
+                  )}
+                >
+                  {size}장
+                </button>
+              ))}
+              <div className="relative flex-1 min-w-[6rem]">
+                <input
+                  id="batchSize"
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_BATCH_SIZE}
+                  max={MAX_BATCH_SIZE}
+                  step={1}
+                  disabled={inFlight}
+                  value={batchSize}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const raw = e.target.value;
+                    if (raw === '') {
+                      setBatchSize(MIN_BATCH_SIZE);
+                      return;
+                    }
+                    const parsed = Number.parseInt(raw, 10);
+                    if (Number.isNaN(parsed)) return;
+                    setBatchSize(
+                      Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, parsed)),
+                    );
+                  }}
+                  className={cn(
+                    'h-9 w-full rounded-md border border-input bg-background px-3 pr-14 text-sm font-medium',
+                    'focus:outline-none focus:ring-2 focus:ring-primary/40',
+                    inFlight && 'cursor-not-allowed opacity-50',
+                  )}
+                />
+                <span
+                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground/60"
+                  aria-hidden="true"
+                >
+                  ~{MAX_BATCH_SIZE}장
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              여러 장을 만들수록 원하는 이미지를 찾기 쉬워집니다. 직접 입력해{' '}
+              {MAX_BATCH_SIZE}장까지 만들 수 있어요.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="prompt">프롬프트</Label>
             <Textarea
@@ -295,68 +357,6 @@ export function GenerationForm({
             checked={schoolProfileApplied}
             onChange={setSchoolProfileApplied}
           />
-
-          <div className="space-y-2">
-            <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {BATCH_SIZE_PRESETS.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  disabled={inFlight}
-                  onClick={() => setBatchSize(size)}
-                  className={cn(
-                    'h-9 min-w-[3.5rem] rounded-md border px-3 text-sm font-medium transition-colors',
-                    batchSize === size
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-input bg-background hover:bg-accent',
-                    inFlight && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  {size}장
-                </button>
-              ))}
-              <div className="relative flex-1 min-w-[6rem]">
-                <input
-                  id="batchSize"
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_BATCH_SIZE}
-                  max={MAX_BATCH_SIZE}
-                  step={1}
-                  disabled={inFlight}
-                  value={batchSize}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    const raw = e.target.value;
-                    if (raw === '') {
-                      setBatchSize(MIN_BATCH_SIZE);
-                      return;
-                    }
-                    const parsed = Number.parseInt(raw, 10);
-                    if (Number.isNaN(parsed)) return;
-                    setBatchSize(
-                      Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, parsed)),
-                    );
-                  }}
-                  className={cn(
-                    'h-9 w-full rounded-md border border-input bg-background px-3 pr-14 text-sm font-medium',
-                    'focus:outline-none focus:ring-2 focus:ring-primary/40',
-                    inFlight && 'cursor-not-allowed opacity-50',
-                  )}
-                />
-                <span
-                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground/60"
-                  aria-hidden="true"
-                >
-                  ~{MAX_BATCH_SIZE}장
-                </span>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              여러 장을 만들수록 원하는 이미지를 찾기 쉬워집니다. 직접 입력해{' '}
-              {MAX_BATCH_SIZE}장까지 만들 수 있어요.
-            </p>
-          </div>
 
           <div className="space-y-2">
             <Label>다양한 느낌으로 만들어 보기</Label>
