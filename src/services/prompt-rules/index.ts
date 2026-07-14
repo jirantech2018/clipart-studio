@@ -78,16 +78,11 @@ export interface ComposedPrompt {
   droppedRuleIds: string[];
 }
 
-const DEFAULT_MAX_LENGTH = 12000;
-
-const CATEGORY_SECTION_ORDER: {
-  label: string;
-  categories: PromptRuleCategory[];
-}[] = [
-  { label: 'Global', categories: ['global'] },
-  { label: 'Context', categories: ['school', 'location', 'style', 'context'] },
-  { label: 'Task', categories: ['task'] },
-];
+// gpt-image-2 는 이론상 매우 긴 프롬프트도 받지만, 실무적으로 너무 길면 지시 우선순위가
+// 무너지거나 요청이 잘리는 경우가 있어 상한을 둔다. Phase 1 초기값 12000 은 관리자가
+// MD 가이드 전체를 하나의 rule 로 붙여넣으면 그 rule 하나만으로 상한을 넘어버렸다.
+// 50000 으로 상향해서 정상 데이터 범위에서는 실질적으로 truncation 이 발생하지 않도록 함.
+const DEFAULT_MAX_LENGTH = 50000;
 
 /**
  * Category+priority 로 정렬된 rule 목록과 사용자 섹션을 받아 최종 프롬프트를 조립한다.
@@ -116,13 +111,6 @@ export function composeRules({
     else if (rule.category === 'negative') negativePool.push(rule);
     else contextPool.push(rule);
   }
-
-  // 조합 결과를 sections 로 만들고, 길이 초과시 priority 낮은 순 (배열 뒤쪽) 부터 잘라낸다
-  const sectionsToRender: { label: string; pool: PromptRule[] }[] = [
-    { label: 'Global', pool: globalPool },
-    { label: 'Context', pool: contextPool },
-    { label: 'Task', pool: taskPool },
-  ];
 
   const renderSection = (label: string, pool: PromptRule[]): string | null => {
     if (pool.length === 0) return null;
@@ -155,6 +143,14 @@ export function composeRules({
   let currentTask = [...taskPool];
   let currentNegative = [...negativePool];
   let composed = buildPrompt(currentGlobal, currentContext, currentTask, currentNegative);
+  const initialLength = composed.length;
+  const userLength = userSection.length;
+  const contentLengths = {
+    global: globalPool.reduce((sum, r) => sum + r.content.length, 0),
+    context: contextPool.reduce((sum, r) => sum + r.content.length, 0),
+    task: taskPool.reduce((sum, r) => sum + r.content.length, 0),
+    negative: negativePool.reduce((sum, r) => sum + r.content.length, 0),
+  };
 
   // 길이 초과시 우선순위 낮은 rule 부터 순차 제거
   // 자르는 순서: Task (마지막 항목부터) → Context → Global (Negative 는 마지막까지 유지)
@@ -180,6 +176,12 @@ export function composeRules({
     for (const r of list) {
       if (!droppedRuleIds.includes(r.id)) appliedRuleIds.push(r.id);
     }
+  }
+
+  if (droppedRuleIds.length > 0 || initialLength > maxLength) {
+    console.warn(
+      `[prompt-rules] compose: initialLen=${initialLength} finalLen=${composed.length} maxLen=${maxLength} userLen=${userLength} contentLens=${JSON.stringify(contentLengths)} dropped=${droppedRuleIds.length}`,
+    );
   }
 
   return { prompt: composed, appliedRuleIds, droppedRuleIds };
