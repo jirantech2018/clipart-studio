@@ -4,14 +4,24 @@
 // Policy: generated images are auto-saved to the library. No user save/discard action.
 // Non-Negotiable Rule 3 (CLAUDE.md): AI 라벨 필수.
 
+import { CSSProperties } from 'react';
+
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 
 import type { ResultCard as ResultCardModel } from '@/lib/store/generationStore';
 
-export function ResultCard({ card }: { card: ResultCardModel }) {
+interface ResultCardProps {
+  card: ResultCardModel;
+  aspectStyle?: CSSProperties;
+}
+
+export function ResultCard({ card, aspectStyle }: ResultCardProps) {
   return (
     <div className="group relative overflow-hidden rounded-lg border bg-card shadow-sm card-fade-in">
-      <div className="relative aspect-square w-full bg-muted">
+      <div
+        className="relative w-full bg-muted"
+        style={aspectStyle ?? { aspectRatio: '1 / 1' }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={card.thumbnailUrl}

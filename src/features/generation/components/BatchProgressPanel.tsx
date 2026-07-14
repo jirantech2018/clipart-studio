@@ -3,18 +3,32 @@
 // Design Ref: §5.4 Batch Progress Panel — progress bar + card stream + done banner
 // Design Ref: §2.2 SSE consumer wiring (useJobStream drives store, panel renders)
 // Plan SC: FR-20 SSE UI reflection
+//
+// Slot-based rendering: 배치 크기만큼 order 슬롯을 미리 만들고 각 슬롯의 상태에 따라
+//   idle    → 아직 시작 전, 얇은 프레임에 순번만 표시
+//   pending → 스트림 중이지만 아직 이 순번의 이미지가 안 옴 (스켈레톤 pulse)
+//   done    → image_ready 이벤트로 채워짐 → ResultCard
+//   failed  → chunk_failed 이벤트로 실패 마킹
+// 이렇게 하면 사용자가 배치/비율만 골라도 우측에서 결과가 어떻게 배열될지 미리 볼 수 있고,
+// 생성이 진행되면 각자의 자리에 그대로 채워지므로 순서가 튀지 않는다.
 
-import { CheckCircle2, ImageIcon, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ImageIcon, Loader2 } from 'lucide-react';
+import { CSSProperties } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResultCard } from '@/features/generation/components/ResultCard';
 import { useJobStream } from '@/features/generation/hooks/useJobStream';
+import { useGenerationDraftStore } from '@/lib/store/generationDraftStore';
 import { useGenerationStore } from '@/lib/store/generationStore';
 import { cn } from '@/lib/utils';
+import { ASPECT_RATIO_DIMENSIONS } from '@/types/domain';
+
+import type { ChunkFailure, ResultCard as ResultCardModel } from '@/lib/store/generationStore';
 
 export function BatchProgressPanel() {
   const jobId = useGenerationStore((s) => s.jobId);
-  const batchSize = useGenerationStore((s) => s.batchSize);
+  const runningBatchSize = useGenerationStore((s) => s.batchSize);
+  const runningAspectRatio = useGenerationStore((s) => s.aspectRatio);
   const cards = useGenerationStore((s) => s.cards);
   const failures = useGenerationStore((s) => s.failures);
   const streamStatus = useGenerationStore((s) => s.streamStatus);
@@ -22,41 +36,55 @@ export function BatchProgressPanel() {
   const errorMessage = useGenerationStore((s) => s.errorMessage);
   const reset = useGenerationStore((s) => s.reset);
 
+  const draftBatchSize = useGenerationDraftStore((s) => s.batchSize);
+  const draftAspectRatio = useGenerationDraftStore((s) => s.aspectRatio);
+
   useJobStream(jobId);
 
-  if (streamStatus === 'idle') {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <ImageIcon className="mb-3 h-8 w-8" aria-hidden="true" />
-          <p className="text-sm">결과가 이 영역에 표시됩니다</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const isIdle = streamStatus === 'idle';
+  const isStreaming = streamStatus === 'starting' || streamStatus === 'streaming';
 
-  const total = batchSize;
+  const total = isIdle ? draftBatchSize : runningBatchSize;
+  const aspectRatio = isIdle ? draftAspectRatio : runningAspectRatio;
+  const dims = ASPECT_RATIO_DIMENSIONS[aspectRatio];
+  const aspectStyle: CSSProperties = { aspectRatio: `${dims.width} / ${dims.height}` };
+
   const finished = cards.length + failures.length;
   const percent = total > 0 ? Math.min(100, Math.round((finished / total) * 100)) : 0;
-  const isStreaming = streamStatus === 'starting' || streamStatus === 'streaming';
+
+  const slots = Array.from({ length: Math.max(1, total) }, (_, i) => ({
+    order: i,
+    card: cards.find((c) => c.order === i) ?? null,
+    failure: failures.find((f) => f.order === i) ?? null,
+  }));
 
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
-            {isStreaming ? (
+            {isIdle ? (
+              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+            ) : isStreaming ? (
               <Loader2 className="h-4 w-4 animate-spin" />
+            ) : streamStatus === 'error' ? (
+              <AlertTriangle className="h-4 w-4 text-destructive" />
             ) : (
               <CheckCircle2 className="h-4 w-4 text-primary" />
             )}
-            {isStreaming ? '생성 중' : streamStatus === 'error' ? '오류' : '완료'}
+            {isIdle
+              ? '준비'
+              : isStreaming
+                ? '생성 중'
+                : streamStatus === 'error'
+                  ? '오류'
+                  : '완료'}
             <span className="text-sm font-normal text-muted-foreground tabular-nums">
-              {cards.length}/{total}
-              {failures.length > 0 && ` · 실패 ${failures.length}`}
+              {isIdle ? `총 ${total}장` : `${cards.length}/${total}`}
+              {!isIdle && failures.length > 0 && ` · 실패 ${failures.length}`}
             </span>
           </CardTitle>
-          {streamStatus !== 'starting' && streamStatus !== 'streaming' && (
+          {!isIdle && streamStatus !== 'starting' && streamStatus !== 'streaming' && (
             <button
               type="button"
               onClick={reset}
@@ -66,15 +94,17 @@ export function BatchProgressPanel() {
             </button>
           )}
         </div>
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn(
-              'h-full bg-primary transition-all duration-300',
-              streamStatus === 'error' && 'bg-destructive',
-            )}
-            style={{ width: `${percent}%` }}
-          />
-        </div>
+        {!isIdle && (
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                'h-full bg-primary transition-all duration-300',
+                streamStatus === 'error' && 'bg-destructive',
+              )}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -113,30 +143,80 @@ export function BatchProgressPanel() {
           </div>
         )}
 
-        {cards.length === 0 && isStreaming ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: Math.min(5, total) }).map((_, i) => (
-              <div
-                key={i}
-                className="aspect-square animate-pulse rounded-lg bg-muted"
-                aria-hidden="true"
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-            {cards.map((card) => (
-              <ResultCard key={card.imageId} card={card} />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          {slots.map(({ order, card, failure }) => (
+            <SlotFrame
+              key={order}
+              order={order}
+              card={card}
+              failure={failure}
+              isStreaming={isStreaming}
+              isIdle={isIdle}
+              aspectStyle={aspectStyle}
+            />
+          ))}
+        </div>
 
-        {isStreaming && cards.length > 0 && cards.length < total && (
+        {isIdle && (
           <p className="text-center text-xs text-muted-foreground">
-            남은 이미지를 생성하고 있어요…
+            좌측에서 &ldquo;이미지 만들기&rdquo; 를 누르면 각 칸이 채워집니다.
           </p>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+interface SlotFrameProps {
+  order: number;
+  card: ResultCardModel | null;
+  failure: ChunkFailure | null;
+  isStreaming: boolean;
+  isIdle: boolean;
+  aspectStyle: CSSProperties;
+}
+
+function SlotFrame({
+  order,
+  card,
+  failure,
+  isStreaming,
+  isIdle,
+  aspectStyle,
+}: SlotFrameProps) {
+  if (card) {
+    return <ResultCard card={card} aspectStyle={aspectStyle} />;
+  }
+
+  if (failure) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-center text-[11px] text-destructive"
+        style={aspectStyle}
+        title={failure.error}
+      >
+        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        <span className="tabular-nums">#{order + 1}</span>
+        <span>실패</span>
+      </div>
+    );
+  }
+
+  // idle: 얇은 프레임, streaming: pulse 스켈레톤
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-center rounded-lg border text-xs tabular-nums text-muted-foreground/60',
+        isStreaming
+          ? 'animate-pulse border-transparent bg-muted'
+          : isIdle
+            ? 'border-dashed bg-muted/30'
+            : 'border-dashed bg-muted/40',
+      )}
+      style={aspectStyle}
+      aria-hidden={isStreaming ? undefined : true}
+    >
+      {isStreaming ? '' : `#${order + 1}`}
+    </div>
   );
 }

@@ -4,6 +4,8 @@
 
 import { create } from 'zustand';
 
+import type { AspectRatio } from '@/types/domain';
+
 export interface ResultCard {
   order: number;
   imageId: string;
@@ -27,13 +29,14 @@ export type StreamStatus = 'idle' | 'starting' | 'streaming' | 'done' | 'error';
 type GenerationState = {
   jobId: string | null;
   batchSize: number;
+  aspectRatio: AspectRatio;
   streamStatus: StreamStatus;
   cards: ResultCard[];
   failures: ChunkFailure[];
   summary: DoneSummary | null;
   errorMessage: string | null;
 
-  startJob: (jobId: string, batchSize: number) => void;
+  startJob: (jobId: string, batchSize: number, aspectRatio: AspectRatio) => void;
   markStreaming: () => void;
   appendCard: (card: ResultCard) => void;
   appendFailure: (failure: ChunkFailure) => void;
@@ -45,6 +48,7 @@ type GenerationState = {
 const initial = {
   jobId: null,
   batchSize: 0,
+  aspectRatio: 'square' as AspectRatio,
   streamStatus: 'idle' as StreamStatus,
   cards: [] as ResultCard[],
   failures: [] as ChunkFailure[],
@@ -54,11 +58,12 @@ const initial = {
 
 export const useGenerationStore = create<GenerationState>((set) => ({
   ...initial,
-  startJob: (jobId, batchSize) =>
+  startJob: (jobId, batchSize, aspectRatio) =>
     set({
       ...initial,
       jobId,
       batchSize,
+      aspectRatio,
       streamStatus: 'starting',
     }),
   markStreaming: () => set({ streamStatus: 'streaming' }),

@@ -51,7 +51,7 @@ export function useCreateJob() {
   return useMutation({
     mutationFn: postJob,
     onSuccess: (data, variables) => {
-      startJob(data.jobId, variables.batchSize);
+      startJob(data.jobId, variables.batchSize, variables.aspectRatio);
       updateStoreCredits(data.remainingCredits);
     },
   });

@@ -10,7 +10,7 @@
 import { Link as LinkIcon, Sparkles, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCre
 import { SchoolStyleToggle } from '@/features/generation/components/SchoolStyleToggle';
 import { useReferenceImages } from '@/features/references/hooks/useReferenceImages';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useGenerationDraftStore } from '@/lib/store/generationDraftStore';
 import { useGenerationStore } from '@/lib/store/generationStore';
 import { useReferenceStore } from '@/lib/store/referenceStore';
 import { cn } from '@/lib/utils';
@@ -94,6 +95,17 @@ export function GenerationForm({
     !chaining && customReferenceId
       ? referenceData?.slots.find((s) => s.id === customReferenceId) ?? null
       : null;
+
+  // 우측 BatchProgressPanel 이 idle 상태에서도 빈 슬롯을 미리 그리도록,
+  // 배치 크기/이미지 비율이 바뀌면 draft store 로 push.
+  const setDraftBatchSize = useGenerationDraftStore((s) => s.setBatchSize);
+  const setDraftAspectRatio = useGenerationDraftStore((s) => s.setAspectRatio);
+  useEffect(() => {
+    setDraftBatchSize(batchSize);
+  }, [batchSize, setDraftBatchSize]);
+  useEffect(() => {
+    setDraftAspectRatio(aspectRatio);
+  }, [aspectRatio, setDraftAspectRatio]);
 
   const createJob = useCreateJob();
 
