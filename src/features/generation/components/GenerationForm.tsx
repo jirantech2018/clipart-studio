@@ -177,6 +177,45 @@ export function GenerationForm({
             </div>
           )}
 
+          {insufficient && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-900 dark:text-amber-200">
+              지금 배치({batchSize}장)를 만들 크레딧이 부족해요.{' '}
+              {creditsResetAt && daysUntil(creditsResetAt) !== null ? (
+                <>
+                  <span className="font-semibold">
+                    {formatResetDate(creditsResetAt)}
+                  </span>
+                  (D-{daysUntil(creditsResetAt)})에 30 크레딧이 다시 지급됩니다.
+                </>
+              ) : (
+                <>다음 리셋 예정일은 프로필에서 확인할 수 있어요.</>
+              )}
+              {batchSize > 5 && ' 배치 크기를 5로 낮추면 지금 바로 생성할 수 있어요.'}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+            <div className="text-sm">
+              <div>
+                이번 생성에{' '}
+                <span className="font-semibold tabular-nums">{batchSize}</span> 크레딧이
+                사용됩니다.
+              </div>
+              <div className="text-muted-foreground">
+                생성 후{' '}
+                <span className="tabular-nums">{Math.max(0, credits - batchSize)}</span>{' '}
+                크레딧이 남습니다.
+              </div>
+            </div>
+            <Button type="submit" disabled={disabled} className="min-w-[10rem]">
+              {inFlight
+                ? '생성 중…'
+                : insufficient
+                  ? '크레딧 부족'
+                  : '이미지 만들기'}
+            </Button>
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="prompt">프롬프트</Label>
             <Textarea
@@ -335,44 +374,6 @@ export function GenerationForm({
             </p>
           </div>
 
-          {insufficient && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-900 dark:text-amber-200">
-              지금 배치({batchSize}장)를 만들 크레딧이 부족해요.{' '}
-              {creditsResetAt && daysUntil(creditsResetAt) !== null ? (
-                <>
-                  <span className="font-semibold">
-                    {formatResetDate(creditsResetAt)}
-                  </span>
-                  (D-{daysUntil(creditsResetAt)})에 30 크레딧이 다시 지급됩니다.
-                </>
-              ) : (
-                <>다음 리셋 예정일은 프로필에서 확인할 수 있어요.</>
-              )}
-              {batchSize > 5 && ' 배치 크기를 5로 낮추면 지금 바로 생성할 수 있어요.'}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-            <div className="text-sm">
-              <div>
-                이번 생성에{' '}
-                <span className="font-semibold tabular-nums">{batchSize}</span> 크레딧이
-                사용됩니다.
-              </div>
-              <div className="text-muted-foreground">
-                생성 후{' '}
-                <span className="tabular-nums">{Math.max(0, credits - batchSize)}</span>{' '}
-                크레딧이 남습니다.
-              </div>
-            </div>
-            <Button type="submit" disabled={disabled} className="min-w-[10rem]">
-              {inFlight
-                ? '생성 중…'
-                : insufficient
-                  ? '크레딧 부족'
-                  : '이미지 만들기'}
-            </Button>
-          </div>
         </form>
       </CardContent>
     </Card>
