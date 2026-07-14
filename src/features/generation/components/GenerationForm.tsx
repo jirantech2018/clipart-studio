@@ -267,7 +267,7 @@ export function GenerationForm({
 
           <div className="space-y-2">
             <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="grid grid-cols-5 gap-1.5">
               {BATCH_SIZE_PRESETS.map((size) => (
                 <button
                   key={size}
@@ -275,7 +275,7 @@ export function GenerationForm({
                   disabled={inFlight}
                   onClick={() => setBatchSize(size)}
                   className={cn(
-                    'h-9 min-w-[3.5rem] rounded-md border px-3 text-sm font-medium transition-colors',
+                    'h-9 rounded-md border text-sm font-medium transition-colors',
                     batchSize === size
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-input bg-background hover:bg-accent',
@@ -285,7 +285,7 @@ export function GenerationForm({
                   {size}장
                 </button>
               ))}
-              <div className="relative flex-1 min-w-[6rem]">
+              <div className="relative">
                 <input
                   id="batchSize"
                   type="number"
@@ -308,13 +308,13 @@ export function GenerationForm({
                     );
                   }}
                   className={cn(
-                    'h-9 w-full rounded-md border border-input bg-background px-3 pr-14 text-sm font-medium',
+                    'h-9 w-full rounded-md border border-input bg-background px-2 pr-11 text-sm font-medium',
                     'focus:outline-none focus:ring-2 focus:ring-primary/40',
                     inFlight && 'cursor-not-allowed opacity-50',
                   )}
                 />
                 <span
-                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground/60"
+                  className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-muted-foreground/60"
                   aria-hidden="true"
                 >
                   ~{MAX_BATCH_SIZE}장
