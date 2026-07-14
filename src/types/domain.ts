@@ -131,8 +131,11 @@ export function aspectRatioSizeString(ratio: AspectRatio): string {
   return `${width}x${height}`;
 }
 
-// Valid batch sizes (5 stepping, max 30 per D6)
-export const BATCH_SIZES = [5, 10, 15, 20, 25, 30] as const;
-export type BatchSize = (typeof BATCH_SIZES)[number];
+// Batch presets shown as one-click chips in the form. Users can also type any
+// integer between 1 and MAX_BATCH_SIZE for finer control.
+export const BATCH_SIZE_PRESETS = [1, 2, 5, 10] as const;
+export const MIN_BATCH_SIZE = 1;
+export const MAX_BATCH_SIZE = 50;
+export type BatchSize = number;
 export const CHUNK_SIZE = 5;
 

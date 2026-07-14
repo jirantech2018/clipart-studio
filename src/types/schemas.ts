@@ -48,7 +48,8 @@ export const createJobSchema = z
     batchSize: z
       .number()
       .int()
-      .refine((v) => [5, 10, 15, 20, 25, 30].includes(v), '배치 크기는 5의 배수 (최대 30)'),
+      .min(1, '배치 크기는 1장 이상')
+      .max(50, '배치 크기는 최대 50장까지'),
     diversityLevel: z.number().int().min(0).max(5).default(0),
     referenceImageId: z.string().uuid().nullable().optional(),
     customReferenceId: z.string().uuid().nullable().optional(),
