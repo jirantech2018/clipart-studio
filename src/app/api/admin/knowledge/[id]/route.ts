@@ -60,6 +60,8 @@ export async function PATCH(
   if (body.description !== undefined) update.description = body.description;
   if (body.triggers !== undefined) update.triggers = body.triggers;
   if (body.negativePrompt !== undefined) update.negative_prompt = body.negativePrompt;
+  if (body.category !== undefined) update.category = body.category;
+  if (body.sortOrder !== undefined) update.sort_order = body.sortOrder;
   if (body.priority !== undefined) update.priority = body.priority;
   if (body.enabled !== undefined) update.enabled = body.enabled;
 
@@ -72,7 +74,9 @@ export async function PATCH(
     .from('knowledge')
     .update(update)
     .eq('id', params.id)
-    .select('id, name, description, triggers, negative_prompt, priority, enabled, created_at, updated_at')
+    .select(
+      'id, name, description, triggers, negative_prompt, category, sort_order, priority, enabled, created_at, updated_at',
+    )
     .single();
 
   if (error || !data) {
@@ -90,6 +94,8 @@ export async function PATCH(
         description: string;
         triggers: string[] | null;
         negative_prompt: string;
+        category: string | null;
+        sort_order: number | null;
         priority: number;
         enabled: boolean;
         created_at: string;

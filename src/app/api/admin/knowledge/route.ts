@@ -62,10 +62,14 @@ export async function POST(request: Request) {
       description: body.description,
       triggers: body.triggers,
       negative_prompt: body.negativePrompt,
+      category: body.category,
+      sort_order: body.sortOrder,
       priority: body.priority,
       enabled: body.enabled,
     })
-    .select('id, name, description, triggers, negative_prompt, priority, enabled, created_at, updated_at')
+    .select(
+      'id, name, description, triggers, negative_prompt, category, sort_order, priority, enabled, created_at, updated_at',
+    )
     .single();
 
   if (error || !data) {
@@ -82,6 +86,8 @@ export async function POST(request: Request) {
           description: string;
           triggers: string[] | null;
           negative_prompt: string;
+          category: string | null;
+          sort_order: number | null;
           priority: number;
           enabled: boolean;
           created_at: string;

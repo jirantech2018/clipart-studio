@@ -66,6 +66,8 @@ export interface CreateKnowledgeInput {
   description: string;
   triggers?: string[];
   negativePrompt?: string;
+  category?: string;
+  sortOrder?: number;
   priority?: number;
   enabled?: boolean;
 }

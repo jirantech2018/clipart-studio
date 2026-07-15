@@ -33,6 +33,7 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [negativePrompt, setNegativePrompt] = useState(initial?.negativePrompt ?? '');
+  const [category, setCategory] = useState(initial?.category ?? '');
   const [priority, setPriority] = useState<number>(initial?.priority ?? 100);
   const [enabled, setEnabled] = useState<boolean>(initial?.enabled ?? true);
   const [triggers, setTriggers] = useState<string[]>(initial?.triggers ?? []);
@@ -70,7 +71,7 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
       if (isEdit && initial) {
         const saved = await update.mutateAsync({
           id: initial.id,
-          patch: { name, description, triggers, negativePrompt, priority, enabled },
+          patch: { name, description, triggers, negativePrompt, category, priority, enabled },
         });
         toast.success('저장했어요');
         onSaved?.(saved);
@@ -80,6 +81,7 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
           description,
           triggers,
           negativePrompt,
+          category,
           priority,
           enabled,
         });
@@ -100,15 +102,31 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="k-name">지식 이름</Label>
-            <Input
-              id="k-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="예: 한국 학교 책상 하부 수납공간"
-              disabled={busy}
-            />
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="space-y-1.5">
+              <Label htmlFor="k-name">지식 이름</Label>
+              <Input
+                id="k-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="예: 한국 학교 책상 하부 수납공간"
+                disabled={busy}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="k-category">카테고리 (자유 입력)</Label>
+              <Input
+                id="k-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="예: 공간, 시설·가구, 등장인물"
+                maxLength={100}
+                disabled={busy}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                비워두면 &ldquo;미분류&rdquo; 로 표시됩니다.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-1.5">

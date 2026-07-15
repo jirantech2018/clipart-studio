@@ -22,6 +22,8 @@ interface KnowledgeRow {
   description: string;
   triggers: string[] | null;
   negative_prompt: string;
+  category: string | null;
+  sort_order: number | null;
   priority: number;
   enabled: boolean;
   created_at: string;
@@ -71,6 +73,8 @@ export function knowledgeRowToDomain(
     description: row.description,
     triggers: row.triggers ?? [],
     negativePrompt: row.negative_prompt,
+    category: row.category ?? '',
+    sortOrder: row.sort_order ?? 100,
     priority: row.priority,
     enabled: row.enabled,
     images,
@@ -78,6 +82,9 @@ export function knowledgeRowToDomain(
     updatedAt: row.updated_at,
   };
 }
+
+const KNOWLEDGE_SELECT =
+  'id, name, description, triggers, negative_prompt, category, sort_order, priority, enabled, created_at, updated_at';
 
 /**
  * knowledge 한 건을 이미지까지 함께 조회. 없으면 null.
@@ -88,7 +95,7 @@ export async function loadKnowledgeWithImages(
   const supabase = createSupabaseServiceClient();
   const { data: kRow, error: kErr } = await supabase
     .from('knowledge')
-    .select('id, name, description, triggers, negative_prompt, priority, enabled, created_at, updated_at')
+    .select(KNOWLEDGE_SELECT)
     .eq('id', id)
     .maybeSingle();
 
@@ -130,7 +137,9 @@ export async function loadKnowledgeList(opts?: {
 
   let kQuery = supabase
     .from('knowledge')
-    .select('id, name, description, triggers, negative_prompt, priority, enabled, created_at, updated_at')
+    .select(KNOWLEDGE_SELECT)
+    .order('category', { ascending: true })
+    .order('sort_order', { ascending: true })
     .order('priority', { ascending: true });
 
   if (opts?.enabledOnly) {

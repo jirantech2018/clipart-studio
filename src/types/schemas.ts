@@ -103,6 +103,8 @@ export const createKnowledgeSchema = z.object({
     .max(20000, '설명은 20000자 이내'),
   triggers: z.array(z.string().min(1).max(100)).max(50).default([]),
   negativePrompt: z.string().max(5000, '금지 조건은 5000자 이내').default(''),
+  category: z.string().max(100, '카테고리 이름은 100자 이내').default(''),
+  sortOrder: z.number().int().min(0).max(100000).default(100),
   priority: z.number().int().min(0).max(10000).default(100),
   enabled: z.boolean().default(true),
 });

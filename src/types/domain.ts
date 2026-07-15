@@ -182,6 +182,10 @@ export interface Knowledge {
   description: string;
   triggers: string[];
   negativePrompt: string;
+  /** 자유 입력 카테고리. 빈 문자열은 "미분류". */
+  category: string;
+  /** 카테고리 내 정렬 순서 (작을수록 위). */
+  sortOrder: number;
   priority: number;
   enabled: boolean;
   images: KnowledgeImage[];
