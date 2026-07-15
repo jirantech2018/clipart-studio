@@ -91,3 +91,37 @@ export const updatePromptRuleSchema = createPromptRuleSchema.partial();
 
 export type CreatePromptRuleInput = z.infer<typeof createPromptRuleSchema>;
 export type UpdatePromptRuleInput = z.infer<typeof updatePromptRuleSchema>;
+
+// Knowledge CMS (Phase A) — admin CRUD 입력 검증.
+export const referenceTypeSchema = z.enum(['positive', 'negative']);
+
+export const createKnowledgeSchema = z.object({
+  name: z.string().min(1, '이름은 필수입니다').max(200, '이름은 200자 이내'),
+  description: z
+    .string()
+    .min(1, '설명은 필수입니다')
+    .max(20000, '설명은 20000자 이내'),
+  triggers: z.array(z.string().min(1).max(100)).max(50).default([]),
+  negativePrompt: z.string().max(5000, '금지 조건은 5000자 이내').default(''),
+  priority: z.number().int().min(0).max(10000).default(100),
+  enabled: z.boolean().default(true),
+});
+
+export const updateKnowledgeSchema = createKnowledgeSchema.partial();
+
+export type CreateKnowledgeInput = z.infer<typeof createKnowledgeSchema>;
+export type UpdateKnowledgeInput = z.infer<typeof updateKnowledgeSchema>;
+
+/**
+ * knowledge_images 는 파일 업로드가 있으므로 별도 multipart 처리.
+ * 이 스키마는 텍스트 필드만 검증 (이미지 자체는 route 에서 처리).
+ */
+export const updateKnowledgeImageSchema = z.object({
+  caption: z.string().max(1000).optional(),
+  viewpoint: z.string().max(100).optional(),
+  referenceType: referenceTypeSchema.optional(),
+  isPrimary: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+});
+
+export type UpdateKnowledgeImageInput = z.infer<typeof updateKnowledgeImageSchema>;

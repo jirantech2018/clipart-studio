@@ -150,6 +150,45 @@ export interface PromptRule {
   updatedAt: string;
 }
 
+// Image Knowledge CMS — Phase A domain types.
+// prompt_rules 를 대체하는 새 구조. 고정 카테고리 없이 트리거 태그로 매칭한다.
+
+export type ReferenceType = 'positive' | 'negative';
+
+export const KNOWLEDGE_POSITIVE_IMAGE_LIMIT = 10;
+export const KNOWLEDGE_NEGATIVE_IMAGE_LIMIT = 5;
+/** 실제 이미지 생성 요청에 한 번에 전달할 positive 참고 이미지 최대 수. */
+export const KNOWLEDGE_API_IMAGE_LIMIT = 5;
+
+export interface KnowledgeImage {
+  id: string;
+  knowledgeId: string;
+  r2Key: string;
+  url: string;
+  caption: string;
+  viewpoint: string;
+  referenceType: ReferenceType;
+  isPrimary: boolean;
+  sortOrder: number;
+  width: number;
+  height: number;
+  filename: string | null;
+  createdAt: string;
+}
+
+export interface Knowledge {
+  id: string;
+  name: string;
+  description: string;
+  triggers: string[];
+  negativePrompt: string;
+  priority: number;
+  enabled: boolean;
+  images: KnowledgeImage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // gpt-image-1 supports these three sizes. The user picks the semantic label,
 // pipeline.ts maps it to the WxH string expected by the API.
 export type AspectRatio = 'square' | 'landscape' | 'portrait';
