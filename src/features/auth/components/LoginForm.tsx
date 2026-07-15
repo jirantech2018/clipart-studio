@@ -3,6 +3,7 @@
 // Design Ref: §5.3 LoginForm component
 // Plan SC: FR-01 Email/OAuth login
 
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,6 +19,14 @@ export function LoginForm() {
   const [sent, setSent] = useState(false);
 
   const supabase = createSupabaseBrowserClient();
+  const searchParams = useSearchParams();
+  // `?next=/image/xxx` 형태로 원래 페이지를 넘겨받아 로그인 후 그리로 복귀.
+  // 절대 URL 이나 외부 도메인은 무시하고 오직 사이트 내부 경로만 신뢰.
+  const rawNext = searchParams?.get('next');
+  const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null;
+  const callbackUrl = next
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?next=${encodeURIComponent(next)}`
+    : `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`;
 
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +34,7 @@ export function LoginForm() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: callbackUrl },
     });
     setLoading(false);
     if (error) {
@@ -40,7 +49,7 @@ export function LoginForm() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callbackUrl },
     });
     if (error) {
       setLoading(false);

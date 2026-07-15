@@ -12,7 +12,10 @@ export default async function ImageDetailPage({ params }: { params: { id: string
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) {
+    // 비회원이 공유 링크로 들어오면 로그인 후 이 페이지로 자동 복귀.
+    redirect(`/login?next=${encodeURIComponent(`/image/${params.id}`)}`);
+  }
 
   return (
     <div className="mx-auto max-w-6xl">

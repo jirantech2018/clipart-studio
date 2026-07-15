@@ -3,7 +3,7 @@
 // Design Ref: §5.4 Image Detail Page — full image + metadata + actions
 // Non-Negotiable Rule 3: AIGeneratedBadge required.
 
-import { ArrowLeft, Download, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -73,6 +73,15 @@ export function ImageDetailView({ id }: { id: string }) {
       refetch();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '변경 실패');
+    }
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success('링크를 복사했어요');
+    } catch {
+      toast.error('링크 복사에 실패했어요. 브라우저 주소창을 사용해주세요.');
     }
   }
 
@@ -186,6 +195,20 @@ export function ImageDetailView({ id }: { id: string }) {
                   <Download className="mr-1 h-3 w-3" />
                 )}
                 다운로드
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCopyLink}
+                disabled={!image.isPublic}
+                title={
+                  image.isPublic
+                    ? '이미지 페이지 링크 복사'
+                    : '링크를 공유하려면 먼저 공개로 설정하세요'
+                }
+                aria-label="링크 복사"
+              >
+                <Link2 className="h-3 w-3" />
               </Button>
               {image.isOwner && (
                 <Button
