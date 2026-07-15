@@ -10,11 +10,16 @@ export const maxDuration = 60;
 import { publicUrl } from '@/services/r2/upload';
 import { fetchReferenceImage, fetchReferenceImageByKey, runOne } from '@/services/image-gen/pipeline';
 import { refundCredits } from '@/services/credit';
+import {
+  composeKnowledgePrompt,
+  matchKnowledgeForPrompt,
+} from '@/services/knowledge';
 import { loadActiveRules } from '@/services/prompt-rules';
 import { structurePrompt } from '@/services/prompt-structuring';
 import { createSupabaseServerClient, createSupabaseServiceClient } from '@/services/supabase/server';
 
 import type { ReferenceImage } from '@/services/image-gen';
+import type { KnowledgeMatch } from '@/services/knowledge';
 import type { StructuredPrompt } from '@/services/prompt-structuring';
 import type { GenerationJob, PromptRule, SchoolProfile } from '@/types/domain';
 
@@ -129,12 +134,40 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           schoolContext: schoolProfile?.styleDesc ?? null,
         });
 
-        // 관리자 정의 prompt_rules 를 배치당 1회 로드. 결과가 비면 pipeline 이 legacy
-        // admin_settings.system_prompt 경로로 자동 fallback 하므로 이전 동작 보존.
+        // Phase C: Knowledge 자동 매칭. 배치당 1회 실행.
+        // 매칭이 하나라도 있으면 pipeline 이 Knowledge composer 로 진행하고,
+        // 없으면 아래 prompt_rules 로 자연 fallback.
+        const knowledgeMatches: KnowledgeMatch[] = await matchKnowledgeForPrompt(job.prompt);
+        console.log(
+          `[knowledge] job=${job.id} matched=${knowledgeMatches.length}${
+            knowledgeMatches.length === 0 ? ' (fallback to prompt_rules)' : ` ids=[${knowledgeMatches.map((m) => m.knowledge.id).join(',')}]`
+          }`,
+        );
+
+        // 매칭된 Knowledge 의 positive 대표 이미지 R2 keys 를 미리 계산하고
+        // 실제 바이트를 병렬로 preload. 여기서 실패한 이미지는 조용히 스킵.
+        let knowledgeReferenceImages: ReferenceImage[] = [];
+        if (knowledgeMatches.length > 0) {
+          const composedPreview = composeKnowledgePrompt(knowledgeMatches, job.prompt);
+          const results = await Promise.allSettled(
+            composedPreview.referenceImageKeys.map((key) => fetchReferenceImageByKey(key)),
+          );
+          knowledgeReferenceImages = results
+            .filter(
+              (r): r is PromiseFulfilledResult<ReferenceImage> => r.status === 'fulfilled',
+            )
+            .map((r) => r.value);
+          console.log(
+            `[knowledge] job=${job.id} preloadedImages=${knowledgeReferenceImages.length}/${composedPreview.referenceImageKeys.length}`,
+          );
+        }
+
+        // 관리자 정의 prompt_rules 를 배치당 1회 로드. Knowledge 매칭이 있으면
+        // 사용되지 않지만 fallback 경로를 위해 항상 준비해 둔다.
         const promptRules: PromptRule[] = await loadActiveRules();
         console.log(
           `[prompt-rules] job=${job.id} loaded=${promptRules.length}${
-            promptRules.length === 0 ? ' (fallback to legacy system_prompt)' : ''
+            promptRules.length === 0 ? ' (fallback to legacy system_prompt if needed)' : ''
           }`,
         );
 
@@ -155,6 +188,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
                 isDiversityChunk: isDiversity,
                 referenceImage,
                 structuredPrompt,
+                knowledgeMatches,
+                knowledgeReferenceImages,
                 promptRules,
               }),
             ),

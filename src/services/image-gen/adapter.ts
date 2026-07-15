@@ -13,7 +13,17 @@ export interface GenerateInput {
   prompt: string;
   negativePrompt?: string;
   seed?: number;
-  /** Reference image for img2img. Required when mode === 'img2img'. */
+  /**
+   * Reference images sent to /v1/images/edits. gpt-image-2 accepts up to 16
+   * images per request; caller is responsible for staying within that cap.
+   * First image is the mask target (per OpenAI docs). Required when
+   * mode === 'img2img'.
+   *
+   * The single-image referenceImage below is retained as a convenience alias
+   * so callers migrating from the old signature keep working.
+   */
+  referenceImages?: ReferenceImage[];
+  /** @deprecated Use referenceImages. Kept for backward compat; treated as [it]. */
   referenceImage?: ReferenceImage;
   mode: GenerationMode;
   /** Exact 'WxH' string the API expects (e.g. '1024x1024', '1536x1024'). */

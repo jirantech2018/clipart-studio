@@ -2,14 +2,19 @@
 // 한꺼번에 로드하는 헬퍼를 제공한다. RLS 가 authenticated 를 차단하므로 이 서비스는
 // 반드시 service_role 클라이언트로만 호출한다.
 
+import { classifyKnowledge } from '@/services/knowledge/classifier';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
+import { KNOWLEDGE_API_IMAGE_LIMIT } from '@/types/domain';
 
+import type { KnowledgeMatch } from '@/services/knowledge/classifier';
 import type {
   Knowledge,
   KnowledgeImage,
   ReferenceType,
 } from '@/types/domain';
+
+export type { KnowledgeMatch } from '@/services/knowledge/classifier';
 
 interface KnowledgeRow {
   id: string;
@@ -171,4 +176,108 @@ export async function loadKnowledgeList(opts?: {
       byKnowledgeId.get((k as { id: string }).id) ?? [],
     ),
   );
+}
+
+// ------------------------------------------------------------
+// Pipeline entry points (Phase C)
+// ------------------------------------------------------------
+
+/**
+ * 활성 Knowledge 를 로드해 사용자 프롬프트와 매칭시켜 정렬된 결과를 돌려준다.
+ * 매칭이 하나도 없으면 빈 배열을 돌려주므로 caller 는 자연스럽게 prompt_rules
+ * fallback 경로를 탈 수 있다.
+ */
+export async function matchKnowledgeForPrompt(
+  prompt: string,
+): Promise<KnowledgeMatch[]> {
+  const list = await loadKnowledgeList({ enabledOnly: true });
+  if (list.length === 0) return [];
+  try {
+    return await classifyKnowledge(prompt, list);
+  } catch (err) {
+    console.error('[knowledge] classify failed', err);
+    return [];
+  }
+}
+
+export interface ComposedKnowledge {
+  /** [Knowledge] + [User] + [Negative] 로 조립된 최종 프롬프트. */
+  prompt: string;
+  /** 실제 이미지 API 에 첨부할 positive 대표 이미지들. 최대 KNOWLEDGE_API_IMAGE_LIMIT 장. */
+  referenceImageKeys: string[];
+  /** 실제 파이프라인 로깅용. */
+  appliedKnowledgeIds: string[];
+  /** 이미지가 없는 매칭까지 포함해 참고용으로 함께 노출. */
+  matches: KnowledgeMatch[];
+}
+
+/**
+ * Knowledge 매칭 결과와 이미 조립된 사용자 섹션을 받아 최종 프롬프트 텍스트를 조립하고
+ * 이미지 API 첨부용 R2 key 목록을 선별한다.
+ *
+ * - description 은 매칭 상위부터 순서대로 나열.
+ * - negative_prompt 는 중복 제거해서 하나의 [Negative] 블록으로.
+ * - referenceImageKeys 는 각 Knowledge 의 primary positive 이미지가 있으면 그것부터,
+ *   없으면 그 Knowledge 의 sort_order 첫 positive 이미지를 사용. 상한
+ *   KNOWLEDGE_API_IMAGE_LIMIT 장까지 취한 뒤 잘라낸다.
+ */
+export function composeKnowledgePrompt(
+  matches: KnowledgeMatch[],
+  userSection: string,
+): ComposedKnowledge {
+  if (matches.length === 0) {
+    return {
+      prompt: userSection,
+      referenceImageKeys: [],
+      appliedKnowledgeIds: [],
+      matches: [],
+    };
+  }
+
+  const knowledgeLines: string[] = [];
+  const negativeLines: string[] = [];
+  const seenNegative = new Set<string>();
+  const referenceImageKeys: string[] = [];
+  const appliedKnowledgeIds: string[] = [];
+
+  for (const match of matches) {
+    const k = match.knowledge;
+    knowledgeLines.push(`- ${k.name}: ${k.description}`);
+    appliedKnowledgeIds.push(k.id);
+
+    if (k.negativePrompt.trim().length > 0) {
+      const norm = k.negativePrompt.trim();
+      if (!seenNegative.has(norm)) {
+        seenNegative.add(norm);
+        negativeLines.push(`- ${norm}`);
+      }
+    }
+
+    if (referenceImageKeys.length < KNOWLEDGE_API_IMAGE_LIMIT) {
+      const positives = k.images
+        .filter((img) => img.referenceType === 'positive')
+        .sort((a, b) => {
+          if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+          return a.sortOrder - b.sortOrder;
+        });
+      const pick = positives[0];
+      if (pick) referenceImageKeys.push(pick.r2Key);
+    }
+  }
+
+  const parts: string[] = [];
+  if (knowledgeLines.length > 0) {
+    parts.push(`[Knowledge]\n${knowledgeLines.join('\n')}`);
+  }
+  parts.push(`[User]\n${userSection}`);
+  if (negativeLines.length > 0) {
+    parts.push(`[Negative]\n${negativeLines.join('\n')}`);
+  }
+
+  return {
+    prompt: parts.join('\n\n'),
+    referenceImageKeys: referenceImageKeys.slice(0, KNOWLEDGE_API_IMAGE_LIMIT),
+    appliedKnowledgeIds,
+    matches,
+  };
 }

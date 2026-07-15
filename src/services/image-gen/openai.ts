@@ -92,19 +92,28 @@ export const openaiImageGen: ImageGenAdapter = {
 
     let payload: ImagePayload;
     if (input.mode === 'img2img') {
-      if (!input.referenceImage) {
-        throw new ImageGenError('img2img requires referenceImage bytes', false);
+      const refs =
+        input.referenceImages && input.referenceImages.length > 0
+          ? input.referenceImages
+          : input.referenceImage
+            ? [input.referenceImage]
+            : [];
+      if (refs.length === 0) {
+        throw new ImageGenError('img2img requires at least one reference image', false);
       }
-      const ref = input.referenceImage;
-      const ext = ref.contentType === 'image/webp' ? 'webp' : 'png';
-      const filename = `reference.${ext}`;
-      const blob = new Blob([new Uint8Array(ref.bytes)], { type: ref.contentType });
       const form = new FormData();
       form.append('model', 'gpt-image-2');
       form.append('prompt', input.prompt);
       form.append('n', '1');
       form.append('size', size);
-      form.append('image', blob, filename);
+      // gpt-image-2 /images/edits accepts multiple images by repeating the
+      // `image` field. First image is the mask target per docs.
+      refs.forEach((ref, i) => {
+        const ext = ref.contentType === 'image/webp' ? 'webp' : 'png';
+        const filename = `reference-${i}.${ext}`;
+        const blob = new Blob([new Uint8Array(ref.bytes)], { type: ref.contentType });
+        form.append('image', blob, filename);
+      });
       payload = await callEdits(form);
     } else {
       // gpt-image-2 returns b64_json by default and rejects response_format.

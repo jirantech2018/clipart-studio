@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { primaryAdapter, applyDiversityHint, mergePrompt } from '@/services/image-gen';
+import { composeKnowledgePrompt } from '@/services/knowledge';
 import { composeRules } from '@/services/prompt-rules';
 import { assembleFinalPrompt } from '@/services/prompt-structuring';
 import { publicUrl, putObject } from '@/services/r2/upload';
@@ -13,6 +14,7 @@ import { taggingAdapter } from '@/services/tagging';
 import { ASPECT_RATIO_DIMENSIONS, aspectRatioSizeString } from '@/types/domain';
 
 import type { ReferenceImage } from '@/services/image-gen';
+import type { KnowledgeMatch } from '@/services/knowledge';
 import type { StructuredPrompt } from '@/services/prompt-structuring';
 import type { GenerationJob, PromptRule, SchoolProfile } from '@/types/domain';
 
@@ -31,7 +33,18 @@ interface RunOneParams {
   referenceImage?: ReferenceImage | null;
   /** Preloaded structured prompt for the batch; caller runs structurePrompt() once. */
   structuredPrompt?: StructuredPrompt | null;
-  /** Active prompt rules loaded by the caller once per batch. Empty array → fallback. */
+  /**
+   * Knowledge matches for this batch (Phase C). When present and non-empty,
+   * Knowledge composer takes over: description + negative_prompt from each
+   * matched Knowledge is injected, and the primary positive image of each
+   * (up to KNOWLEDGE_API_IMAGE_LIMIT) is loaded from R2 and attached to
+   * gpt-image-2 /edits alongside the user's own reference image.
+   */
+  knowledgeMatches?: KnowledgeMatch[];
+  /** Preloaded knowledge reference image bytes (parallel to the R2 keys in
+   * composeKnowledgePrompt().referenceImageKeys). Fetched once per batch. */
+  knowledgeReferenceImages?: ReferenceImage[];
+  /** Active prompt rules — used only when Knowledge yields zero matches. */
   promptRules?: PromptRule[];
 }
 
@@ -76,6 +89,8 @@ export async function runOne({
   isDiversityChunk,
   referenceImage,
   structuredPrompt,
+  knowledgeMatches,
+  knowledgeReferenceImages,
   promptRules,
 }: RunOneParams): Promise<PipelineResult> {
   const adapter = primaryAdapter();
@@ -87,11 +102,20 @@ export async function runOne({
     ? assembleFinalPrompt(merged, structuredPrompt)
     : merged;
 
-  // 활성 prompt_rules 가 있으면 [Global][Context][Task][User][Negative] 순으로 조합.
-  // 없으면 (마이그레이션 전 or 관리자가 rule 을 아직 만들지 않은 상태) 기존 흐름:
-  //   admin_settings.system_prompt + userSection.
+  // 조합 우선순위 (Phase C):
+  //   1) Knowledge 매칭이 있으면 → Knowledge 시스템 사용 (description + negative
+  //      + positive 대표 이미지 첨부)
+  //   2) 매칭 0개면 → prompt_rules 시스템 (기존 흐름) 그대로 유지
+  //   3) prompt_rules 도 비어 있으면 → 옛 admin_settings.system_prompt fallback
   let finalPrompt: string;
-  if (promptRules && promptRules.length > 0) {
+  const usingKnowledge = !!knowledgeMatches && knowledgeMatches.length > 0;
+  if (usingKnowledge) {
+    const composed = composeKnowledgePrompt(knowledgeMatches!, userSection);
+    finalPrompt = composed.prompt;
+    console.log(
+      `[knowledge] job=${job.id} order=${order} applied=[${composed.appliedKnowledgeIds.join(',')}] refImages=${composed.referenceImageKeys.length} len=${composed.prompt.length}`,
+    );
+  } else if (promptRules && promptRules.length > 0) {
     const composed = composeRules({ rules: promptRules, userSection });
     finalPrompt = composed.prompt;
     console.log(
@@ -111,10 +135,24 @@ export async function runOne({
 
   const chaining = !!job.referenceImageId;
   const customReference = !!job.customReferenceR2Key;
-  const imgToImg = chaining || customReference;
-  if (imgToImg && !referenceImage) {
-    throw new Error('img2img job requires referenceImage bytes');
+  const userProvidedReference = chaining || customReference;
+
+  // 이미지 배열 조립: 사용자의 참고 이미지가 있으면 그것을 첫 번째로 (mask 대상),
+  // 그 뒤에 Knowledge positive 대표 이미지들을 append.
+  const referenceImages: ReferenceImage[] = [];
+  if (userProvidedReference) {
+    if (!referenceImage) {
+      throw new Error('img2img job requires referenceImage bytes');
+    }
+    referenceImages.push(referenceImage);
   }
+  if (usingKnowledge && knowledgeReferenceImages) {
+    for (const img of knowledgeReferenceImages) {
+      referenceImages.push(img);
+    }
+  }
+
+  const imgToImg = referenceImages.length > 0;
 
   const size = aspectRatioSizeString(job.aspectRatio);
   const dims = ASPECT_RATIO_DIMENSIONS[job.aspectRatio];
@@ -122,7 +160,7 @@ export async function runOne({
   const gen = await adapter.generate({
     prompt: finalPrompt,
     mode: imgToImg ? 'img2img' : 'text2img',
-    referenceImage: referenceImage ?? undefined,
+    referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
     size,
   });
 
