@@ -81,8 +81,20 @@ export function useJobStream(jobId: string | null) {
     });
 
     source.onerror = () => {
+      // 잡이 이미 done 이라면 브라우저 자동 재접속 실패로 인한 onerror — 무시.
       const state = useGenerationStore.getState();
-      if (state.streamStatus === 'done') return;
+      if (state.streamStatus === 'done') {
+        source.close();
+        return;
+      }
+      // EventSource 는 서버가 stream close 하면 자동 재접속을 시도한다. 그 시점에
+      // readyState=CONNECTING 으로 잠깐 진입하는데, done 이벤트 처리와 경합이 나면
+      // 이 onerror 가 먼저 fire 될 수 있다. 재접속 시도 상태면 진짜 에러가 아니니
+      // 우리가 명시적으로 close 만 하고 종료.
+      if (source.readyState === EventSource.CONNECTING) {
+        source.close();
+        return;
+      }
       fail('스트림 연결이 끊어졌습니다');
       toast.error('실시간 연결 오류. 페이지를 새로고침해주세요.');
       source.close();

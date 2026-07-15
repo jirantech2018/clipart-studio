@@ -281,6 +281,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
               finalRemainingCredits: finalProfile?.credits ?? null,
             }),
           );
+          // done 이벤트가 클라이언트에 도달해 EventSource.close() 를 부를 시간을
+          // 확보한 뒤 서버측 close. 이 delay 가 없으면 브라우저가 자동 재접속을
+          // 시도해서 이미 완료된 job 에 대해 409 를 받고 onerror 를 trigger 한다.
+          await new Promise((resolve) => setTimeout(resolve, 500));
           controller.close();
         } catch {
           // Client already disconnected — ignore enqueue/close errors
