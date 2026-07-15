@@ -1,17 +1,11 @@
-// Admin-only page. Non-admins get 404'd via notFound() so the page's existence
-// isn't advertised to random authenticated users.
+// Admin-only. 관리자 진입 페이지가 곧 프롬프트 규칙 관리 페이지.
+// 옛 admin_settings.system_prompt 편집 UI 는 제거됨 — 이관 이후로는 규칙 시스템만 사용.
 
-import { ArrowRight } from 'lucide-react';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
-import { Card, CardContent } from '@/components/ui/card';
-import { AdminSettingsForm } from '@/features/admin/components/AdminSettingsForm';
+import { PromptRulesManager } from '@/features/prompt-rules/components/PromptRulesManager';
 import { isAdmin } from '@/lib/admin';
-import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from '@/services/supabase/server';
+import { createSupabaseServerClient } from '@/services/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,39 +17,17 @@ export default async function AdminPage() {
   if (!user) redirect('/login');
   if (!isAdmin(user.email)) notFound();
 
-  const service = createSupabaseServiceClient();
-  const { data } = await service
-    .from('admin_settings')
-    .select('system_prompt, updated_at')
-    .eq('id', 1)
-    .maybeSingle();
-
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">관리자 · 학습 공간</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">관리자 · 프롬프트 규칙</h1>
         <p className="text-sm text-muted-foreground">
-          여기서 설정한 지시는 모든 사용자의 이미지 생성에 자동으로 반영됩니다.
+          이미지 생성 시 사용자 프롬프트에 자동으로 조합될 시스템 지시사항을 관리합니다.
+          카테고리별로 나눠 등록하고, 필요할 때 켜고 끌 수 있어요.
         </p>
       </div>
-      <AdminSettingsForm
-        initialPrompt={(data?.system_prompt as string) ?? ''}
-        initialUpdatedAt={(data?.updated_at as string) ?? null}
-      />
 
-      <Link href="/admin/prompts" className="block">
-        <Card className="transition-colors hover:border-primary">
-          <CardContent className="flex items-center justify-between gap-3 py-4">
-            <div className="space-y-0.5">
-              <div className="text-sm font-medium">프롬프트 규칙 관리 →</div>
-              <p className="text-xs text-muted-foreground">
-                여러 규칙을 카테고리로 나눠 추가/편집/켜고끄기, 조합 결과 미리보기.
-              </p>
-            </div>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          </CardContent>
-        </Card>
-      </Link>
+      <PromptRulesManager />
     </div>
   );
 }
