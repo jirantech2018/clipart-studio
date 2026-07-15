@@ -2,10 +2,8 @@
 // Plan SC: FR-20 SSE streaming, FR-06 diversity, FR-17 school profile inject
 // Behavior: chunk-parallel generation, per-slot refund on failure, final job status update.
 //
-// Vercel serverless functions default to 10s on Hobby plan; force the maximum
-// available (60s Hobby / 300s Pro) so a full 5-image chunk can finish streaming.
+// Runs on Railway (Node runtime, no serverless timeout). 60초 넘는 배치도 그대로 흘러간다.
 export const runtime = 'nodejs';
-export const maxDuration = 60;
 
 import { publicUrl } from '@/services/r2/upload';
 import { fetchReferenceImage, fetchReferenceImageByKey, runOne } from '@/services/image-gen/pipeline';
@@ -23,10 +21,18 @@ import type { StructuredPrompt } from '@/services/prompt-structuring';
 import type { GenerationJob, SchoolProfile } from '@/types/domain';
 
 const CHUNK_SIZE = 5;
+// Chunk 병렬 처리 중에는 image_ready 이벤트가 안 나가므로, 그 사이 프록시가
+// idle timeout 으로 SSE 연결을 끊지 못하도록 15초마다 comment 라인을 보낸다.
+const HEARTBEAT_INTERVAL_MS = 15_000;
 
 // Server-Sent Events framing
 function sseEvent(event: string, data: unknown): Uint8Array {
   return new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+// SSE comment line — 클라이언트는 무시하지만 연결을 살아있게 유지한다.
+function sseComment(msg: string): Uint8Array {
+  return new TextEncoder().encode(`: ${msg}\n\n`);
 }
 
 // snake_case DB row → GenerationJob domain shape
@@ -113,6 +119,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       let succeeded = 0;
       let failed = 0;
       let fatal: Error | null = null;
+
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(sseComment('keepalive'));
+        } catch {
+          // 클라이언트가 이미 끊었거나 stream 이 닫힌 상태 — 조용히 무시.
+        }
+      }, HEARTBEAT_INTERVAL_MS);
 
       try {
         // Preload the reference image once per batch when the job is img2img
@@ -216,6 +230,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         fatal = err as Error;
         console.error(`[jobs/${job.id}/stream] fatal error:`, fatal?.stack ?? fatal);
       } finally {
+        clearInterval(heartbeat);
+
         // Refund any slots we never got to (e.g. fatal error mid-batch)
         const untouched = job.batchSize - succeeded - failed;
         if (untouched > 0) {
