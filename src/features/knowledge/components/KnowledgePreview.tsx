@@ -4,7 +4,7 @@
 // - 임의 프롬프트 입력 → matchKnowledgeForPrompt + composeKnowledgePrompt 결과 표시
 // - 실제 이미지 생성 X, 크레딧 소비 X
 
-import { Loader2, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ import { usePreviewKnowledge } from '@/features/knowledge/hooks/usePreviewKnowle
 import { cn } from '@/lib/utils';
 
 export function KnowledgePreview() {
+  const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState(
     '학생이 책상 아래에서 교과서를 꺼내는 모습',
   );
@@ -38,16 +39,31 @@ export function KnowledgePreview() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Search className="h-4 w-4" />
-          Preview — 어떤 Knowledge 가 매칭될지 미리 보기
-        </CardTitle>
-        <p className="mt-1 text-xs text-muted-foreground">
-          실제 이미지 생성은 하지 않아 크레딧이 소비되지 않아요. 파이프라인이 이 프롬프트에
-          대해 어떤 Knowledge 를 선택하고, 어떤 이미지가 gpt-image-2 에 전달되는지 그대로 확인할 수 있어요.
-        </p>
+      <CardHeader className="p-0">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-start gap-2 px-6 py-4 text-left transition-colors hover:bg-muted/40"
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+          <div className="min-w-0 flex-1">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Search className="h-4 w-4" />
+              Preview — 어떤 Knowledge 가 매칭될지 미리 보기
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              실제 이미지 생성은 하지 않아 크레딧이 소비되지 않아요. 파이프라인이 이 프롬프트에
+              대해 어떤 Knowledge 를 선택하고, 어떤 이미지가 gpt-image-2 에 전달되는지 그대로 확인할 수 있어요.
+            </p>
+          </div>
+        </button>
       </CardHeader>
+      {open && (
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="preview-prompt">테스트 프롬프트</Label>
@@ -84,7 +100,7 @@ export function KnowledgePreview() {
               </span>
               {result.matches.length === 0 && (
                 <span className="text-amber-700 dark:text-amber-400">
-                  · Knowledge 매칭 없음 → 파이프라인이 prompt_rules 로 fallback 합니다
+                  · Knowledge 매칭 없음 → 사용자 프롬프트가 그대로 전달됩니다
                 </span>
               )}
             </div>
@@ -203,6 +219,7 @@ export function KnowledgePreview() {
           </div>
         )}
       </CardContent>
+      )}
     </Card>
   );
 }

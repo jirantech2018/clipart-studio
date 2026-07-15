@@ -35,9 +35,9 @@ export default async function AdminKnowledgePage() {
         </p>
       </div>
 
-      <KnowledgeListManager />
-
       <KnowledgePreview />
+
+      <KnowledgeListManager />
     </div>
   );
 }

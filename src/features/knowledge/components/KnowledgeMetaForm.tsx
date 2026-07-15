@@ -5,7 +5,7 @@
 // 생성 모드 (initial 없음) 와 편집 모드 둘 다 지원.
 
 import { X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   useCreateKnowledge,
+  useKnowledgeList,
   useUpdateKnowledge,
 } from '@/features/knowledge/hooks/useKnowledge';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,16 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
   const create = useCreateKnowledge();
   const update = useUpdateKnowledge();
   const busy = create.isPending || update.isPending;
+
+  const { data: knowledgeListData } = useKnowledgeList();
+  const existingCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const k of knowledgeListData?.knowledge ?? []) {
+      const c = k.category.trim();
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [knowledgeListData]);
 
   function commitTriggerInput() {
     const raw = triggerInput.trim();
@@ -117,12 +128,18 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
               <Label htmlFor="k-category">카테고리 (자유 입력)</Label>
               <Input
                 id="k-category"
+                list="knowledge-categories"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="예: 공간, 시설·가구, 등장인물"
+                placeholder="예: 공간, 교실 비품, 등장인물"
                 maxLength={100}
                 disabled={busy}
               />
+              <datalist id="knowledge-categories">
+                {existingCategories.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
               <p className="text-[10px] text-muted-foreground">
                 비워두면 &ldquo;미분류&rdquo; 로 표시됩니다.
               </p>

@@ -6,7 +6,6 @@ import { randomUUID } from 'node:crypto';
 
 import { primaryAdapter, applyDiversityHint, mergePrompt } from '@/services/image-gen';
 import { composeKnowledgePrompt } from '@/services/knowledge';
-import { composeRules } from '@/services/prompt-rules';
 import { assembleFinalPrompt } from '@/services/prompt-structuring';
 import { publicUrl, putObject } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
@@ -16,7 +15,7 @@ import { ASPECT_RATIO_DIMENSIONS, aspectRatioSizeString } from '@/types/domain';
 import type { ReferenceImage } from '@/services/image-gen';
 import type { KnowledgeMatch } from '@/services/knowledge';
 import type { StructuredPrompt } from '@/services/prompt-structuring';
-import type { GenerationJob, PromptRule, SchoolProfile } from '@/types/domain';
+import type { GenerationJob, SchoolProfile } from '@/types/domain';
 
 export interface PipelineResult {
   imageId: string;
@@ -44,8 +43,6 @@ interface RunOneParams {
   /** Preloaded knowledge reference image bytes (parallel to the R2 keys in
    * composeKnowledgePrompt().referenceImageKeys). Fetched once per batch. */
   knowledgeReferenceImages?: ReferenceImage[];
-  /** Active prompt rules — used only when Knowledge yields zero matches. */
-  promptRules?: PromptRule[];
 }
 
 /**
@@ -91,7 +88,6 @@ export async function runOne({
   structuredPrompt,
   knowledgeMatches,
   knowledgeReferenceImages,
-  promptRules,
 }: RunOneParams): Promise<PipelineResult> {
   const adapter = primaryAdapter();
 
@@ -102,11 +98,8 @@ export async function runOne({
     ? assembleFinalPrompt(merged, structuredPrompt)
     : merged;
 
-  // 조합 우선순위 (Phase C):
-  //   1) Knowledge 매칭이 있으면 → Knowledge 시스템 사용 (description + negative
-  //      + positive 대표 이미지 첨부)
-  //   2) 매칭 0개면 → prompt_rules 시스템 (기존 흐름) 그대로 유지
-  //   3) prompt_rules 도 비어 있으면 → 옛 admin_settings.system_prompt fallback
+  // Knowledge 매칭이 있으면 Knowledge 시스템 사용 (description + negative +
+  // positive 대표 이미지 첨부), 없으면 사용자 프롬프트(userSection) 그대로.
   let finalPrompt: string;
   const usingKnowledge = !!knowledgeMatches && knowledgeMatches.length > 0;
   if (usingKnowledge) {
@@ -115,18 +108,8 @@ export async function runOne({
     console.log(
       `[knowledge] job=${job.id} order=${order} applied=[${composed.appliedKnowledgeIds.join(',')}] refImages=${composed.referenceImageKeys.length} len=${composed.prompt.length}`,
     );
-  } else if (promptRules && promptRules.length > 0) {
-    const composed = composeRules({ rules: promptRules, userSection });
-    finalPrompt = composed.prompt;
-    console.log(
-      `[prompt-rules] job=${job.id} order=${order} applied=[${composed.appliedRuleIds.join(',')}] dropped=[${composed.droppedRuleIds.join(',')}] len=${composed.prompt.length}`,
-    );
   } else {
-    const settingsClient = createSupabaseServiceClient();
-    const legacyAdminPrompt = await fetchAdminSystemPrompt(settingsClient);
-    finalPrompt = legacyAdminPrompt
-      ? `${legacyAdminPrompt}\n\n${userSection}`
-      : userSection;
+    finalPrompt = userSection;
   }
 
   if (isDiversityChunk) {
@@ -212,17 +195,6 @@ export async function runOne({
   });
 
   return { imageId, r2Key, order };
-}
-
-async function fetchAdminSystemPrompt(
-  supabase: ReturnType<typeof createSupabaseServiceClient>,
-): Promise<string> {
-  const { data } = await supabase
-    .from('admin_settings')
-    .select('system_prompt')
-    .eq('id', 1)
-    .maybeSingle();
-  return ((data?.system_prompt as string) ?? '').trim();
 }
 
 interface RunTaggingParams {

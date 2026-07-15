@@ -14,14 +14,13 @@ import {
   composeKnowledgePrompt,
   matchKnowledgeForPrompt,
 } from '@/services/knowledge';
-import { loadActiveRules } from '@/services/prompt-rules';
 import { structurePrompt } from '@/services/prompt-structuring';
 import { createSupabaseServerClient, createSupabaseServiceClient } from '@/services/supabase/server';
 
 import type { ReferenceImage } from '@/services/image-gen';
 import type { KnowledgeMatch } from '@/services/knowledge';
 import type { StructuredPrompt } from '@/services/prompt-structuring';
-import type { GenerationJob, PromptRule, SchoolProfile } from '@/types/domain';
+import type { GenerationJob, SchoolProfile } from '@/types/domain';
 
 const CHUNK_SIZE = 5;
 
@@ -134,13 +133,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           schoolContext: schoolProfile?.styleDesc ?? null,
         });
 
-        // Phase C: Knowledge 자동 매칭. 배치당 1회 실행.
-        // 매칭이 하나라도 있으면 pipeline 이 Knowledge composer 로 진행하고,
-        // 없으면 아래 prompt_rules 로 자연 fallback.
+        // Knowledge 자동 매칭. 배치당 1회 실행.
+        // 매칭이 없으면 pipeline 이 사용자 프롬프트를 그대로 사용.
         const knowledgeMatches: KnowledgeMatch[] = await matchKnowledgeForPrompt(job.prompt);
         console.log(
           `[knowledge] job=${job.id} matched=${knowledgeMatches.length}${
-            knowledgeMatches.length === 0 ? ' (fallback to prompt_rules)' : ` ids=[${knowledgeMatches.map((m) => m.knowledge.id).join(',')}]`
+            knowledgeMatches.length === 0 ? '' : ` ids=[${knowledgeMatches.map((m) => m.knowledge.id).join(',')}]`
           }`,
         );
 
@@ -162,15 +160,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           );
         }
 
-        // 관리자 정의 prompt_rules 를 배치당 1회 로드. Knowledge 매칭이 있으면
-        // 사용되지 않지만 fallback 경로를 위해 항상 준비해 둔다.
-        const promptRules: PromptRule[] = await loadActiveRules();
-        console.log(
-          `[prompt-rules] job=${job.id} loaded=${promptRules.length}${
-            promptRules.length === 0 ? ' (fallback to legacy system_prompt if needed)' : ''
-          }`,
-        );
-
         const totalSlots = job.batchSize;
         const chunkCount = Math.ceil(totalSlots / CHUNK_SIZE);
 
@@ -190,7 +179,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
                 structuredPrompt,
                 knowledgeMatches,
                 knowledgeReferenceImages,
-                promptRules,
               }),
             ),
           );

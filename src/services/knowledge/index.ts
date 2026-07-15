@@ -188,13 +188,12 @@ export async function loadKnowledgeList(opts?: {
 }
 
 // ------------------------------------------------------------
-// Pipeline entry points (Phase C)
+// Pipeline entry points
 // ------------------------------------------------------------
 
 /**
  * 활성 Knowledge 를 로드해 사용자 프롬프트와 매칭시켜 정렬된 결과를 돌려준다.
- * 매칭이 하나도 없으면 빈 배열을 돌려주므로 caller 는 자연스럽게 prompt_rules
- * fallback 경로를 탈 수 있다.
+ * 매칭이 하나도 없으면 빈 배열을 돌려주고, caller 는 사용자 프롬프트를 그대로 사용한다.
  */
 export async function matchKnowledgeForPrompt(
   prompt: string,

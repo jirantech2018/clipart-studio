@@ -109,49 +109,8 @@ export interface ReferenceImageSlot {
 
 export const REFERENCE_IMAGE_SLOT_LIMIT = 5;
 
-export type PromptRuleCategory =
-  | 'global'
-  | 'school'
-  | 'location'
-  | 'style'
-  | 'task'
-  | 'context'
-  | 'negative';
-
-export const PROMPT_RULE_CATEGORIES: PromptRuleCategory[] = [
-  'global',
-  'school',
-  'location',
-  'style',
-  'task',
-  'context',
-  'negative',
-];
-
-export const PROMPT_RULE_CATEGORY_LABELS: Record<PromptRuleCategory, string> = {
-  global: 'Global',
-  school: 'School',
-  location: 'Location',
-  style: 'Style',
-  task: 'Task',
-  context: 'Context',
-  negative: 'Negative',
-};
-
-export interface PromptRule {
-  id: string;
-  name: string;
-  category: PromptRuleCategory;
-  tags: string[];
-  priority: number;
-  enabled: boolean;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Image Knowledge CMS — Phase A domain types.
-// prompt_rules 를 대체하는 새 구조. 고정 카테고리 없이 트리거 태그로 매칭한다.
+// Image Knowledge CMS — 이미지 생성 파이프라인의 유일한 시스템 지식 소스.
+// 고정 카테고리 없이 트리거 태그로 매칭한다.
 
 export type ReferenceType = 'positive' | 'negative';
 
