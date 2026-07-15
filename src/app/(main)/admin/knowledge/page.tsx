@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { KnowledgeListManager } from '@/features/knowledge/components/KnowledgeListManager';
+import { KnowledgePreview } from '@/features/knowledge/components/KnowledgePreview';
 import { isAdmin } from '@/lib/admin';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -35,6 +36,8 @@ export default async function AdminKnowledgePage() {
       </div>
 
       <KnowledgeListManager />
+
+      <KnowledgePreview />
     </div>
   );
 }
