@@ -68,3 +68,12 @@ CREATE POLICY "reference_images_delete_own"
 -- 둘은 상호 배타적으로 사용된다 (API 계층에서 강제).
 ALTER TABLE public.generation_jobs
   ADD COLUMN IF NOT EXISTS custom_reference_r2_key TEXT;
+
+-- ---------------------------------------------------------------
+-- 5. Role-level GRANT
+-- ---------------------------------------------------------------
+-- RLS와 별개로 authenticated/service_role에 테이블 자체 접근 권한이 필요하다.
+-- (fresh install에서도 완결되도록 025에 포함. 이미 배포된 곳은 026이 이 부분을
+-- 다시 실행하지만 GRANT는 idempotent라 안전하다.)
+GRANT SELECT, INSERT, DELETE ON public.reference_images TO authenticated;
+GRANT ALL ON public.reference_images TO service_role;
