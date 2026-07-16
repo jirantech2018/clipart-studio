@@ -61,134 +61,162 @@ interface ImageRow {
 }
 
 export async function POST(request: Request) {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
-
-  let body: z.infer<typeof bodySchema>;
   try {
-    body = bodySchema.parse(await request.json());
-  } catch {
-    return apiError(
-      'VALIDATION_ERROR',
-      `요청 형식이 올바르지 않아요 (최대 ${MAX_IMAGES}장).`,
-    );
-  }
-
-  // Scope 별 SELECT 조건을 서버가 강제. RLS 도 함께 필터해주지만 계층 방어 목적으로 명시.
-  let query = supabase
-    .from('images')
-    .select('id, r2_key, user_id, is_public, status');
-
-  if (body.scope === 'library') {
-    query = query.eq('user_id', user.id);
-  } else {
-    query = query.eq('is_public', true);
-  }
-  query = query.in('id', body.ids);
-
-  const { data, error } = await query;
-  if (error) {
-    console.error('[download-zip] query error', error);
-    return apiError('INTERNAL_ERROR', '이미지 조회 실패');
-  }
-
-  const rows = (data ?? []) as ImageRow[];
-  if (rows.length !== body.ids.length) {
-    return apiError('FORBIDDEN', '권한이 없는 이미지가 포함돼 있어요');
-  }
-
-  // library scope 는 status='saved' 만 다운로드 허용 (개별 download 라우트와 동일 정책).
-  if (body.scope === 'library') {
-    const notSaved = rows.filter((r) => r.status !== 'saved');
-    if (notSaved.length > 0) {
-      return apiError(
-        'VALIDATION_ERROR',
-        '저장 완료된 이미지만 다운로드할 수 있어요',
-      );
-    }
-  }
-
-  // download_events 는 백그라운드로 로깅 (실패해도 다운로드는 진행).
-  const service = createSupabaseServiceClient();
-  const eventRows = rows.map((r) => ({
-    user_id: user.id,
-    image_id: r.id,
-    event_type: 'download' as const,
-  }));
-  void service
-    .from('download_events')
-    .insert(eventRows)
-    .then((res) => {
-      if (res.error) {
-        console.error('[download-zip] download_events insert failed', res.error);
-      }
+    console.log('[download-zip] start', {
+      nodeVersion: process.version,
+      archiverType: typeof archiverImport,
+      createArchiveType: typeof createArchive,
     });
 
-  // archiver 스트림 준비. 응답 시작 후 백그라운드로 각 이미지를 순차 fetch + append.
-  const archive: Archiver = createArchive('zip', { zlib: { level: 6 } });
+    const supabase = createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
 
-  archive.on('warning', (err: Error) => {
-    console.warn('[download-zip] archiver warning', err);
-  });
-  archive.on('error', (err: Error) => {
-    console.error('[download-zip] archiver error', err);
-  });
-
-  // R2 fetch → append → finalize 를 별도 태스크로 실행.
-  // 총 용량 초과 시 archive.abort() 로 스트림 조기 종료.
-  void (async () => {
-    let totalBytes = 0;
+    let body: z.infer<typeof bodySchema>;
     try {
-      for (const row of rows) {
-        const key = row.r2_key;
-        const url = publicUrl(key);
-        const res = await fetch(url);
-        if (!res.ok || !res.body) {
-          console.error('[download-zip] R2 fetch failed', key, res.status);
-          archive.abort();
-          return;
+      body = bodySchema.parse(await request.json());
+    } catch {
+      return apiError(
+        'VALIDATION_ERROR',
+        `요청 형식이 올바르지 않아요 (최대 ${MAX_IMAGES}장).`,
+      );
+    }
+    console.log('[download-zip] body ok', { scope: body.scope, ids: body.ids.length });
+
+    // archiver factory 가 실제로 함수인지 방어적으로 확인.
+    if (typeof createArchive !== 'function') {
+      console.error('[download-zip] createArchive is not a function', {
+        keys: Object.keys(archiverImport as object),
+      });
+      return apiError('INTERNAL_ERROR', 'ZIP 라이브러리 초기화 실패');
+    }
+
+    // Scope 별 SELECT 조건을 서버가 강제. RLS 도 함께 필터해주지만 계층 방어 목적으로 명시.
+    let query = supabase
+      .from('images')
+      .select('id, r2_key, user_id, is_public, status');
+
+    if (body.scope === 'library') {
+      query = query.eq('user_id', user.id);
+    } else {
+      query = query.eq('is_public', true);
+    }
+    query = query.in('id', body.ids);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[download-zip] query error', error);
+      return apiError('INTERNAL_ERROR', '이미지 조회 실패');
+    }
+
+    const rows = (data ?? []) as ImageRow[];
+    console.log('[download-zip] rows fetched', {
+      requested: body.ids.length,
+      returned: rows.length,
+    });
+    if (rows.length !== body.ids.length) {
+      return apiError('FORBIDDEN', '권한이 없는 이미지가 포함돼 있어요');
+    }
+
+    // library scope 는 status='saved' 만 다운로드 허용 (개별 download 라우트와 동일 정책).
+    if (body.scope === 'library') {
+      const notSaved = rows.filter((r) => r.status !== 'saved');
+      if (notSaved.length > 0) {
+        return apiError(
+          'VALIDATION_ERROR',
+          '저장 완료된 이미지만 다운로드할 수 있어요',
+        );
+      }
+    }
+
+    // download_events 는 백그라운드로 로깅 (실패해도 다운로드는 진행).
+    const service = createSupabaseServiceClient();
+    const eventRows = rows.map((r) => ({
+      user_id: user.id,
+      image_id: r.id,
+      event_type: 'download' as const,
+    }));
+    void service
+      .from('download_events')
+      .insert(eventRows)
+      .then((res) => {
+        if (res.error) {
+          console.error('[download-zip] download_events insert failed', res.error);
         }
-        const contentLength = res.headers.get('content-length');
-        if (contentLength) {
-          totalBytes += Number(contentLength);
-          if (totalBytes > MAX_TOTAL_BYTES) {
-            console.error('[download-zip] total size exceeded', totalBytes);
+      });
+
+    // archiver 스트림 준비. 응답 시작 후 백그라운드로 각 이미지를 순차 fetch + append.
+    const archive: Archiver = createArchive('zip', { zlib: { level: 6 } });
+    console.log('[download-zip] archive created');
+
+    archive.on('warning', (err: Error) => {
+      console.warn('[download-zip] archiver warning', err);
+    });
+    archive.on('error', (err: Error) => {
+      console.error('[download-zip] archiver error', err);
+    });
+
+    // R2 fetch → append → finalize 를 별도 태스크로 실행.
+    // 총 용량 초과 시 archive.abort() 로 스트림 조기 종료.
+    void (async () => {
+      let totalBytes = 0;
+      try {
+        for (const row of rows) {
+          const key = row.r2_key;
+          const url = publicUrl(key);
+          const res = await fetch(url);
+          if (!res.ok || !res.body) {
+            console.error('[download-zip] R2 fetch failed', key, res.status);
             archive.abort();
             return;
           }
+          const contentLength = res.headers.get('content-length');
+          if (contentLength) {
+            totalBytes += Number(contentLength);
+            if (totalBytes > MAX_TOTAL_BYTES) {
+              console.error('[download-zip] total size exceeded', totalBytes);
+              archive.abort();
+              return;
+            }
+          }
+          const ext = key.split('.').pop()?.toLowerCase() ?? 'png';
+          const safeExt = ext === 'webp' ? 'webp' : 'png';
+          const nodeStream = Readable.fromWeb(
+            res.body as unknown as import('node:stream/web').ReadableStream,
+          );
+          archive.append(nodeStream, { name: `${row.id}.${safeExt}` });
         }
-        const ext = key.split('.').pop()?.toLowerCase() ?? 'png';
-        const safeExt = ext === 'webp' ? 'webp' : 'png';
-        const nodeStream = Readable.fromWeb(
-          res.body as unknown as import('node:stream/web').ReadableStream,
-        );
-        archive.append(nodeStream, { name: `${row.id}.${safeExt}` });
+        await archive.finalize();
+        console.log('[download-zip] archive finalized', { totalBytes });
+      } catch (err) {
+        console.error('[download-zip] pipeline error', err);
+        try {
+          archive.abort();
+        } catch {
+          // ignore
+        }
       }
-      await archive.finalize();
-    } catch (err) {
-      console.error('[download-zip] pipeline error', err);
-      try {
-        archive.abort();
-      } catch {
-        // ignore
-      }
-    }
-  })();
+    })();
 
-  const today = new Date().toISOString().slice(0, 10);
-  const filename = `clipart-studio-${today}-${rows.length}장.zip`;
-  const webStream = Readable.toWeb(archive) as unknown as ReadableStream<Uint8Array>;
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = `clipart-studio-${today}-${rows.length}장.zip`;
+    const webStream = Readable.toWeb(archive) as unknown as ReadableStream<Uint8Array>;
+    console.log('[download-zip] returning stream', { filename });
 
-  return new Response(webStream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      'Cache-Control': 'private, no-store',
-      'X-Accel-Buffering': 'no',
-    },
-  });
+    return new Response(webStream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Cache-Control': 'private, no-store',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  } catch (err) {
+    console.error('[download-zip] fatal', err);
+    const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    return apiError('INTERNAL_ERROR', `ZIP 생성 실패 — ${message}`);
+  }
 }
