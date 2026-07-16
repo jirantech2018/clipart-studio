@@ -1,12 +1,15 @@
-# Organization — PRD v0.1 (Draft)
+# Organization — PRD v0.2
 
-- **Status**: Draft (설계 리뷰 대기)
+- **Status**: Reviewed (5 core open questions confirmed by user)
 - **Author**: sbtmxk20
 - **Date**: 2026-07-16
-- **Version**: 0.1
+- **Version**: 0.2 (v0.1 리뷰 반영)
 - **Related**: [ClipArt Studio PRD v1.1](./clipart-studio.prd.md), [Organization Design](../02-design/features/organization.design.md)
 
-> 이 문서는 사용자와의 논의를 위한 **초안**이다. 각 섹션의 "결정 옵션" 은 확정된 것이 아니며, 리뷰 후 확정본으로 갱신한다.
+## Changelog
+
+- **v0.2 (2026-07-16)** — 사용자 리뷰 반영: KPI 4개 갱신, Scope 에 조직 활동 로그 추가, 결정 13 을 `visibility` enum 통합으로 재확정 (기존 is_shareable + is_public 모두 단일 enum 으로 대체)
+- **v0.1 (2026-07-16)** — 최초 draft. 13 결정 항목 옵션·추천안 제시
 
 ---
 
@@ -88,15 +91,14 @@ organization → private       (조직 공유 취소; 조직 소유 이미지의
 ### 링크 공유 (P1 에서 도입한 is_shareable)
 링크 공유는 위 3단계와 **직교 (orthogonal)** 함. 즉 어떤 공개 단계이든 소유자가 별도로 링크 공유를 켤 수 있음. 단 링크 공유 범위는 조직 정책으로 통제 가능 (§8 참조).
 
-## 5. Success Metrics (KPI)
+## 5. Success Metrics (KPI) — v0.2 확정
 
 | 지표 | 정의 | 목표 |
 |-----|-----|-----|
-| **조직당 활성 멤버 수** | 최근 30일 로그인한 조직 멤버 | ≥ 5명/조직 |
-| **조직당 신규 이미지** | 조직 라이브러리에 월간 신규 등록 이미지 | ≥ 20장/조직·월 |
-| **초대 수락률** | 발송된 초대 중 24h 내 수락 | ≥ 60% |
-| **조직→Community 승격율** | 조직 이미지 중 Community 로 승격된 비율 | ≥ 10% |
-| **조직 이미지 재사용률** | 조직 이미지의 다운로드 이벤트 / 등록 이미지 수 | ≥ 50% (개인보다 높아야 조직 가치 증명) |
+| **초대 수락률** | 발송된 초대 중 7일 내 수락한 비율 | ≥ 60% |
+| **조직 활성화율** | 조직 생성 후 7일 내 owner 외 추가 멤버 최소 1명 확보한 조직 비율 | ≥ 70% |
+| **조직 이미지 공유율** | 조직 소속 멤버가 개인 이미지 중 조직에 공유한 비율 | ≥ 40% |
+| **Community 승격율** | 조직 라이브러리 이미지 중 Community 로 승격된 비율 | 15~20% |
 
 ## 6. Scope
 
@@ -106,8 +108,8 @@ organization → private       (조직 공유 취소; 조직 소유 이미지의
 - 4가지 역할 (owner/admin/editor/viewer)
 - 이미지의 조직 라이브러리 승격/강등
 - 조직 라이브러리 페이지 (`/organization/[organizationId]`)
-- 3단계 공개 모델 UI + RLS
-- P1(`is_shareable`) 정책의 조직 확장
+- **`visibility` enum 기반 통합 공개 모델** (`private / organization / authenticated / public`)
+- **조직 활동 로그** (organization_activity_logs) — 멤버 초대·삭제·역할 변경, 이미지 공유·강등, Community 승격·취소 등의 이벤트 기록. 조직 관리 페이지에서 admin+ 가 조회 가능
 
 ### ❌ Out (v1.0 제외, v2+ 예정)
 - 여러 조직 동시 공유 (한 이미지가 여러 조직 라이브러리에 동시에 나타나기) — v2
@@ -190,14 +192,14 @@ organization → private       (조직 공유 취소; 조직 소유 이미지의
 
 ---
 
-### 결정 5. 개인 소유 vs 조직 소유 이미지 구분
+### 결정 5. 개인 소유 vs 조직 소유 이미지 구분 — v0.2 확정
 
 **옵션**
 - (A) **개인 소유만** — 이미지는 항상 계정(auth.users) 소유. 조직 공유 = 조회 권한 부여
 - (B) 조직 소유 병존 — 이미지에 `owner_type: 'user'|'organization'` 을 두어 순수 조직 자산 지원
 - (C) 소유권 이전 — 개인 이미지를 조직에 "이관" 하면 개인 라이브러리에서 사라지고 조직 자산이 됨
 
-**추천**: **(A) 개인 소유만 (v1.0)**. v2 에서 (B) 로 확장 여지 남김
+**확정: (A) 개인 소유만 (v1.0)**. v2 에서 (B) 로 확장 여지 남김
 - v1.0 은 SaaS 로의 첫 걸음. 소유권 개념 복잡화는 리스크
 - 조직 이미지 = "누군가 개인이 만든 이미지에 조직 라벨이 붙은 것"
 - 크레딧도 여전히 계정 단위로 소비
@@ -206,14 +208,14 @@ organization → private       (조직 공유 취소; 조직 소유 이미지의
 
 ---
 
-### 결정 6. 이미지의 Organization 공유 방식
+### 결정 6. 이미지의 Organization 공유 방식 — v0.2 확정
 
 **옵션**
 - (A) `images.organization_id` 컬럼 (nullable, 단일 조직) — 이미지가 한 조직에만 공유 가능
 - (B) `image_organization_shares` 연결 테이블 — 한 이미지가 여러 조직에 동시 공유 가능
 - (C) 하이브리드: `images.organization_id` 를 primary organization 으로 두고 추가 공유는 별도 테이블
 
-**추천**: **(B) 연결 테이블** — v1.0 UI 는 단일 조직으로만 노출하지만 스키마는 확장 가능하게. 나중에 여러 조직 동시 공유(스코프 out) 를 도입할 때 스키마 마이그레이션 불필요
+**확정: (B) 연결 테이블** — v1.0 UI 는 단일 조직으로만 노출하지만 스키마는 확장 가능하게. 나중에 여러 조직 동시 공유(스코프 out) 를 도입할 때 스키마 마이그레이션 불필요
 - 테이블명: `image_organization_shares(image_id, organization_id, shared_by_user_id, shared_at)`
 - v1.0 API 는 이미지 하나당 조직 하나까지만 허용 (Zod 검증)
 - 데이터 구조는 이미 N:N
@@ -266,14 +268,14 @@ organization → private       (조직 공유 취소; 조직 소유 이미지의
 
 ---
 
-### 결정 10. 한 이미지의 여러 조직 동시 공유 여부
+### 결정 10. 한 이미지의 여러 조직 동시 공유 여부 — v0.2 확정
 
 **옵션**
 - (A) v1.0 부터 지원 (UI + API 모두 열기)
 - (B) 스키마는 지원 (연결 테이블), UI 는 단일 조직만 노출 — **v2 에서 UI 확장**
 - (C) 스키마도 단일 (images.organization_id) — 나중에 스키마 마이그레이션
 
-**추천**: **(B)** — 결정 6 과 짝. 스키마는 유연하되 v1.0 사용자는 혼란 없이 "1 이미지 - 1 조직" 으로 시작
+**확정: (B)** — 결정 6 과 짝. 스키마는 유연하되 v1.0 사용자는 혼란 없이 "1 이미지 - 1 조직" 으로 시작
 
 **트레이드오프**: (A) 는 v1.0 UX 복잡화. (C) 는 v2 마이그레이션 비용
 
@@ -295,19 +297,42 @@ Design 문서(§4) 에서 상세. PRD 수준 결정:
 
 ---
 
-### 결정 13. `is_shareable` 의 조직 내부 링크 vs 조직 외부 링크 구분
+### 결정 13. 공개 범위 표현 (visibility 통합) — v0.2 재확정
 
-**옵션**
-- (A) 하나의 `is_shareable` 유지 — 링크가 있으면 조직 안팎 구분 없이 로그인 회원 누구든 접근 가능
-- (B) 두 개로 분리: `is_shareable_internal` (조직 멤버만) + `is_shareable_external` (외부 회원 포함)
-- (C) 링크 shared_scope enum: `'off' | 'organization' | 'authenticated' | 'public'`
+**v0.1 리뷰 결과**: 사용자가 "is_shareable boolean 을 유지하지 말고, 하나의 `visibility` enum 으로 통합" 을 선택. 이에 따라 `is_public` 컬럼도 별개로 두지 않고 같은 enum 에 흡수한다.
 
-**추천**: **(C) enum** — 정책 표현력 최고, 조직이 "외부 링크 공유 금지" 를 policy 로 설정 가능
-- 필드명: `images.link_share_scope`
-- 기본값: `'off'`
-- 조직 policy: `organizations.max_link_share_scope` 로 상한 강제 (예: 조직이 max=authenticated 로 설정하면 소속 이미지는 public 링크 못 함)
+**최종 결정**: **단일 `images.visibility` enum 도입 → 기존 `is_public` + `is_shareable` 두 boolean 을 모두 대체**
 
-**트레이드오프**: (A) 는 단순하지만 조직 관리자 통제 불가. (C) 는 마이그레이션 필요 (기존 is_shareable → link_share_scope='authenticated')
+**enum 값과 의미**
+
+| 값 | 접근 가능한 사용자 | Community 페이지 노출 |
+|---|---|---|
+| `private` | 소유자만 | ✗ |
+| `organization` | 소유자 + 이 이미지를 공유받은 조직의 active 멤버 | ✗ |
+| `authenticated` | 로그인한 모든 회원 (링크만 알면) | ✗ |
+| `public` | 로그인한 모든 회원 (링크 or Community 진입 모두) | ✓ |
+
+**정책적 의미**:
+- 승격 흐름 `private → organization → authenticated → public` 이 자연스러운 부분 순서로 표현됨
+- Community 노출 = `visibility='public'` 로 조회 필터 단순화 (기존 `WHERE is_public = TRUE` 그대로 대체)
+- 링크 공유 상태 = `visibility >= 'authenticated'` (즉 `authenticated` 또는 `public`) — 링크 클릭 시 로그인 회원이면 볼 수 있음
+- 비회원 접근은 v1.0 out. 필요하면 v2 에서 별도 flag 로 추가
+
+**마이그레이션 규칙** (033):
+```sql
+ALTER TABLE images ADD COLUMN visibility image_visibility NOT NULL DEFAULT 'private';
+
+UPDATE images SET visibility = 'public'         WHERE is_public = TRUE;
+UPDATE images SET visibility = 'authenticated'  WHERE is_public = FALSE AND is_shareable = TRUE;
+-- 나머지는 default 'private' 유지
+
+ALTER TABLE images DROP COLUMN is_public;
+ALTER TABLE images DROP COLUMN is_shareable;
+```
+
+**조직 policy 상한**: `organizations.max_visibility` — 조직 admin 이 "우리 조직 이미지는 authenticated 이상 못 나가게" 상한 강제 가능. 이미지 소유자가 그 상한을 넘어서는 visibility 로 세팅하려 하면 API/RLS 에서 거부.
+
+**트레이드오프**: 하나의 enum 으로 통합하면 semantic 이 훨씬 깔끔하고, 두 boolean 조합의 애매한 상태(is_public=TRUE + is_shareable=TRUE 등) 도 사라짐. 대신 마이그레이션 규모가 P1/P2 확장분까지 통째로 재작업.
 
 ---
 
@@ -318,12 +343,21 @@ Design 문서(§4) 에서 상세. PRD 수준 결정:
 - **감사 로그**: 조직 내 액션(승격·강등·역할 변경) 감사 로그 저장 여부 (v1.0 out, v2 예정)
 - **조직 slug 정책**: URL 에 노출될 slug 의 예약어·중복 규칙
 
-## 9. Open Questions to User
+## 9. Open Questions — v0.2 Status
 
-**리뷰 시 사용자님이 확답해야 할 항목**:
+### ✅ v0.1 리뷰에서 확정된 항목
+1. **결정 5 — 이미지 소유**: 개인 소유만 (v1.0)
+2. **결정 6/10/11 — 공유 방식**: image_organization_shares 연결 테이블, N:N 스키마, v1.0 UI 단일 조직
+3. **결정 13 — 공개 범위 표현**: `visibility` enum 통합 (`private / organization / authenticated / public`). is_public + is_shareable 모두 대체
+4. **Scope In**: 조직 활동 로그 (organization_activity_logs) 추가
+5. **KPI**: 초대 수락률 60% / 조직 활성화율 70% / 조직 이미지 공유율 40% / Community 승격율 15~20%
 
-1. 결정 5 (개인 소유만 vs 조직 소유 병존) — 추천은 (A) 개인 소유만. 동의?
-2. 결정 6/10/11 (연결 테이블 vs 컬럼) — 추천은 (B) 연결 테이블 + v1.0 UI 는 단일. 동의?
-3. 결정 13 (is_shareable 확장) — 추천은 (C) enum. 동의? 아니면 (A) 유지?
-4. Scope In/Out — 놓친 필수 기능 있는지?
-5. KPI 목표치 — 현실적인 목표인가?
+### 🟡 여전히 열려있는 항목 (구현 착수 전에 확정 필요)
+
+- **`public` 의 의미 재확정**: 현재 정의는 "로그인 회원 누구나 접근 + Community 페이지 노출". 비회원 접근은 v1.0 out. 사용자가 원한 정의와 일치하는지 확인 필요
+- **조직 slug 예약어 목록**: `admin`, `new`, `settings`, `invites`, `api` 등
+- **초대 만료 기본값**: 7일 확정 (Design v0.1 도 7일). 변경 없이 갈지
+- **조직 삭제 유예 기간**: 30일 (soft delete). 변경 없이 갈지
+- **viewer 다운로드 권한**: 결정 4 매트릭스에서 viewer 도 다운로드 가능. 이 정책 유지?
+- **크레딧 정책**: 조직 컨텍스트에서 생성한 이미지의 크레딧 부담 주체 (v1.0 은 개인 부담 유지)
+- **알림 채널**: 이메일 only vs 인앱 vs 둘 다 (v1.0 은 이메일 only 추천)
