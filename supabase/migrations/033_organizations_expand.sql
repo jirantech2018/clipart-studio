@@ -1,20 +1,16 @@
--- Migration: 033_organizations
+-- Migration: 033_organizations_expand
 -- Design Ref: docs/02-design/features/organization.design.md v0.3
 -- PRD Ref:    docs/00-pm/organization.prd.md v0.3
 --
--- Scope:
---   1) 조직 계층 (organizations, organization_members, organization_invites)
---   2) 이미지의 조직 공유 (image_organization_shares 연결 테이블)
---   3) 조직 활동 로그 (organization_activity_logs)
---   4) images.visibility enum + is_on_community boolean 도입,
---      기존 is_public / is_shareable 컬럼 완전 제거
---   5) 모든 접근 제어는 RLS 강제 (계층 방어층)
---
--- 배포 순서 주의:
---   이 migration 은 images 테이블의 컬럼을 DROP 한다. 실행 전 반드시
---   앱 코드가 새 컬럼(visibility, is_on_community) 을 사용하도록 완전히
---   대체되어 있어야 한다. 그렇지 않으면 기존 배포가 즉시 컬럼 없음
---   에러를 발생시킴.
+-- Deployment strategy: Expand → Migrate → Contract (zero-downtime)
+--   * This file is the EXPAND phase — only additive changes.
+--     기존 컬럼(images.is_public, images.is_shareable) 과 기존 정책은
+--     그대로 유지하므로, 이 SQL 을 실행해도 지금 배포된 앱은 아무 변경
+--     없이 정상 동작한다.
+--   * MIGRATE phase: 앱 코드가 새 컬럼(visibility, is_on_community) 만
+--     쓰도록 재작성 & 배포.
+--   * CONTRACT phase: 새 앱이 안정화된 뒤 034_organizations_contract.sql
+--     을 실행해서 옛 컬럼/정책을 완전히 제거.
 
 -- ================================================================
 -- 1. Enums
@@ -23,10 +19,10 @@
 CREATE TYPE organization_role AS ENUM ('owner', 'admin', 'editor', 'viewer');
 
 CREATE TYPE image_visibility AS ENUM (
-  'private',        -- 소유자만
-  'organization',   -- 소유자 + image_organization_shares 로 공유받은 조직 active 멤버
-  'authenticated',  -- 로그인 회원 누구나 (링크 있어야; unlisted)
-  'public'          -- 로그인 회원 누구나 (검색·발견 대상; listed)
+  'private',
+  'organization',
+  'authenticated',
+  'public'
 );
 
 CREATE TYPE org_activity_type AS ENUM (
@@ -125,13 +121,12 @@ CREATE TABLE public.organization_invites (
     CHECK (expires_at > created_at)
 );
 
--- (조직, 이메일) 조합에 대해 pending 초대는 1개만
 CREATE UNIQUE INDEX idx_organization_invites_unique_pending
   ON public.organization_invites(organization_id, email)
   WHERE accepted_at IS NULL AND revoked_at IS NULL;
 
 -- ================================================================
--- 5. image_organization_shares (N:N 연결 테이블)
+-- 5. image_organization_shares
 -- ================================================================
 
 CREATE TABLE public.image_organization_shares (
@@ -178,7 +173,6 @@ CREATE INDEX idx_org_activity_target_image
 -- 7. Helper functions (RLS 서브쿼리 캐시용, SECURITY DEFINER STABLE)
 -- ================================================================
 
--- 특정 유저가 조직에 active 멤버인지
 CREATE OR REPLACE FUNCTION public.is_org_member(org_id UUID, uid UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -193,7 +187,6 @@ AS $$
   );
 $$;
 
--- 특정 유저의 조직 내 역할 (없으면 NULL)
 CREATE OR REPLACE FUNCTION public.org_role(org_id UUID, uid UUID)
 RETURNS organization_role
 LANGUAGE sql
@@ -206,7 +199,6 @@ AS $$
     AND status = 'active';
 $$;
 
--- 이미지가 사용자에게 조직 공유로 접근 가능한지
 CREATE OR REPLACE FUNCTION public.image_visible_via_org(img_id UUID, uid UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -225,26 +217,23 @@ AS $$
 $$;
 
 -- ================================================================
--- 8. images.visibility + is_on_community 도입 및 마이그레이션
+-- 8. images 확장 — 새 컬럼만 추가 (기존 is_public / is_shareable 은 유지!)
 -- ================================================================
 
 ALTER TABLE public.images
   ADD COLUMN visibility image_visibility NOT NULL DEFAULT 'private',
   ADD COLUMN is_on_community BOOLEAN NOT NULL DEFAULT FALSE;
 
--- 기존 is_public=TRUE 이미지 → visibility='public' + Community 노출 유지
+-- 기존 데이터 백필: is_public / is_shareable → visibility / is_on_community
 UPDATE public.images
    SET visibility = 'public', is_on_community = TRUE
  WHERE is_public = TRUE;
 
--- 기존 is_shareable=TRUE (is_public=FALSE) 이미지 → visibility='authenticated'
 UPDATE public.images
    SET visibility = 'authenticated'
  WHERE is_public = FALSE AND is_shareable = TRUE;
 
--- 나머지 이미지는 DEFAULT 유지 (visibility='private', is_on_community=FALSE)
-
--- Community 노출은 authenticated 이상일 때만 허용
+-- Community 노출 정합성 강제 (visibility >= authenticated 일 때만 TRUE 허용)
 ALTER TABLE public.images
   ADD CONSTRAINT images_community_requires_public_or_auth
   CHECK (
@@ -253,27 +242,7 @@ ALTER TABLE public.images
   );
 
 -- ================================================================
--- 9. 기존 정책 폐기 (visibility 기반으로 재작성)
--- ================================================================
-
-DROP POLICY IF EXISTS images_select_own_or_public ON public.images;
-DROP POLICY IF EXISTS images_select_own_public_or_shareable ON public.images;
-DROP POLICY IF EXISTS images_select_v3 ON public.images;
-DROP POLICY IF EXISTS images_update_own ON public.images;
-
--- 관련 태그·카테고리 정책도 재작성 필요
-DROP POLICY IF EXISTS tags_select ON public.image_tags;
-DROP POLICY IF EXISTS categories_select ON public.image_categories;
-
--- ================================================================
--- 10. images.is_public / is_shareable 컬럼 제거
--- ================================================================
-
-ALTER TABLE public.images DROP COLUMN is_public;
-ALTER TABLE public.images DROP COLUMN is_shareable;
-
--- ================================================================
--- 11. 부분 인덱스 (Community 페이지 조회 최적화)
+-- 9. 부분 인덱스 (신규)
 -- ================================================================
 
 CREATE INDEX idx_images_on_community
@@ -284,7 +253,9 @@ CREATE INDEX idx_images_visibility
   ON public.images(visibility);
 
 -- ================================================================
--- 12. 새 SELECT / UPDATE RLS
+-- 10. 새 SELECT / UPDATE RLS — 기존 정책과 공존 (RLS 는 여러 정책 OR 로 평가)
+--     같은 사용자에 대해 옛/새 정책 중 하나라도 허용하면 접근 가능.
+--     백필로 두 시스템이 동일한 접근 권한을 표현하므로 실질적 차이 없음.
 -- ================================================================
 
 CREATE POLICY images_select_v4 ON public.images
@@ -298,7 +269,6 @@ CREATE POLICY images_select_v4 ON public.images
     )
   );
 
--- UPDATE: 소유자 + 조직 admin+ (승격 대리 목적)
 CREATE POLICY images_update_v2 ON public.images
   FOR UPDATE
   USING (
@@ -315,8 +285,8 @@ CREATE POLICY images_update_v2 ON public.images
     )
   );
 
--- image_tags / image_categories 정책 재작성 (visibility 기반)
-CREATE POLICY tags_select ON public.image_tags
+-- image_tags / image_categories 도 visibility 조건 추가 정책 (기존 정책과 공존)
+CREATE POLICY tags_select_v2 ON public.image_tags
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM public.images
@@ -332,7 +302,7 @@ CREATE POLICY tags_select ON public.image_tags
     )
   );
 
-CREATE POLICY categories_select ON public.image_categories
+CREATE POLICY categories_select_v2 ON public.image_categories
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM public.images
@@ -349,7 +319,7 @@ CREATE POLICY categories_select ON public.image_categories
   );
 
 -- ================================================================
--- 13. organizations RLS
+-- 11. organizations RLS
 -- ================================================================
 
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
@@ -375,7 +345,7 @@ CREATE POLICY orgs_delete ON public.organizations
   FOR DELETE USING (auth.uid() = owner_id);
 
 -- ================================================================
--- 14. organization_members RLS
+-- 12. organization_members RLS
 -- ================================================================
 
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
@@ -400,25 +370,22 @@ CREATE POLICY members_delete ON public.organization_members
   );
 
 -- ================================================================
--- 15. organization_invites RLS
+-- 13. organization_invites RLS
 -- ================================================================
 
 ALTER TABLE public.organization_invites ENABLE ROW LEVEL SECURITY;
 
--- admin+ 만 조직의 pending 초대 목록 조회
 CREATE POLICY invites_select_admin ON public.organization_invites
   FOR SELECT USING (
     org_role(organization_id, auth.uid()) IN ('owner', 'admin')
   );
 
--- admin+ 만 초대 생성
 CREATE POLICY invites_insert_admin ON public.organization_invites
   FOR INSERT WITH CHECK (
     org_role(organization_id, auth.uid()) IN ('owner', 'admin')
     AND invited_by = auth.uid()
   );
 
--- admin+ 만 초대 취소 (revoked_at 세팅) / 삭제
 CREATE POLICY invites_update_admin ON public.organization_invites
   FOR UPDATE USING (
     org_role(organization_id, auth.uid()) IN ('owner', 'admin')
@@ -430,7 +397,7 @@ CREATE POLICY invites_delete_admin ON public.organization_invites
   );
 
 -- ================================================================
--- 16. image_organization_shares RLS
+-- 14. image_organization_shares RLS
 -- ================================================================
 
 ALTER TABLE public.image_organization_shares ENABLE ROW LEVEL SECURITY;
@@ -457,24 +424,19 @@ CREATE POLICY ios_delete ON public.image_organization_shares
   );
 
 -- ================================================================
--- 17. organization_activity_logs RLS
+-- 15. organization_activity_logs RLS
 -- ================================================================
 
 ALTER TABLE public.organization_activity_logs ENABLE ROW LEVEL SECURITY;
 
--- admin+ 만 활동 로그 조회
 CREATE POLICY activity_logs_select_admin ON public.organization_activity_logs
   FOR SELECT USING (
     org_role(organization_id, auth.uid()) IN ('owner', 'admin')
   );
 
--- INSERT 는 service role 만 (API 라우트가 service client 로 기록)
-
 -- ================================================================
--- 18. GRANTS
+-- 16. GRANTS
 -- ================================================================
-
--- 016 마이그레이션에서 images 는 이미 authenticated 에 CRUD 부여됨. 유지.
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.organizations TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_members TO authenticated;
@@ -482,15 +444,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_invites TO authentic
 GRANT SELECT, INSERT, DELETE ON public.image_organization_shares TO authenticated;
 GRANT SELECT ON public.organization_activity_logs TO authenticated;
 
--- Service role 은 모든 것에 대해 우회 (INSERT logs 등)
 GRANT INSERT ON public.organization_activity_logs TO service_role;
 
--- Sequences (BIGSERIAL)
 GRANT USAGE, SELECT ON SEQUENCE public.organization_activity_logs_id_seq TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE public.organization_activity_logs_id_seq TO service_role;
 
 -- ================================================================
--- 19. updated_at 자동 갱신 트리거 (organizations)
+-- 17. updated_at 트리거 (organizations)
 -- ================================================================
 
 CREATE OR REPLACE FUNCTION public.set_updated_at()
