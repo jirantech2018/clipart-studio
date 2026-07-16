@@ -19,13 +19,23 @@ export const maxDuration = 300;
 import { Readable } from 'node:stream';
 import { z } from 'zod';
 
-// archiver 는 CommonJS 함수 export. esModuleInterop 은 true 라 런타임 default
-// 로 잡히지만 @types/archiver 가 default callable signature 를 노출하지 않아
-// 타입만 우회. runtime 동작에는 영향 없음.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error archiver runtime is callable; types only declare namespace
-import createArchive from 'archiver';
-import type { Archiver } from 'archiver';
+// archiver 는 CommonJS 함수 export (`module.exports = function archiver(...)`).
+// @types/archiver 는 default callable signature 를 노출하지 않는 데다,
+// Next.js 의 serverComponentsExternalPackages 로 external 처리하면 default
+// import shim 이 붙지 않아 런타임에 함수가 아닌 { default: fn } 로 잡힐 수도
+// 있다. 두 형태 모두 안전하게 대응.
+import * as archiverImport from 'archiver';
+import type { Archiver, ArchiverOptions } from 'archiver';
+
+type ArchiverFactory = (
+  format: 'zip' | 'tar' | 'json',
+  options?: ArchiverOptions,
+) => Archiver;
+
+const createArchive: ArchiverFactory =
+  typeof archiverImport === 'function'
+    ? (archiverImport as unknown as ArchiverFactory)
+    : (archiverImport as unknown as { default: ArchiverFactory }).default;
 
 import { apiError } from '@/lib/api-error';
 import { publicUrl } from '@/services/r2/upload';
