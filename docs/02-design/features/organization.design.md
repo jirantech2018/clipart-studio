@@ -1,15 +1,16 @@
-# Organization — Design v0.2
+# Organization — Design v0.3
 
-> **Summary**: SaaS 형 조직 계층 도입. 계정(auth.users) 위에 organizations 를 얹고, images 는 개인 소유 원칙을 유지한 채 `image_organization_shares` 연결 테이블로 조직 라이브러리에 노출. 기존 `is_public` + `is_shareable` 두 boolean 을 단일 `visibility` enum (`private/organization/authenticated/public`) 으로 통합. 모든 접근 제어는 RLS 강제. 조직 활동 로그 v1.0 포함.
+> **Summary**: SaaS 형 조직 계층 도입. 계정(auth.users) 위에 organizations 를 얹고, images 는 개인 소유 원칙을 유지한 채 `image_organization_shares` 연결 테이블로 조직 라이브러리에 노출. 기존 `is_public` + `is_shareable` 두 boolean 을 `visibility` enum (`private/organization/authenticated/public`) + 독립 `is_on_community` boolean 으로 분리. Community 노출은 별도 승격 액션. 모든 접근 제어는 RLS 강제. 조직 활동 로그 v1.0 포함.
 >
-> **Version**: 0.2.0
+> **Version**: 0.3.0
 > **Author**: sbtmxk20
 > **Date**: 2026-07-16
-> **Status**: Reviewed — PRD v0.2 결정사항 반영
-> **PRD**: [organization.prd.md v0.2](../../00-pm/organization.prd.md)
+> **Status**: Approved — 033_organizations.sql migration 준비 완료
+> **PRD**: [organization.prd.md v0.3](../../00-pm/organization.prd.md)
 
 ## Changelog
 
+- **v0.3** — PRD v0.3 반영: (1) `is_on_community` boolean 분리 (Community 노출은 visibility 와 독립), (2) 조직 slug 예약어 CHECK constraint, (3) viewer 다운로드 권한 확정
 - **v0.2** — PRD v0.2 리뷰 반영: (1) visibility enum 도입 & is_public/is_shareable 완전 제거, (2) organization_activity_logs 테이블 신설, (3) SELECT/UPDATE RLS 재작성, (4) migration 순서 갱신
 - **v0.1** — 최초 draft. 개별 옵션 제시
 
@@ -67,7 +68,21 @@ CREATE TABLE public.organizations (
   CONSTRAINT organizations_slug_format
     CHECK (slug ~ '^[a-z0-9][a-z0-9-]{2,63}$'),  -- 소문자·숫자·하이픈, 3~64자
   CONSTRAINT organizations_name_length
-    CHECK (char_length(name) BETWEEN 1 AND 100)
+    CHECK (char_length(name) BETWEEN 1 AND 100),
+  -- 시스템 라우트와 충돌하는 slug 금지 (PRD §10 참조)
+  CONSTRAINT organizations_slug_not_reserved
+    CHECK (slug NOT IN (
+      'admin', 'api', 'auth', 'login', 'logout', 'signup',
+      'settings', 'organization', 'organizations', 'library',
+      'community', 'profile', 'account', 'help', 'support',
+      'new', 'edit', 'invite', 'invites',
+      'image', 'images', 'generate', 'onboarding', 'search',
+      'callback', 'knowledge', 'dashboard',
+      '_next', '_static', '_vercel',
+      'sitemap', 'robots', 'favicon', 'manifest',
+      'www', 'mail', 'ftp', 'ns1', 'ns2',
+      'null', 'undefined'
+    ))
 );
 
 CREATE INDEX idx_organizations_owner ON public.organizations(owner_id)
@@ -158,53 +173,72 @@ CREATE INDEX idx_ios_image ON public.image_organization_shares(image_id);
 - v1.0 API 는 이미지당 조직 1개만 허용 (Zod 검증), 스키마는 열림
 - 이미지 삭제 시 CASCADE
 
-### 3.5 `images.visibility` — 통합 공개 범위 (v0.2 재확정)
+### 3.5 `images.visibility` + `is_on_community` — 접근 범위와 노출 분리 (v0.3)
 
-**PRD v0.2 결정 13** 에 따라 기존 `is_public` + `is_shareable` 두 boolean 을 **단일 `visibility` enum 으로 완전 통합**. 두 컬럼은 마이그레이션 후 같은 SQL 파일에서 DROP 한다 (v1.1 유예 없음).
+**PRD v0.3 결정 13** 재해석 반영: `visibility` 는 오직 접근 범위만 표현하고, Community 페이지 노출은 독립 boolean `is_on_community` 로 분리.
 
 ```sql
 CREATE TYPE image_visibility AS ENUM (
-  'private',        -- 소유자만 접근
+  'private',        -- 소유자만
   'organization',   -- 소유자 + image_organization_shares 로 공유받은 조직의 active 멤버
-  'authenticated',  -- 로그인한 모든 회원 접근 (링크만 알면)
-  'public'          -- 로그인한 모든 회원 접근 + /community 에 노출됨
+  'authenticated',  -- 로그인 회원 누구나 (링크 있어야; unlisted)
+  'public'          -- 로그인 회원 누구나 (검색·발견 대상; listed)
 );
 
 ALTER TABLE public.images
-  ADD COLUMN visibility image_visibility NOT NULL DEFAULT 'private';
+  ADD COLUMN visibility image_visibility NOT NULL DEFAULT 'private',
+  ADD COLUMN is_on_community BOOLEAN NOT NULL DEFAULT FALSE;
 
--- 마이그레이션: is_public 이 우선순위 높음
-UPDATE public.images SET visibility = 'public'         WHERE is_public = TRUE;
-UPDATE public.images SET visibility = 'authenticated'  WHERE is_public = FALSE AND is_shareable = TRUE;
--- 나머지는 DEFAULT 'private' 유지
+-- 마이그레이션: 기존 두 boolean 을 두 새 컬럼으로 분해
+UPDATE public.images
+   SET visibility = 'public', is_on_community = TRUE
+ WHERE is_public = TRUE;
 
--- 기존 컬럼 및 관련 정책 완전 제거
+UPDATE public.images
+   SET visibility = 'authenticated'
+ WHERE is_public = FALSE AND is_shareable = TRUE;
+
+-- 기존 컬럼 및 관련 정책 제거
 DROP POLICY IF EXISTS images_select_v3 ON public.images;
 ALTER TABLE public.images DROP COLUMN is_public;
 ALTER TABLE public.images DROP COLUMN is_shareable;
 
--- 조회 성능용 부분 인덱스 (Community 필터가 가장 잦음)
-CREATE INDEX idx_images_visibility_public
+-- Community 노출은 authenticated 이상일 때만 허용 (정합성 강제)
+ALTER TABLE public.images
+  ADD CONSTRAINT images_community_requires_public_or_auth
+  CHECK (
+    is_on_community = FALSE
+    OR visibility IN ('authenticated', 'public')
+  );
+
+-- 부분 인덱스: Community 페이지 조회 최적화
+CREATE INDEX idx_images_on_community
   ON public.images(created_at DESC)
-  WHERE visibility = 'public';
+  WHERE is_on_community = TRUE;
 ```
 
 **enum 값 의미표**
 
-| 값 | 접근 가능 | Community 페이지 노출 | 대체된 기존 상태 |
+| 값 | 접근 가능 | 링크 없이 발견 가능 | 대체된 기존 상태 |
 |---|---|:-:|---|
 | `private` | 소유자만 | ✗ | `is_public=F, is_shareable=F` |
-| `organization` | 소유자 + 이 이미지가 공유된 조직의 active 멤버 | ✗ | (신설) |
-| `authenticated` | 로그인 회원 누구나 (링크만 알면) | ✗ | `is_shareable=T` |
-| `public` | 로그인 회원 누구나 + Community 노출 | ✓ | `is_public=T` |
+| `organization` | 소유자 + 조직 멤버 (연결 테이블 기반) | 조직 라이브러리 O | (신설) |
+| `authenticated` | 로그인 회원 누구나 (링크 있어야) | ✗ | `is_shareable=T` |
+| `public` | 로그인 회원 누구나 | ✓ (검색 API 등) | `is_public=T` |
+
+**`is_on_community` 규칙**
+- 기본값 FALSE
+- `visibility >= 'authenticated'` 일 때만 TRUE 허용 (CHECK constraint 로 강제)
+- Community 페이지 (`/community`) 필터: **`WHERE is_on_community = TRUE`** (기존 `WHERE is_public = TRUE` 대체)
+- Community 승격 액션 = `is_on_community=TRUE` 로 세팅. 강등 = `FALSE` 로
 
 **정책적 의미**
-- 승격 흐름 `private → organization → authenticated → public` 이 자연스러운 부분 순서
-- Community 페이지 필터가 `WHERE visibility = 'public'` 로 단순화됨 (기존 `is_public=TRUE` 대체)
-- 링크 공유는 `visibility >= 'authenticated'` — DB 에서 enum 은 순서가 있으므로 `visibility IN ('authenticated','public')` 로 필터
-- 비회원 접근은 v1.0 out. v2 에서 별도 flag 나 새 enum 값(`'anonymous'`)으로 확장 가능
+- `authenticated` vs `public` 차이 명확: unlisted vs listed. 검색·추천 대상 여부가 다름
+- Community 노출은 완전 별개 승격 액션 → 심리적 안전장치
+- 비회원 접근은 v1.0 out. v2 에서 확장 가능
 
-**조직 상한 검증**: `organizations.max_visibility` — 조직 admin 이 "우리 조직 이미지는 authenticated 이상 못 나가게" 설정하면, 그 조직에 공유된 이미지의 visibility 는 그 상한을 초과할 수 없음. API 에서 검증하고, DB trigger 로 이중 방어.
+**조직 상한 검증** (`organizations.max_visibility`)
+조직 admin 이 "우리 조직 이미지는 authenticated 이상 못 나가게" 설정 시, 그 조직에 공유된 이미지의 visibility 는 상한 초과 불가. API 검증 + DB trigger 이중 방어.
 
 ### 3.6 `organization_activity_logs` (v0.2 신규)
 
@@ -308,9 +342,9 @@ RETURNS BOOLEAN AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 ```
 
-### 4.2 `images` SELECT RLS — v0.2 재작성
+### 4.2 `images` SELECT RLS — v0.3
 
-기존 `images_select_own_public_or_shareable` (v1 → v3 확장분) 을 모두 폐기하고, `visibility` enum 기준의 단일 정책으로 통합:
+기존 `images_select_own_public_or_shareable` (v1 → v3 확장분) 폐기. `visibility` enum 기준의 단일 정책. Community 노출은 별개 flag 라 RLS 에는 무관 (application 레벨 필터).
 
 ```sql
 DROP POLICY IF EXISTS images_select_own_public_or_shareable ON public.images;
@@ -328,15 +362,16 @@ CREATE POLICY images_select_v4 ON public.images
 ```
 
 **정책 노트**
-- `visibility = 'private'` 이면 오직 소유자만 (auth.uid() = user_id 조건만 매치)
-- `visibility = 'organization'` 이면 소유자 + 이 이미지가 공유된 조직의 active 멤버
-- `visibility = 'authenticated'` 이면 로그인한 모든 회원
-- `visibility = 'public'` 도 접근 조건은 authenticated 와 같음. 차이는 Community 페이지 노출 (application 레벨 필터)
+- `visibility = 'private'`: 소유자만 접근
+- `visibility = 'organization'`: 소유자 + 조직 멤버 (`image_organization_shares` 조인)
+- `visibility = 'authenticated' | 'public'`: 로그인 회원 누구나. **RLS 상 접근 권한은 동일**
+- `authenticated` vs `public` 의 차이는 검색·발견 대상 여부. 이는 application 레벨 (검색 API 가 `visibility='public'` 만 반환)
+- `is_on_community` 는 RLS 에 영향 없음. Community 페이지 API 가 `WHERE is_on_community=TRUE` 만 필터하면 됨. 이미지가 Community 에 있어도 접근 권한은 여전히 visibility 로만 결정
 
 **성능 노트**
-- `image_visible_via_org` 는 STABLE 함수라 같은 트랜잭션 내 캐시 가능하지만, 이미지 목록 API 에서 매 row 서브쿼리는 N+1 위험
-- 조직 라이브러리 API 는 `image_organization_shares` 를 JOIN 하는 방식으로 우회 (§5.2)
-- Community 페이지는 `WHERE visibility='public'` 만 필터하므로 부분 인덱스(`idx_images_visibility_public`)로 상수 시간에 조회
+- `image_visible_via_org` 는 STABLE 함수, 같은 트랜잭션 내 캐시 가능. 하지만 매 row 서브쿼리는 N+1 위험
+- 조직 라이브러리 API 는 `image_organization_shares` JOIN 으로 우회 (§5.2)
+- Community 페이지는 `WHERE is_on_community = TRUE` 만 필터 → `idx_images_on_community` 부분 인덱스로 상수 시간 조회
 
 ### 4.3 `organizations` RLS
 
@@ -514,12 +549,14 @@ JOIN 방식이므로 §4.2 의 N+1 문제 없음.
 | DELETE | `/api/organizations/[slug]/invites/[id]` | admin+ | 초대 취소 |
 | POST | `/api/invites/[token]/accept` | authenticated | 초대 수락 (인증된 email 이 초대 email 과 일치해야) |
 
-### 5.4 기존 API 확장 (v0.2)
+### 5.4 기존 API 확장 (v0.3)
 
-- `PATCH /api/images/[id]` — `isPublic` + `isShareable` 필드 제거, **`visibility` 단일 필드** 로 대체 (`'private'|'organization'|'authenticated'|'public'`). 조직 admin 이 대리 승격 시 소유자에게 알림 트리거
+- `PATCH /api/images/[id]` — `isPublic` + `isShareable` 제거. **두 필드로 대체**:
+  - `visibility` (`'private'|'organization'|'authenticated'|'public'`) — 접근 범위
+  - `isOnCommunity` (boolean) — Community 페이지 노출. `visibility >= 'authenticated'` 일 때만 TRUE 허용
 - `POST /api/images/download-zip` — `scope` 에 `organization:{orgId}` 값 추가 (Zod). 서버는 `image_organization_shares` JOIN 으로 검증. 개수/용량 상한은 P2a 그대로 (50개 / 100MB)
-- `GET /api/images` — 라이브러리 목록에 `visibility` 필드 노출. 필터 옵션 `visibility=public` (기존 `filter=public` 대체)
-- `GET /api/community` — 내부 필터가 `visibility='public'` 로 변경 (기존 `is_public=TRUE` 대체)
+- `GET /api/images` — 라이브러리 목록에 `visibility`, `isOnCommunity` 필드 노출. 필터 옵션 `isOnCommunity=true` (기존 `filter=public` 대체)
+- `GET /api/community` — 내부 필터가 `WHERE is_on_community = TRUE` 로 변경 (기존 `is_public=TRUE` 대체)
 
 ### 5.5 활동 로그 API (v0.2 신규)
 

@@ -1,13 +1,14 @@
-# Organization — PRD v0.2
+# Organization — PRD v0.3
 
-- **Status**: Reviewed (5 core open questions confirmed by user)
+- **Status**: Approved for Implementation (033_organizations.sql migration 대기)
 - **Author**: sbtmxk20
 - **Date**: 2026-07-16
-- **Version**: 0.2 (v0.1 리뷰 반영)
+- **Version**: 0.3 (v0.2 리뷰 반영 — 3개 미결 항목 확정)
 - **Related**: [ClipArt Studio PRD v1.1](./clipart-studio.prd.md), [Organization Design](../02-design/features/organization.design.md)
 
 ## Changelog
 
+- **v0.3 (2026-07-16)** — 3개 미결 항목 확정: (1) `public` 정의 재해석 → visibility 와 Community 노출 분리 (별도 `is_on_community` boolean 신설), (2) 조직 slug 예약어 리스트 확정, (3) viewer 다운로드 권한 유지
 - **v0.2 (2026-07-16)** — 사용자 리뷰 반영: KPI 4개 갱신, Scope 에 조직 활동 로그 추가, 결정 13 을 `visibility` enum 통합으로 재확정 (기존 is_shareable + is_public 모두 단일 enum 으로 대체)
 - **v0.1 (2026-07-16)** — 최초 draft. 13 결정 항목 옵션·추천안 제시
 
@@ -297,42 +298,77 @@ Design 문서(§4) 에서 상세. PRD 수준 결정:
 
 ---
 
-### 결정 13. 공개 범위 표현 (visibility 통합) — v0.2 재확정
+### 결정 13. 공개 범위 표현 — v0.3 확정 (visibility + is_on_community 분리)
 
-**v0.1 리뷰 결과**: 사용자가 "is_shareable boolean 을 유지하지 말고, 하나의 `visibility` enum 으로 통합" 을 선택. 이에 따라 `is_public` 컬럼도 별개로 두지 않고 같은 enum 에 흡수한다.
+**v0.2 → v0.3 재해석**: 사용자가 "`public` 은 로그인 회원 접근이라는 뜻이지 Community 자동 노출은 아니다. Community 노출은 별도 승격 작업" 이라고 명시. 따라서 **visibility 는 접근 범위만 표현하고, Community 노출은 독립 boolean 으로 분리** 한다.
 
-**최종 결정**: **단일 `images.visibility` enum 도입 → 기존 `is_public` + `is_shareable` 두 boolean 을 모두 대체**
+**최종 결정 (v0.3)**:
+- **`images.visibility` enum** — 접근 범위만 표현 (Community 노출 여부는 무관)
+- **`images.is_on_community BOOLEAN`** — Community 페이지 노출 여부 (독립 flag)
+- 기존 `is_public` + `is_shareable` 두 boolean 은 여전히 완전히 대체 (v0.2 통합 정신 유지)
 
-**enum 값과 의미**
+**enum 값 정의 (v0.3)**
 
-| 값 | 접근 가능한 사용자 | Community 페이지 노출 |
-|---|---|---|
+| 값 | 접근 가능한 사용자 | 링크 없이 발견 가능? |
+|---|---|:-:|
 | `private` | 소유자만 | ✗ |
-| `organization` | 소유자 + 이 이미지를 공유받은 조직의 active 멤버 | ✗ |
-| `authenticated` | 로그인한 모든 회원 (링크만 알면) | ✗ |
-| `public` | 로그인한 모든 회원 (링크 or Community 진입 모두) | ✓ |
+| `organization` | 소유자 + 이 이미지가 공유된 조직의 active 멤버 | 조직 라이브러리 O |
+| `authenticated` | 로그인 회원 누구나 (링크 있어야, unlisted) | ✗ |
+| `public` | 로그인 회원 누구나 (검색·발견 대상, listed) | ✓ (검색 API 등) |
 
-**정책적 의미**:
-- 승격 흐름 `private → organization → authenticated → public` 이 자연스러운 부분 순서로 표현됨
-- Community 노출 = `visibility='public'` 로 조회 필터 단순화 (기존 `WHERE is_public = TRUE` 그대로 대체)
-- 링크 공유 상태 = `visibility >= 'authenticated'` (즉 `authenticated` 또는 `public`) — 링크 클릭 시 로그인 회원이면 볼 수 있음
-- 비회원 접근은 v1.0 out. 필요하면 v2 에서 별도 flag 로 추가
+**`is_on_community` 규칙**
+- 기본값: FALSE
+- `visibility` 와 독립적으로 세팅 가능하지만, `is_on_community=TRUE` 조건: `visibility >= 'authenticated'` (즉 `authenticated` or `public` 만 허용). private/organization 이미지는 Community 노출 불가
+- Community 페이지 (`/community`) 는 오직 `is_on_community = TRUE` 이미지만 표시
+- Community 승격 액션 = `is_on_community = TRUE` 로 세팅. 강등 = `FALSE` 로.
 
-**마이그레이션 규칙** (033):
+**정책적 의미**
+- `authenticated` vs `public` 차이 명확화:
+  - `authenticated` = "링크 공유 대상" (unlisted). 검색 API 결과에서 제외
+  - `public` = "완전 공개" (listed). 검색·발견 가능
+- Community 노출은 어느 visibility 이든 별개 승격 액션 필요 → 사용자가 조심스러운 심리적 안전장치
+- 승격 흐름:
+  ```
+  private → organization → authenticated → public
+                                              ↓
+                                       is_on_community=TRUE
+                                       (Community 승격)
+  ```
+- 비회원 접근은 v1.0 out. 필요하면 v2 에서 새 enum 값 (`'anonymous'`) 이나 별도 flag 추가
+
+**마이그레이션 규칙 (033)**
 ```sql
-ALTER TABLE images ADD COLUMN visibility image_visibility NOT NULL DEFAULT 'private';
+ALTER TABLE images
+  ADD COLUMN visibility image_visibility NOT NULL DEFAULT 'private',
+  ADD COLUMN is_on_community BOOLEAN NOT NULL DEFAULT FALSE;
 
-UPDATE images SET visibility = 'public'         WHERE is_public = TRUE;
-UPDATE images SET visibility = 'authenticated'  WHERE is_public = FALSE AND is_shareable = TRUE;
--- 나머지는 default 'private' 유지
+-- 기존 is_public=TRUE 이미지 → visibility='public' + Community 노출 유지
+UPDATE images
+   SET visibility = 'public', is_on_community = TRUE
+ WHERE is_public = TRUE;
+
+-- 기존 is_shareable=TRUE (is_public=FALSE) 이미지 → visibility='authenticated'
+UPDATE images
+   SET visibility = 'authenticated'
+ WHERE is_public = FALSE AND is_shareable = TRUE;
+
+-- 나머지 default 유지
 
 ALTER TABLE images DROP COLUMN is_public;
 ALTER TABLE images DROP COLUMN is_shareable;
+
+-- Community 노출 정합성 강제
+ALTER TABLE images
+  ADD CONSTRAINT images_community_requires_public_or_auth
+  CHECK (
+    is_on_community = FALSE
+    OR visibility IN ('authenticated', 'public')
+  );
 ```
 
-**조직 policy 상한**: `organizations.max_visibility` — 조직 admin 이 "우리 조직 이미지는 authenticated 이상 못 나가게" 상한 강제 가능. 이미지 소유자가 그 상한을 넘어서는 visibility 로 세팅하려 하면 API/RLS 에서 거부.
+**조직 policy 상한**: `organizations.max_visibility` — 조직 admin 이 "우리 조직 이미지는 authenticated 이상 못 나가게" 상한 강제 가능. 이미지 소유자가 상한을 넘어서는 visibility 로 세팅하려 하면 API/RLS 에서 거부.
 
-**트레이드오프**: 하나의 enum 으로 통합하면 semantic 이 훨씬 깔끔하고, 두 boolean 조합의 애매한 상태(is_public=TRUE + is_shareable=TRUE 등) 도 사라짐. 대신 마이그레이션 규모가 P1/P2 확장분까지 통째로 재작업.
+**트레이드오프**: `is_on_community` 를 별도 flag 로 두면 v0.2 의 "완전 통합" 은 다소 후퇴하지만, semantic 이 훨씬 명확하고 사용자 요구 ("공개=Community 자동 노출 아님") 를 정확히 표현.
 
 ---
 
@@ -343,21 +379,47 @@ ALTER TABLE images DROP COLUMN is_shareable;
 - **감사 로그**: 조직 내 액션(승격·강등·역할 변경) 감사 로그 저장 여부 (v1.0 out, v2 예정)
 - **조직 slug 정책**: URL 에 노출될 slug 의 예약어·중복 규칙
 
-## 9. Open Questions — v0.2 Status
+## 9. Open Questions — v0.3 Status
 
-### ✅ v0.1 리뷰에서 확정된 항목
-1. **결정 5 — 이미지 소유**: 개인 소유만 (v1.0)
+### ✅ v0.1 → v0.3 리뷰에서 확정된 항목
+1. **결정 5 — 이미지 소유**: 개인 소유만 (v1.0). 조직 소유는 v2 검토
 2. **결정 6/10/11 — 공유 방식**: image_organization_shares 연결 테이블, N:N 스키마, v1.0 UI 단일 조직
-3. **결정 13 — 공개 범위 표현**: `visibility` enum 통합 (`private / organization / authenticated / public`). is_public + is_shareable 모두 대체
-4. **Scope In**: 조직 활동 로그 (organization_activity_logs) 추가
+3. **결정 13 (v0.3 재정의) — 공개 범위 표현**: `visibility` enum (`private / organization / authenticated / public`) + 독립 `is_on_community` boolean. Community 노출은 별도 승격 액션
+4. **Scope In**: 조직 활동 로그 (organization_activity_logs)
 5. **KPI**: 초대 수락률 60% / 조직 활성화율 70% / 조직 이미지 공유율 40% / Community 승격율 15~20%
+6. **조직 slug 예약어** (v0.3): §10 참조
+7. **viewer 다운로드 권한** (v0.3): 유지. 열람 + 다운로드 O, 수정·삭제·공유변경·Community승격 X
 
-### 🟡 여전히 열려있는 항목 (구현 착수 전에 확정 필요)
+### 🟡 여전히 열려있는 항목 (구현 중 결정 가능)
 
-- **`public` 의 의미 재확정**: 현재 정의는 "로그인 회원 누구나 접근 + Community 페이지 노출". 비회원 접근은 v1.0 out. 사용자가 원한 정의와 일치하는지 확인 필요
-- **조직 slug 예약어 목록**: `admin`, `new`, `settings`, `invites`, `api` 등
-- **초대 만료 기본값**: 7일 확정 (Design v0.1 도 7일). 변경 없이 갈지
-- **조직 삭제 유예 기간**: 30일 (soft delete). 변경 없이 갈지
-- **viewer 다운로드 권한**: 결정 4 매트릭스에서 viewer 도 다운로드 가능. 이 정책 유지?
-- **크레딧 정책**: 조직 컨텍스트에서 생성한 이미지의 크레딧 부담 주체 (v1.0 은 개인 부담 유지)
-- **알림 채널**: 이메일 only vs 인앱 vs 둘 다 (v1.0 은 이메일 only 추천)
+- **초대 만료 기본값**: 7일로 확정 진행
+- **조직 삭제 유예 기간**: 30일 (soft delete) 로 확정 진행
+- **크레딧 정책**: v1.0 은 개인 계정 부담 (조직 크레딧 풀은 v3 결제와 함께)
+- **알림 채널**: v1.0 은 이메일 only (인앱 알림은 v1.1)
+
+## 10. Reserved Organization Slugs (v0.3 확정)
+
+조직 slug 는 `/organization/[slug]` URL 에 노출되므로 시스템 라우트와 충돌 방지 필요. 아래 단어들은 조직 slug 로 사용 금지.
+
+### 사용자 명시 목록
+`admin`, `api`, `auth`, `login`, `logout`, `signup`, `settings`, `organization`, `organizations`, `library`, `community`, `profile`, `account`, `help`, `support`, `new`, `edit`, `invite`, `invites`
+
+### 실제 프로젝트 라우트 대응 (추가)
+- `image`, `images` — `/image/[id]` 라우트 충돌 방지
+- `generate` — `/generate` 라우트
+- `onboarding` — `/onboarding` 라우트
+- `search` — `/search` 라우트
+- `callback` — `/auth/callback` 하위 예약
+- `knowledge` — `/admin/knowledge` 관련
+- `dashboard` — 향후 확장 대비
+
+### Next.js/Web 예약
+- `_next`, `_static`, `_vercel` — Next.js 내부
+- `sitemap`, `robots`, `favicon`, `manifest` — SEO/Web 표준
+- `www`, `mail`, `ftp`, `ns1`, `ns2` — 일반 subdomain 관행
+- `null`, `undefined` — 안전상
+
+### 예약어 관리
+- SQL CHECK constraint 로 강제 (`organizations.slug NOT IN (...reserved)`)
+- API 계층에서도 이중 검증 (더 친절한 에러 메시지 제공)
+- 신규 라우트 추가 시 예약어 목록 갱신 (본 문서 + migration 함께)
