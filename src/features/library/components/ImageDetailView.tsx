@@ -16,6 +16,7 @@ import { LineageTree } from '@/features/library/components/LineageTree';
 import {
   downloadImageFile,
   usePublishToggle,
+  useShareableToggle,
 } from '@/features/library/hooks/useMyImages';
 import { useImageDetail } from '@/features/library/hooks/useImageDetail';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ export function ImageDetailView({ id }: { id: string }) {
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useImageDetail(id);
   const publish = usePublishToggle();
+  const shareable = useShareableToggle();
   const [downloading, setDownloading] = useState(false);
 
   if (isLoading) {
@@ -77,6 +79,17 @@ export function ImageDetailView({ id }: { id: string }) {
   }
 
   async function handleCopyLink() {
+    // 소유자가 링크를 처음 복사할 때 이미지가 아직 공유 상태가 아니면,
+    // 링크를 실제로 유효하게 만들기 위해 is_shareable 을 자동으로 켠다.
+    // (커뮤니티 노출 = is_public 은 건드리지 않음 — 링크 공유와 별개.)
+    if (image.isOwner && !image.isShareable && !image.isPublic) {
+      try {
+        await shareable.mutateAsync({ id: image.id, isShareable: true });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : '링크 공유 설정 실패');
+        return;
+      }
+    }
     try {
       await navigator.clipboard.writeText(window.location.href);
       toast.success('링크를 복사했어요');
@@ -200,15 +213,15 @@ export function ImageDetailView({ id }: { id: string }) {
                 type="button"
                 variant="outline"
                 onClick={handleCopyLink}
-                disabled={!image.isPublic}
-                title={
-                  image.isPublic
-                    ? '이미지 페이지 링크 복사'
-                    : '링크를 공유하려면 먼저 공개로 설정하세요'
-                }
+                disabled={shareable.isPending}
+                title="이미지 페이지 링크 복사"
                 aria-label="링크 복사"
               >
-                <Link2 className="h-3 w-3" />
+                {shareable.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Link2 className="h-3 w-3" />
+                )}
               </Button>
               {image.isOwner && (
                 <Button

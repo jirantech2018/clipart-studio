@@ -11,6 +11,7 @@ export interface ImageDetail {
   model: string;
   seed: number | null;
   isPublic: boolean;
+  isShareable: boolean;
   parentImageId: string | null;
   batchId: string | null;
   generationMode: string;

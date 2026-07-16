@@ -64,6 +64,7 @@ export interface Image {
   r2Key: string;
   thumbnailR2Key: string | null;
   isPublic: boolean;
+  isShareable: boolean;
   isUpscaled: boolean;
   upscaledFromId: string | null;
   parentImageId: string | null;

@@ -37,6 +37,7 @@ function rowToImage(row: Record<string, unknown>): ImageWithMeta {
     r2Key,
     thumbnailR2Key: (row.thumbnail_r2_key as string) ?? null,
     isPublic: row.is_public as boolean,
+    isShareable: (row.is_shareable as boolean) ?? false,
     isUpscaled: row.is_upscaled as boolean,
     upscaledFromId: (row.upscaled_from_id as string) ?? null,
     parentImageId: (row.parent_image_id as string) ?? null,

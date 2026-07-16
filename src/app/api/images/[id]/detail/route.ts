@@ -30,6 +30,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     model: row.model as string,
     seed: (row.seed as number) ?? null,
     isPublic: row.is_public as boolean,
+    isShareable: (row.is_shareable as boolean) ?? false,
     parentImageId: (row.parent_image_id as string) ?? null,
     batchId: (row.batch_id as string) ?? null,
     generationMode: row.generation_mode as string,

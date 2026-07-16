@@ -84,6 +84,33 @@ export function usePublishToggle() {
 }
 
 /**
+ * 링크 공유 활성화/비활성화 토글. 소유자만 서버 RLS 를 통과한다.
+ * "링크 복사" 를 누른 순간 자동으로 true 세팅되도록 UI 에서 활용.
+ */
+export function useShareableToggle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, isShareable }: { id: string; isShareable: boolean }) => {
+      const res = await fetch(`/api/images/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isShareable }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '링크 공유 설정 변경 실패');
+      }
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['images'] });
+      queryClient.invalidateQueries({ queryKey: ['image-detail', vars.id] });
+    },
+  });
+}
+
+/**
  * Downloads the image file. The server route proxies the R2 bytes with
  * Content-Disposition: attachment so the browser saves rather than opens it,
  * and it logs the download_events row for the reuse-rate KPI.
