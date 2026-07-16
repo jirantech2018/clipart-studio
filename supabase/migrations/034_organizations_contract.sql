@@ -31,9 +31,14 @@ DROP POLICY IF EXISTS categories_select ON public.image_categories;
 -- ================================================================
 -- 2. community_images 뷰를 옛 컬럼 참조 없이 재정의
 --    (is_public 컬럼을 DROP 하기 전에 뷰가 그 컬럼을 안 참조해야 함)
+--
+--    CREATE OR REPLACE VIEW 는 컬럼 순서·이름 변경을 허용하지 않으므로,
+--    is_public 을 컬럼 중간에서 제거하려면 뷰를 DROP 하고 새로 만들어야 한다.
 -- ================================================================
 
-CREATE OR REPLACE VIEW public.community_images AS
+DROP VIEW IF EXISTS public.community_images;
+
+CREATE VIEW public.community_images AS
 SELECT
   i.id,
   i.user_id,
