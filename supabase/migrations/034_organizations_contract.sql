@@ -29,7 +29,50 @@ DROP POLICY IF EXISTS tags_select ON public.image_tags;
 DROP POLICY IF EXISTS categories_select ON public.image_categories;
 
 -- ================================================================
--- 2. 옛 컬럼 제거 (실제 DROP — 되돌리기 어려움)
+-- 2. community_images 뷰를 옛 컬럼 참조 없이 재정의
+--    (is_public 컬럼을 DROP 하기 전에 뷰가 그 컬럼을 안 참조해야 함)
+-- ================================================================
+
+CREATE OR REPLACE VIEW public.community_images AS
+SELECT
+  i.id,
+  i.user_id,
+  i.prompt,
+  i.model,
+  i.seed,
+  i.r2_key,
+  i.thumbnail_r2_key,
+  i.visibility,
+  i.is_on_community,
+  i.is_upscaled,
+  i.parent_image_id,
+  i.batch_id,
+  i.generation_mode,
+  i.reference_image_id,
+  i.school_profile_applied,
+  i.status,
+  i.created_at,
+  p.account_type AS author_type,
+  sp.school_name AS author_school_name,
+  COALESCE((
+    SELECT COUNT(*)
+      FROM public.download_events d
+     WHERE d.image_id = i.id
+       AND d.event_type = 'download'
+  ), 0)::BIGINT AS download_count,
+  i.width,
+  i.height
+FROM public.images i
+JOIN public.profiles p ON i.user_id = p.id
+LEFT JOIN public.school_profiles sp ON i.user_id = sp.user_id
+WHERE i.is_on_community = TRUE
+  AND i.status = 'saved';
+
+GRANT SELECT ON public.community_images TO authenticated;
+GRANT SELECT ON public.community_images TO service_role;
+
+-- ================================================================
+-- 3. 옛 컬럼 제거 (실제 DROP — 되돌리기 어려움)
 -- ================================================================
 
 ALTER TABLE public.images DROP COLUMN IF EXISTS is_public;
