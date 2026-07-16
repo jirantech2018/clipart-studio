@@ -21,17 +21,19 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   } = await supabase.auth.getUser();
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
 
-  // RLS ensures we only see own images or is_public=TRUE ones.
+  // RLS ensures we only see own images, org-shared, authenticated/public visibility.
   const { data: image } = await supabase
     .from('images')
-    .select('id, user_id, r2_key, status, is_public, model')
+    .select('id, user_id, r2_key, status, visibility, model')
     .eq('id', params.id)
     .maybeSingle();
 
   if (!image) return apiError('NOT_FOUND', '이미지를 찾을 수 없습니다');
 
   const isOwner = image.user_id === user.id;
-  if (!isOwner && !image.is_public) {
+  const visibility = image.visibility as string;
+  const publiclyDownloadable = visibility === 'authenticated' || visibility === 'public';
+  if (!isOwner && !publiclyDownloadable) {
     return apiError('FORBIDDEN', '이 이미지는 다운로드할 수 없습니다');
   }
   if (isOwner && image.status !== 'saved') {

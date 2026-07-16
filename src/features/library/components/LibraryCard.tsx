@@ -11,7 +11,10 @@ import { toast } from 'sonner';
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 import { Button } from '@/components/ui/button';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
-import { downloadImageFile, usePublishToggle } from '@/features/library/hooks/useMyImages';
+import {
+  downloadImageFile,
+  useUpdateImageVisibility,
+} from '@/features/library/hooks/useMyImages';
 import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 import { cn } from '@/lib/utils';
 
@@ -19,7 +22,7 @@ import type { LibraryImage } from '@/features/library/hooks/useMyImages';
 
 export function LibraryCard({ image }: { image: LibraryImage }) {
   const [downloading, setDownloading] = useState(false);
-  const publish = usePublishToggle();
+  const updateVisibility = useUpdateImageVisibility();
   const selection = useMultiSelection('library');
   const selected = selection.isSelected(image.id);
 
@@ -35,10 +38,15 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
     }
   }
 
-  async function handlePublishToggle() {
+  async function handleCommunityToggle() {
+    const nextOn = !image.isOnCommunity;
     try {
-      await publish.mutateAsync({ id: image.id, isPublic: !image.isPublic });
-      toast.success(!image.isPublic ? '워크스페이스에 공개했어요' : '비공개로 전환했어요');
+      await updateVisibility.mutateAsync(
+        nextOn
+          ? { id: image.id, visibility: 'public', isOnCommunity: true }
+          : { id: image.id, visibility: 'private', isOnCommunity: false },
+      );
+      toast.success(nextOn ? '워크스페이스에 공개했어요' : '비공개로 전환했어요');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '변경 실패');
     }
@@ -85,7 +93,7 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
 
       <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1">
         <AIGeneratedBadge />
-        {image.isPublic && (
+        {image.isOnCommunity && (
           <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
             공개 중
           </span>
@@ -111,15 +119,15 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
         <Button
           type="button"
           size="sm"
-          variant={image.isPublic ? 'secondary' : 'default'}
-          onClick={handlePublishToggle}
-          disabled={publish.isPending}
+          variant={image.isOnCommunity ? 'secondary' : 'default'}
+          onClick={handleCommunityToggle}
+          disabled={updateVisibility.isPending}
           className="h-8 px-2 shadow-md"
         >
-          {publish.isPending ? (
+          {updateVisibility.isPending ? (
             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           ) : null}
-          {image.isPublic ? '비공개' : '공개'}
+          {image.isOnCommunity ? '비공개' : '공개'}
         </Button>
       </div>
     </div>

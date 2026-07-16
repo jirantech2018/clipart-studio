@@ -31,8 +31,8 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
     supabase.from('school_profiles').select('school_name').eq('user_id', user.id).maybeSingle(),
   ]);
 
-  // Optional chaining source. RLS allows own images and any is_public image,
-  // so someone sharing a Community image link can chain from it too.
+  // Optional chaining source. RLS allows own images plus authenticated/public
+  // visibility, so any Community or link-shared image can be chained from too.
   const parentId = searchParams.parent ?? null;
   let parent: { id: string; prompt: string; thumbnailUrl: string } | null = null;
   if (parentId) {

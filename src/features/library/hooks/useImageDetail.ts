@@ -4,14 +4,16 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+import type { ImageVisibility } from '@/types/domain';
+
 export interface ImageDetail {
   id: string;
   userId: string;
   prompt: string;
   model: string;
   seed: number | null;
-  isPublic: boolean;
-  isShareable: boolean;
+  visibility: ImageVisibility;
+  isOnCommunity: boolean;
   parentImageId: string | null;
   batchId: string | null;
   generationMode: string;

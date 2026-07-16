@@ -9,7 +9,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import type { Image } from '@/types/domain';
+import type { Image, ImageVisibility } from '@/types/domain';
 
 export type LibraryFilter = 'all' | 'public';
 export type LibrarySort = 'newest' | 'oldest';
@@ -61,46 +61,39 @@ export function useMyImages(filter: LibraryFilter, sort: LibrarySort) {
   });
 }
 
-export function usePublishToggle() {
+/**
+ * 이미지의 visibility / Community 노출 상태를 갱신하는 통합 mutation.
+ * 소유자만 서버 RLS 를 통과한다.
+ *
+ * 사용 패턴:
+ *   - Community 공개: { visibility: 'public', isOnCommunity: true }
+ *   - Community 취소: { visibility: 'private', isOnCommunity: false } (권장 기본값)
+ *   - 링크 공유 활성화: { visibility: 'authenticated' } (private 상태에서 링크 복사 시)
+ */
+export interface UpdateImageVisibilityInput {
+  id: string;
+  visibility?: ImageVisibility;
+  isOnCommunity?: boolean;
+}
+
+export function useUpdateImageVisibility() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, isPublic }: { id: string; isPublic: boolean }) => {
+    mutationFn: async ({ id, visibility, isOnCommunity }: UpdateImageVisibilityInput) => {
+      const body: Record<string, unknown> = {};
+      if (visibility !== undefined) body.visibility = visibility;
+      if (isOnCommunity !== undefined) body.isOnCommunity = isOnCommunity;
+
       const res = await fetch(`/api/images/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPublic }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as {
           error?: { message?: string };
         } | null;
         throw new Error(json?.error?.message ?? '공개 설정 변경 실패');
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['images'] });
-    },
-  });
-}
-
-/**
- * 링크 공유 활성화/비활성화 토글. 소유자만 서버 RLS 를 통과한다.
- * "링크 복사" 를 누른 순간 자동으로 true 세팅되도록 UI 에서 활용.
- */
-export function useShareableToggle() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, isShareable }: { id: string; isShareable: boolean }) => {
-      const res = await fetch(`/api/images/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isShareable }),
-      });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as {
-          error?: { message?: string };
-        } | null;
-        throw new Error(json?.error?.message ?? '링크 공유 설정 변경 실패');
       }
     },
     onSuccess: (_data, vars) => {
@@ -164,7 +157,7 @@ function parseFilenameFromContentDisposition(header: string | null): string | nu
  *
  * scope:
  *   - 'library'   : 본인 소유 이미지만 허용
- *   - 'community' : is_public=TRUE 인 이미지만 허용
+ *   - 'community' : is_on_community=TRUE 인 이미지만 허용
  */
 export async function downloadImagesAsZip(
   ids: string[],

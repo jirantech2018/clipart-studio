@@ -4,7 +4,7 @@
 //   1) 클라이언트가 넘긴 ids 를 절대 그대로 신뢰하지 않는다.
 //   2) scope 별로 SELECT 시 사용자의 접근 가능 조건을 강제한다.
 //        - library:  user_id = auth.uid()      (본인 소유 이미지)
-//        - community: is_public = TRUE          (P2b 에서 활용)
+//        - community: is_on_community = TRUE   (Community 페이지 노출 이미지)
 //   3) 요청 개수와 실제 조회 결과 개수가 다르면 → 403.
 //   4) 최대 이미지 개수 / 총 용량 초과 시 → 실패.
 //   5) 서버가 알고 있는 r2_key 만 fetch (경로 인젝션 차단).
@@ -39,7 +39,7 @@ interface ImageRow {
   id: string;
   r2_key: string;
   user_id: string;
-  is_public: boolean;
+  is_on_community: boolean;
   status: string;
 }
 
@@ -70,12 +70,12 @@ export async function POST(request: Request) {
     // Scope 별 SELECT 조건 강제 (RLS + 명시 조건의 이중 방어).
     let query = supabase
       .from('images')
-      .select('id, r2_key, user_id, is_public, status');
+      .select('id, r2_key, user_id, is_on_community, status');
 
     if (body.scope === 'library') {
       query = query.eq('user_id', user.id);
     } else {
-      query = query.eq('is_public', true);
+      query = query.eq('is_on_community', true);
     }
     query = query.in('id', body.ids);
 

@@ -1,5 +1,5 @@
 // Design Ref: §5.4 Search Result Page + §3.3 tsvector FTS
-// Scope: 'mine' (내 라이브러리) | 'community' (is_public=TRUE) | 'all' (union)
+// Scope: 'mine' (내 라이브러리) | 'community' (is_on_community=TRUE) | 'all' (union)
 // Matching strategy: collect candidate image_ids from three sources
 //   (a) prompt full-text search    (b) exact tag hit    (c) exact category hit
 // Union the ids, then fetch full rows with embeds in one round-trip.
@@ -11,7 +11,7 @@ import { apiError, apiOk } from '@/lib/api-error';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
-import type { AccountType, Image, ImageStatus } from '@/types/domain';
+import type { AccountType, Image, ImageStatus, ImageVisibility } from '@/types/domain';
 
 const querySchema = z.object({
   q: z.string().trim().min(1, '검색어를 입력해주세요').max(100),
@@ -52,8 +52,8 @@ function rowToImage(
     seed: (row.seed as number) ?? null,
     r2Key,
     thumbnailR2Key: (row.thumbnail_r2_key as string) ?? null,
-    isPublic: row.is_public as boolean,
-    isShareable: (row.is_shareable as boolean) ?? false,
+    visibility: row.visibility as ImageVisibility,
+    isOnCommunity: row.is_on_community as boolean,
     isUpscaled: row.is_upscaled as boolean,
     upscaledFromId: (row.upscaled_from_id as string) ?? null,
     parentImageId: (row.parent_image_id as string) ?? null,
@@ -129,10 +129,10 @@ export async function GET(request: Request) {
   if (scope === 'mine') {
     query = query.eq('user_id', user.id);
   } else if (scope === 'community') {
-    query = query.eq('is_public', true);
+    query = query.eq('is_on_community', true);
   } else {
-    // 'all' — owner's private/public + everyone else's public
-    query = query.or(`user_id.eq.${user.id},is_public.eq.true`);
+    // 'all' — 내 것 + Community 노출된 이미지
+    query = query.or(`user_id.eq.${user.id},is_on_community.eq.true`);
   }
 
   query = query

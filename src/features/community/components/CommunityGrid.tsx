@@ -2,7 +2,7 @@
 
 // Infinite-scroll workspace grid. Sentinel below the grid triggers the next page.
 // P2b: 라이브러리와 동일한 다중 선택 인프라를 얹어 [ZIP 다운로드] 액션 노출.
-// 서버 API 는 scope='community' 로 호출되어 is_public=TRUE 인 이미지만 검증.
+// 서버 API 는 scope='community' 로 호출되어 is_on_community=TRUE 이미지만 검증.
 
 import { Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';

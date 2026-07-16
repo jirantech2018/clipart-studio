@@ -4,6 +4,14 @@
 export type AccountType = 'teacher' | 'student' | 'school' | 'school_staff' | 'general';
 export type SchoolLevel = 'elementary' | 'middle' | 'high';
 export type ImageStatus = 'pending' | 'saved' | 'discarded';
+
+// 이미지의 접근 범위. 각 값은 누적적 (public 이 가장 넓음):
+//   private       - 소유자만
+//   organization  - 소유자 + image_organization_shares 로 공유받은 조직의 active 멤버
+//   authenticated - 로그인 회원 누구나 (링크 있어야; unlisted)
+//   public        - 로그인 회원 누구나 (검색·발견 대상; listed)
+// Community 페이지 노출 여부는 별도 boolean `isOnCommunity` 로 결정.
+export type ImageVisibility = 'private' | 'organization' | 'authenticated' | 'public';
 export type GenerationMode = 'text2img' | 'img2img' | 'upscale';
 export type JobStatus = 'queued' | 'running' | 'partial' | 'done' | 'failed';
 export type ImageModel = 'gpt-image-2' | 'gpt-image-1' | 'flux-schnell';
@@ -63,8 +71,8 @@ export interface Image {
   seed: number | null;
   r2Key: string;
   thumbnailR2Key: string | null;
-  isPublic: boolean;
-  isShareable: boolean;
+  visibility: ImageVisibility;
+  isOnCommunity: boolean;
   isUpscaled: boolean;
   upscaledFromId: string | null;
   parentImageId: string | null;

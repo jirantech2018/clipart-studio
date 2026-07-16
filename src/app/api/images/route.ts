@@ -7,7 +7,7 @@ import { apiError, apiOk } from '@/lib/api-error';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 import { publicUrl } from '@/services/r2/upload';
 
-import type { Image, ImageStatus } from '@/types/domain';
+import type { Image, ImageStatus, ImageVisibility } from '@/types/domain';
 
 const querySchema = z.object({
   filter: z.enum(['all', 'public']).default('all'),
@@ -36,8 +36,8 @@ function rowToImage(row: Record<string, unknown>): ImageWithMeta {
     seed: (row.seed as number) ?? null,
     r2Key,
     thumbnailR2Key: (row.thumbnail_r2_key as string) ?? null,
-    isPublic: row.is_public as boolean,
-    isShareable: (row.is_shareable as boolean) ?? false,
+    visibility: row.visibility as ImageVisibility,
+    isOnCommunity: row.is_on_community as boolean,
     isUpscaled: row.is_upscaled as boolean,
     upscaledFromId: (row.upscaled_from_id as string) ?? null,
     parentImageId: (row.parent_image_id as string) ?? null,
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
 
   // All library images are 'saved' by policy (no pending/discarded lifecycle).
   query = query.eq('status', 'saved');
-  if (filter === 'public') query = query.eq('is_public', true);
+  if (filter === 'public') query = query.eq('is_on_community', true);
 
   query = query
     .order('created_at', { ascending: sort === 'oldest' })
