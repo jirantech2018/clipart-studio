@@ -10,13 +10,18 @@ import { toast } from 'sonner';
 
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 import { Button } from '@/components/ui/button';
+import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { downloadImageFile, usePublishToggle } from '@/features/library/hooks/useMyImages';
+import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
+import { cn } from '@/lib/utils';
 
 import type { LibraryImage } from '@/features/library/hooks/useMyImages';
 
 export function LibraryCard({ image }: { image: LibraryImage }) {
   const [downloading, setDownloading] = useState(false);
   const publish = usePublishToggle();
+  const selection = useMultiSelection('library');
+  const selected = selection.isSelected(image.id);
 
   async function handleDownload() {
     if (downloading) return;
@@ -41,7 +46,10 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
 
   return (
     <div
-      className="group relative overflow-hidden rounded-lg border bg-muted shadow-sm"
+      className={cn(
+        'group relative overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow',
+        selected && 'ring-2 ring-primary ring-offset-2',
+      )}
       style={{ aspectRatio: `${image.width} / ${image.height}` }}
     >
       <Link
@@ -58,6 +66,22 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
           loading="lazy"
         />
       </Link>
+
+      {/* 좌상단 선택 체크박스: 미선택 시 hover/focus 로만 표시, 선택 시 항상 표시. */}
+      <div
+        className={cn(
+          'absolute left-2 top-2 transition-opacity',
+          selected
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
+        )}
+      >
+        <SelectionCheckbox
+          checked={selected}
+          onCheckedChange={() => selection.toggle(image.id)}
+          ariaLabel={selected ? '선택 해제' : '선택'}
+        />
+      </div>
 
       <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1">
         <AIGeneratedBadge />

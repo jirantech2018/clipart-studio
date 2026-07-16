@@ -2,22 +2,41 @@
 
 // Infinite-scroll variant: fetches 24 images per page and appends more when
 // a sentinel below the grid enters the viewport.
+// P2a: 다중 선택 인프라 위에 [ZIP 다운로드] 액션을 하나만 노출. 나중에
+// [조직에 공유] 등의 액션이 추가되면 actions 배열에 항목을 얹기만 하면 됨.
 
+import { Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
+import { MultiSelectActionBar } from '@/components/multiselect/MultiSelectActionBar';
+import type { MultiSelectAction } from '@/components/multiselect/MultiSelectActionBar';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LibraryCard } from '@/features/library/components/LibraryCard';
 import { LibraryFilters } from '@/features/library/components/LibraryFilters';
-import { useMyImages } from '@/features/library/hooks/useMyImages';
+import {
+  downloadImagesAsZip,
+  useMyImages,
+} from '@/features/library/hooks/useMyImages';
 import { useIntersection } from '@/lib/hooks/useIntersection';
+import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 
 import type { LibraryFilter, LibrarySort } from '@/features/library/hooks/useMyImages';
 
 export function LibraryGrid() {
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('newest');
+  const [zipPending, setZipPending] = useState(false);
+  const selection = useMultiSelection('library');
+
+  // 페이지에서 벗어나면 선택 상태 초기화 (다시 들어왔을 때 지난 선택이 남아있지 않도록).
+  useEffect(() => {
+    return () => selection.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const {
     data,
     isLoading,
@@ -39,6 +58,29 @@ export function LibraryGrid() {
   const sentinelRef = useIntersection(onSentinel, {
     enabled: hasNextPage && !isFetchingNextPage,
   });
+
+  const actions: MultiSelectAction[] = [
+    {
+      key: 'download-zip',
+      label: zipPending ? 'ZIP 만드는 중…' : 'ZIP 다운로드',
+      icon: zipPending ? Loader2 : Download,
+      variant: 'default',
+      isPending: zipPending,
+      onClick: async (ids) => {
+        if (zipPending) return;
+        setZipPending(true);
+        try {
+          await downloadImagesAsZip(ids, 'library');
+          toast.success('다운로드를 시작했어요');
+          selection.clear();
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'ZIP 다운로드 실패');
+        } finally {
+          setZipPending(false);
+        }
+      },
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -103,6 +145,13 @@ export function LibraryGrid() {
           )}
         </>
       )}
+
+      <MultiSelectActionBar
+        count={selection.count}
+        selectedIds={selection.selectedIds}
+        actions={actions}
+        onClear={selection.clear}
+      />
     </div>
   );
 }
