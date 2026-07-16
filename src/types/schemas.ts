@@ -99,3 +99,66 @@ export const updateKnowledgeImageSchema = z.object({
 });
 
 export type UpdateKnowledgeImageInput = z.infer<typeof updateKnowledgeImageSchema>;
+
+// Organization (P5)
+// Migration 033 의 CHECK constraint 와 정확히 동일한 규칙을 클라이언트에도 강제.
+export const organizationRoleSchema = z.enum(['owner', 'admin', 'editor', 'viewer']);
+export const imageVisibilitySchema = z.enum([
+  'private',
+  'organization',
+  'authenticated',
+  'public',
+]);
+
+// 조직 slug 예약어. 033 SQL 의 CHECK 와 동기화.
+const RESERVED_ORG_SLUGS = new Set([
+  'admin', 'api', 'auth', 'login', 'logout', 'signup',
+  'settings', 'organization', 'organizations', 'library',
+  'community', 'profile', 'account', 'help', 'support',
+  'new', 'edit', 'invite', 'invites',
+  'image', 'images', 'generate', 'onboarding', 'search',
+  'callback', 'knowledge', 'dashboard',
+  '_next', '_static', '_vercel',
+  'sitemap', 'robots', 'favicon', 'manifest',
+  'www', 'mail', 'ftp', 'ns1', 'ns2',
+  'null', 'undefined',
+]);
+
+export const organizationSlugSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]{2,63}$/, {
+    message: '3~64자, 소문자·숫자·하이픈만 (첫 글자는 소문자/숫자)',
+  })
+  .refine((slug) => !RESERVED_ORG_SLUGS.has(slug), {
+    message: '이 URL 이름은 예약되어 있어요. 다른 이름을 선택해주세요.',
+  });
+
+export const createOrganizationSchema = z.object({
+  slug: organizationSlugSchema,
+  name: z.string().trim().min(1, '조직 이름을 입력해주세요').max(100, '100자 이내'),
+  description: z.string().max(500, '500자 이내').default(''),
+  homepageUrl: z
+    .string()
+    .trim()
+    .url('올바른 URL 형식이 아닙니다')
+    .max(500)
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+});
+
+export const updateOrganizationSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+  homepageUrl: z
+    .string()
+    .trim()
+    .url()
+    .max(500)
+    .nullable()
+    .optional(),
+  avatarUrl: z.string().trim().url().max(500).nullable().optional(),
+  maxVisibility: imageVisibilitySchema.optional(),
+});
+
+export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
+export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;

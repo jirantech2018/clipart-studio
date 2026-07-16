@@ -1,6 +1,14 @@
 'use client';
 
-import { Home, Image as ImageIcon, School, Shield, Sparkles, Users } from 'lucide-react';
+import {
+  Building2,
+  Home,
+  Image as ImageIcon,
+  School,
+  Shield,
+  Sparkles,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -9,6 +17,7 @@ import { cn } from '@/lib/utils';
 const NAV_ITEMS = [
   { href: '/', label: '홈', icon: Home },
   { href: '/library', label: '내 라이브러리', icon: ImageIcon },
+  { href: '/organizations', label: '내 조직', icon: Building2 },
   { href: '/community', label: '워크스페이스 (공유 라이브러리)', icon: Users },
   { href: '/generate', label: 'AI 이미지 만들기', icon: Sparkles },
 ];

@@ -13,6 +13,29 @@ export type ImageStatus = 'pending' | 'saved' | 'discarded';
 // Community 페이지 노출 여부는 별도 boolean `isOnCommunity` 로 결정.
 export type ImageVisibility = 'private' | 'organization' | 'authenticated' | 'public';
 export type GenerationMode = 'text2img' | 'img2img' | 'upscale';
+
+// Organization 도메인 (P5)
+export type OrganizationRole = 'owner' | 'admin' | 'editor' | 'viewer';
+export type OrganizationMemberStatus = 'active' | 'suspended';
+
+export interface Organization {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  avatarUrl: string | null;
+  homepageUrl: string | null;
+  ownerId: string;
+  maxVisibility: ImageVisibility;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 내가 속한 조직 목록에서 각 항목에 내 role 을 함께 실어 보낸다.
+export interface OrganizationWithMyRole extends Organization {
+  myRole: OrganizationRole;
+  memberCount: number;
+}
 export type JobStatus = 'queued' | 'running' | 'partial' | 'done' | 'failed';
 export type ImageModel = 'gpt-image-2' | 'gpt-image-1' | 'flux-schnell';
 
