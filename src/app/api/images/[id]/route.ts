@@ -69,6 +69,17 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     });
   }
 
+  // Migrate phase 임시 dual-write (Contract 실행 후 자동으로 무효화됨)
+  //
+  // community_images 뷰가 아직 옛 컬럼도 조건에 포함해서 (033b: `is_public =
+  // TRUE OR is_on_community = TRUE`), 옛 이미지의 is_public 이 TRUE 상태로
+  // 남아있으면 새 앱이 is_on_community 를 FALSE 로 내려도 뷰가 여전히 노출한다.
+  // 앱이 계산한 다음 상태를 기준으로 legacy 두 컬럼도 동기화해서 이 gap 을 없앤다.
+  update.is_public =
+    nextOnCommunity && (nextVisibility === 'authenticated' || nextVisibility === 'public');
+  update.is_shareable =
+    nextVisibility === 'authenticated' || nextVisibility === 'public';
+
   const { error: updateError } = await supabase
     .from('images')
     .update(update)
