@@ -21,9 +21,23 @@ import type { OrganizationInvite, OrganizationRole } from '@/types/domain';
 const INVITE_TTL_DAYS = 7;
 
 function siteBaseUrl(request: Request): string {
-  // 우선순위: 환경변수 (프로덕션 자체 도메인) > 요청 origin
+  // 우선순위:
+  //   1) NEXT_PUBLIC_SITE_URL 환경변수 (프로덕션에 명시 설정하면 가장 확실)
+  //   2) x-forwarded-host + x-forwarded-proto (Railway/Vercel 등 프록시 뒤)
+  //   3) request.url 의 origin (fallback — 로컬 개발)
+  //
+  // Railway 컨테이너 내부에서 request.url 은 `http://localhost:8080/...` 로
+  // 잡히므로 headers 를 반드시 참조해야 실제 외부 URL 을 얻을 수 있다.
   const env = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (env) return env.replace(/\/$/, '');
+
+  const headers = request.headers;
+  const forwardedHost = headers.get('x-forwarded-host') ?? headers.get('host');
+  const forwardedProto = headers.get('x-forwarded-proto') ?? 'https';
+  if (forwardedHost && !forwardedHost.startsWith('localhost')) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
   return new URL(request.url).origin;
 }
 
