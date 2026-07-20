@@ -36,6 +36,43 @@ export interface OrganizationWithMyRole extends Organization {
   myRole: OrganizationRole;
   memberCount: number;
 }
+
+// 조직 멤버 상세 — 멤버 관리 페이지에서 표시.
+export interface OrganizationMember {
+  userId: string;
+  email: string;
+  accountType: AccountType;
+  role: OrganizationRole;
+  status: OrganizationMemberStatus;
+  joinedAt: string;
+  isMe: boolean;
+}
+
+// 조직 초대 (pending or accepted). 관리 페이지에서 pending 목록 표시.
+export interface OrganizationInvite {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: OrganizationRole;
+  invitedBy: string;
+  token: string;
+  inviteUrl: string; // 클라이언트 편의를 위해 서버에서 조립해 내려줌
+  expiresAt: string;
+  createdAt: string;
+}
+
+// 초대 링크 진입 시 로그인한 사용자에게 미리 보여주는 요약 정보.
+export interface InvitePreview {
+  organizationName: string;
+  organizationSlug: string;
+  role: OrganizationRole;
+  inviterEmail: string | null;
+  targetEmail: string;
+  expiresAt: string;
+  expired: boolean;
+  alreadyMember: boolean;
+  emailMismatch: boolean; // 로그인 사용자 이메일 ≠ 초대 대상 이메일
+}
 export type JobStatus = 'queued' | 'running' | 'partial' | 'done' | 'failed';
 export type ImageModel = 'gpt-image-2' | 'gpt-image-1' | 'flux-schnell';
 

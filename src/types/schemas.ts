@@ -162,3 +162,17 @@ export const updateOrganizationSchema = z.object({
 
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
+
+// 멤버 초대 (POST /api/organizations/[slug]/invites)
+export const inviteMemberSchema = z.object({
+  email: z.string().trim().toLowerCase().email('올바른 이메일 형식이 아닙니다').max(200),
+  role: organizationRoleSchema,
+});
+
+// 초대 수락 시 owner 지정은 불가 (Zod refine)
+export const updateMemberRoleSchema = z.object({
+  role: organizationRoleSchema,
+});
+
+export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
+export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
