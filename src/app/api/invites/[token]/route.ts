@@ -21,15 +21,6 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
   const requesterEmail = (user.email ?? '').toLowerCase();
 
-  // 진단 로그 (P5-B 문제 해결용). 이후 정상화되면 제거.
-  console.log('[invites GET] start', {
-    tokenPrefix: params.token.slice(0, 12),
-    tokenLen: params.token.length,
-    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    serviceRoleKeyLen: process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? 0,
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  });
-
   // service role 로 초대 조회 (RLS 는 admin+ 만 SELECT 이므로 우회 필요)
   const service = createSupabaseServiceClient();
   const { data: invite, error: inviteError } = await service
@@ -38,16 +29,9 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     .eq('token', params.token)
     .maybeSingle();
 
-  console.log('[invites GET] query result', {
-    hasInvite: !!invite,
-    error: inviteError ? { code: inviteError.code, message: inviteError.message } : null,
-  });
-
   if (inviteError) {
-    return apiError(
-      'INTERNAL_ERROR',
-      `초대 조회 실패 — ${inviteError.code ?? ''}: ${inviteError.message}`,
-    );
+    console.error('[invites GET] query error', inviteError);
+    return apiError('INTERNAL_ERROR', '초대 조회 실패');
   }
   if (!invite) return apiError('NOT_FOUND', '유효하지 않은 초대 링크입니다');
 
