@@ -75,36 +75,7 @@ export function InviteAcceptView({
     }
   }
 
-  // 우선순위: emailMismatch → expired → alreadyMember → 정상.
-  //   이메일 불일치를 가장 먼저 판정해야 한다 — 로그인한 사용자가 이미 조직 멤버라도
-  //   초대는 다른 사람 앞으로 발송된 것이면 그 사실을 먼저 안내해야 정확한 UX.
-
-  // 이메일 불일치 케이스 (초대 대상자가 아닌 사람이 링크를 열었음)
-  if (inv.emailMismatch) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <AlertCircle className="h-5 w-5 text-amber-600" />
-            이 초대는 다른 사람 앞으로 발송됐어요
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p>
-            초대 대상: <strong>{inv.targetEmail}</strong>
-          </p>
-          <p>
-            현재 로그인 계정: <span className="font-medium">{currentUserEmail}</span>
-          </p>
-          <p className="pt-2 text-xs text-muted-foreground">
-            초대받은 분에게 이 링크를 전달하거나, 대상 이메일로 로그인 후 다시 열어주세요.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // 이미 멤버 케이스 (로그인 = 초대 대상인데 이미 그 조직 소속)
+  // 이미 멤버 케이스
   if (inv.alreadyMember) {
     return (
       <Card>
@@ -124,6 +95,31 @@ export function InviteAcceptView({
           >
             조직으로 이동 <ArrowRight className="h-3 w-3" />
           </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // 이메일 불일치 케이스
+  if (inv.emailMismatch) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <AlertCircle className="h-5 w-5 text-amber-600" />
+            다른 이메일로 로그인되어 있어요
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>
+            이 초대는 <strong>{inv.targetEmail}</strong> 앞으로 발송됐어요.
+          </p>
+          <p>
+            현재 로그인된 계정: <span className="font-medium">{currentUserEmail}</span>
+          </p>
+          <p className="pt-2 text-xs text-muted-foreground">
+            초대 대상 이메일로 로그인 후 다시 링크를 열어주세요.
+          </p>
         </CardContent>
       </Card>
     );
