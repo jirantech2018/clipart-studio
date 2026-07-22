@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -17,7 +18,15 @@ export default async function MainLayout({ children }: PropsWithChildren) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login');
+    // 비로그인 사용자가 (main) 하위 페이지에 접근하면 로그인 페이지로 유도하되,
+    // 현재 요청 경로를 next 로 담아 로그인 완료 후 원래 페이지로 복귀시킨다.
+    // pathname 은 middleware 가 세팅한 x-pathname 헤더로 얻는다.
+    const pathname = headers().get('x-pathname');
+    const target =
+      pathname && pathname.startsWith('/') && !pathname.startsWith('//') && pathname !== '/login'
+        ? `/login?next=${encodeURIComponent(pathname)}`
+        : '/login';
+    redirect(target);
   }
 
   const { data: profile } = await supabase
