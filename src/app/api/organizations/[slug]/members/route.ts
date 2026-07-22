@@ -63,6 +63,25 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
     profileMap.set(row.id, { email: row.email, accountType: row.account_type });
   }
 
+  // 폴백: profiles 에 행이 없으면 auth.users 에서 email 직접 조회.
+  // 원인은 대체로 회원가입 이후 profiles insert 트리거가 누락된 경우.
+  // 여기서 UI 가 '(unknown)' 로 표시되지 않도록 admin API 로 채워준다.
+  const missingIds = userIds.filter((id) => !profileMap.has(id));
+  if (missingIds.length > 0) {
+    const authLookups = await Promise.all(
+      missingIds.map(async (id) => {
+        const { data, error } = await service.auth.admin.getUserById(id);
+        if (error || !data?.user) return null;
+        return { id, email: data.user.email ?? '' };
+      }),
+    );
+    for (const row of authLookups) {
+      if (row && row.email) {
+        profileMap.set(row.id, { email: row.email, accountType: 'general' });
+      }
+    }
+  }
+
   const result: OrganizationMember[] = members.map((m) => {
     const row = m as {
       user_id: string;
