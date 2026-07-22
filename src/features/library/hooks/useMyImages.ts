@@ -62,17 +62,18 @@ export function useMyImages(filter: LibraryFilter, sort: LibrarySort) {
 }
 
 /**
- * 이미지의 visibility / Community 노출 상태를 갱신하는 통합 mutation.
- * 소유자만 서버 RLS 를 통과한다.
+ * 이미지의 visibility 를 갱신하는 mutation. 소유자만 RLS 통과.
  *
- * 사용 패턴:
- *   - Community 공개: { visibility: 'public', isOnCommunity: true }
- *   - Community 취소: { visibility: 'private', isOnCommunity: false } (권장 기본값)
- *   - 링크 공유 활성화: { visibility: 'authenticated' } (private 상태에서 링크 복사 시)
+ * P5-C Phase A 이후 서버 계약 변경:
+ *   - isOnCommunity 를 넘기면 서버가 403 을 반환 (개인의 커뮤니티 직접
+ *     공개 경로가 폐쇄됨). 인터페이스는 남기지만 실제로 사용하면 실패한다.
+ *     UI 는 Phase B 에서 버튼 자체를 제거하는 방향으로 정리.
+ *   - 링크 공유(visibility='authenticated') 는 계속 소유자가 승격 가능.
  */
 export interface UpdateImageVisibilityInput {
   id: string;
   visibility?: ImageVisibility;
+  /** @deprecated 서버가 403. 조직 라이브러리 배치 API 로 대체. */
   isOnCommunity?: boolean;
 }
 
