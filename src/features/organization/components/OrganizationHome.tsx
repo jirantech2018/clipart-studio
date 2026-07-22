@@ -11,11 +11,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useOrganization } from '@/features/organization/hooks/useOrganizations';
 import { cn } from '@/lib/utils';
 
+// 역할 모델 단일화: owner = "어드민", 그 외 전부 "멤버".
 const ROLE_LABEL: Record<string, string> = {
-  owner: '소유자',
-  admin: '관리자',
-  editor: '편집자',
-  viewer: '뷰어',
+  owner: '어드민',
+  admin: '멤버',
+  editor: '멤버',
+  viewer: '멤버',
 };
 
 export function OrganizationHome({ slug }: { slug: string }) {

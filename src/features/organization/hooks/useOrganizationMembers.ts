@@ -98,7 +98,9 @@ export function useOrganizationInvites(slug: string | null) {
 export function useCreateInvite(slug: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { email: string; role: OrganizationRole }) => {
+    // role 은 서버에서 항상 editor 로 강제 (역할 모델 단일화 이후). 클라이언트는
+    // 굳이 role 을 지정하지 않아도 되지만, 후방 호환을 위해 optional 로 남겨둠.
+    mutationFn: async (input: { email: string; role?: OrganizationRole }) => {
       const res = await fetch(`/api/organizations/${slug}/invites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

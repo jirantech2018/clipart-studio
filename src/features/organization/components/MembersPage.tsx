@@ -1,17 +1,15 @@
 'use client';
 
 // 멤버 + 초대 관리 화면.
+// 역할 모델 (migration 036 이후):
+//   - owner  = "어드민" (조직 생성자, 유일). 멤버 강퇴·초대 취소 가능.
+//   - editor = "멤버" (그 외 모두). 목록 열람 + 새 초대 가능. 강퇴 불가.
+//     (스키마상 admin/viewer 도 남아있지만 신규 발급되지 않음.)
 // 접근 범위:
-//   - 모든 조직 멤버(owner/admin/editor/viewer)가 페이지 진입 가능.
-//   - editor/viewer 는 멤버 목록을 "보기"만 가능 (역할 변경·강퇴 컨트롤 미노출).
-//     단, 본인은 "나가기" 버튼으로 조직에서 탈퇴 가능.
-//   - 초대 폼은 모두에게 노출 (팀 협업의 자연스러운 부분).
-//     단, admin 역할 초대는 관리자만 허용 (API 에서 재검증).
-//   - pending 초대 목록은 관리자만 (기존 GET/DELETE API 가 admin+).
-// UI 흐름:
-//   상단: 조직 이름 (홈 링크)
-//   섹션 1: 멤버 목록
-//   섹션 2: 초대 폼 (전원) + pending 초대 목록 (관리자)
+//   - 모든 조직 멤버가 페이지 진입 가능.
+//   - 멤버는 강퇴 컨트롤 없음. 단, 본인은 "나가기" 버튼으로 탈퇴 가능.
+//   - 초대 폼은 모두에게 노출 (역할 선택 없이 무조건 "멤버" 로 발급).
+//   - pending 초대 목록은 어드민만 (GET/DELETE API 가 owner/admin).
 
 import { ArrowLeft, Check, Copy, Loader2, Trash2, UserPlus, X } from 'lucide-react';
 import Link from 'next/link';
@@ -29,25 +27,15 @@ import {
   useOrganizationMembers,
   useRemoveMember,
   useRevokeInvite,
-  useUpdateMemberRole,
 } from '@/features/organization/hooks/useOrganizationMembers';
 import { cn } from '@/lib/utils';
 
 import type { OrganizationRole } from '@/types/domain';
 
-const ROLE_LABEL: Record<OrganizationRole, string> = {
-  owner: '소유자',
-  admin: '관리자',
-  editor: '편집자',
-  viewer: '뷰어',
-};
-
-const ROLE_DESC: Record<OrganizationRole, string> = {
-  owner: '모든 권한',
-  admin: '멤버·이미지·설정 관리',
-  editor: '조직에 이미지 공유, 열람·다운로드',
-  viewer: '열람·다운로드만',
-};
+// UI 상 노출되는 역할 라벨은 두 가지 뿐 — "어드민" (owner) / "멤버" (그 외).
+function roleLabel(role: OrganizationRole): string {
+  return role === 'owner' ? '어드민' : '멤버';
+}
 
 export function MembersPage({ slug }: { slug: string }) {
   const { data: orgData, isLoading: orgLoading } = useOrganization(slug);
@@ -85,7 +73,7 @@ export function MembersPage({ slug }: { slug: string }) {
 
       <MembersSection slug={slug} canManage={canManage} />
 
-      <InvitesSection slug={slug} canManage={canManage} />
+      <InvitesSection slug={slug} />
 
       {canManage && <PendingInvitesList slug={slug} />}
     </div>
@@ -96,7 +84,6 @@ export function MembersPage({ slug }: { slug: string }) {
 
 function MembersSection({ slug, canManage }: { slug: string; canManage: boolean }) {
   const { data } = useOrganizationMembers(slug);
-  const updateRole = useUpdateMemberRole(slug);
   const remove = useRemoveMember(slug);
 
   const members = data?.members ?? [];
@@ -108,9 +95,8 @@ function MembersSection({ slug, canManage }: { slug: string; canManage: boolean 
       </CardHeader>
       <CardContent className="space-y-2">
         {members.map((m) => {
-          // owner 이거나 관리자가 아닌 뷰어에게는 역할을 "읽기 전용 뱃지" 로 보여준다.
-          const showRoleSelect = canManage && m.role !== 'owner';
-          // 강퇴 버튼은 관리자만 (단, 본인은 언제나 "나가기" 가능. owner 는 API 에서 차단).
+          // 강퇴 버튼: 어드민(owner) 이 다른 멤버를 강퇴, 또는 본인이 스스로 탈퇴.
+          // owner 자신은 강퇴/탈퇴 불가 (API 에서 차단; 여기서도 버튼 숨김).
           const showRemoveButton = (canManage || m.isMe) && m.role !== 'owner';
 
           return (
@@ -136,34 +122,11 @@ function MembersSection({ slug, canManage }: { slug: string; canManage: boolean 
               <div className="flex items-center gap-2">
                 {m.role === 'owner' ? (
                   <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground">
-                    소유자
+                    어드민
                   </span>
-                ) : showRoleSelect ? (
-                  <select
-                    value={m.role}
-                    onChange={async (e) => {
-                      const next = e.target.value as OrganizationRole;
-                      try {
-                        await updateRole.mutateAsync({ userId: m.userId, role: next });
-                        toast.success(`${ROLE_LABEL[next]} 로 변경했어요`);
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : '변경 실패');
-                      }
-                    }}
-                    disabled={updateRole.isPending}
-                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                    title={ROLE_DESC[m.role]}
-                  >
-                    <option value="admin">관리자</option>
-                    <option value="editor">편집자</option>
-                    <option value="viewer">뷰어</option>
-                  </select>
                 ) : (
-                  <span
-                    className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground"
-                    title={ROLE_DESC[m.role]}
-                  >
-                    {ROLE_LABEL[m.role]}
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                    멤버
                   </span>
                 )}
                 {showRemoveButton && (
@@ -199,9 +162,8 @@ function MembersSection({ slug, canManage }: { slug: string; canManage: boolean 
 
 // ---------- 초대 폼 ----------
 
-function InvitesSection({ slug, canManage }: { slug: string; canManage: boolean }) {
+function InvitesSection({ slug }: { slug: string }) {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<OrganizationRole>('editor');
   const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
   const create = useCreateInvite(slug);
 
@@ -209,7 +171,8 @@ function InvitesSection({ slug, canManage }: { slug: string; canManage: boolean 
     e.preventDefault();
     if (!email.trim()) return;
     try {
-      const invite = await create.mutateAsync({ email: email.trim().toLowerCase(), role });
+      // role 은 서버에서 항상 editor 로 강제 — 굳이 안 보내도 됨.
+      const invite = await create.mutateAsync({ email: email.trim().toLowerCase() });
       setLastInviteUrl(invite.inviteUrl);
       setEmail('');
       toast.success('초대 링크가 만들어졌어요');
@@ -221,7 +184,7 @@ function InvitesSection({ slug, canManage }: { slug: string; canManage: boolean 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">새로 초대</CardTitle>
+        <CardTitle className="text-base">새 멤버 초대</CardTitle>
         <p className="text-xs text-muted-foreground">
           이메일 발송은 아직 없어요. 링크를 만들고 원하는 방법(카톡·이메일 등)으로 직접 전달해주세요.
         </p>
@@ -239,21 +202,6 @@ function InvitesSection({ slug, canManage }: { slug: string; canManage: boolean 
               required
               disabled={create.isPending}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="invite-role">역할</Label>
-            <select
-              id="invite-role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as OrganizationRole)}
-              disabled={create.isPending}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              {/* editor/viewer 는 admin 역할로 초대할 수 없음 (권한 상향 방지) */}
-              {canManage && <option value="admin">관리자</option>}
-              <option value="editor">편집자</option>
-              <option value="viewer">뷰어</option>
-            </select>
           </div>
           <Button type="submit" disabled={create.isPending}>
             {create.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <UserPlus className="mr-1 h-3.5 w-3.5" />}
@@ -323,7 +271,7 @@ function PendingInvitesList({ slug }: { slug: string }) {
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{inv.email}</span>
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                    {ROLE_LABEL[inv.role]}
+                    {roleLabel(inv.role)}
                   </span>
                   {expired && (
                     <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">

@@ -152,14 +152,12 @@ export async function POST(request: Request, { params }: { params: { slug: strin
     return apiError('VALIDATION_ERROR', '요청 형식이 올바르지 않습니다');
   }
 
+  // 역할 모델 단일화 (migration 036): owner=조직 생성자, 그 외 전부 editor("멤버").
+  // 클라이언트가 무슨 role 을 보내든 항상 editor 로 강제. owner 초대는 계속 금지.
   if (body.role === 'owner') {
     return apiError('FORBIDDEN', '소유자 초대는 지원하지 않아요 (소유권 이전 별도)');
   }
-  // 권한 상향 방지: editor/viewer 는 자신보다 높은 역할(admin) 로 초대할 수 없다.
-  // 그렇지 않으면 viewer 가 admin 을 부르는 방식으로 우회 승격이 가능해진다.
-  if (body.role === 'admin' && requesterRole !== 'owner' && requesterRole !== 'admin') {
-    return apiError('FORBIDDEN', '관리자 초대는 조직 관리자만 할 수 있어요');
-  }
+  const inviteRole: OrganizationRole = 'editor';
 
   // 이미 조직 멤버인지 검증 (service role — profiles 조회 후 members 확인)
   const service = createSupabaseServiceClient();
@@ -181,8 +179,10 @@ export async function POST(request: Request, { params }: { params: { slug: strin
     }
   }
 
-  // 기존 pending 초대 확인 (UPSERT 패턴: 있으면 토큰 갱신)
-  const { data: pending } = await supabase
+  // 기존 pending 초대 확인 (UPSERT 패턴: 있으면 토큰 갱신).
+  // 이하 write 는 모두 service role — RLS invites_insert_admin 정책이
+  // owner/admin 만 허용하는데 우리는 모든 멤버에게 초대 권한을 열었기 때문.
+  const { data: pending } = await service
     .from('organization_invites')
     .select('id')
     .eq('organization_id', org.id)
@@ -197,10 +197,10 @@ export async function POST(request: Request, { params }: { params: { slug: strin
   let inviteRow;
   if (pending) {
     const pendingId = (pending as { id: string }).id;
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await service
       .from('organization_invites')
       .update({
-        role: body.role,
+        role: inviteRole,
         token,
         expires_at: expiresAt,
         invited_by: user.id,
@@ -214,12 +214,12 @@ export async function POST(request: Request, { params }: { params: { slug: strin
     }
     inviteRow = updated;
   } else {
-    const { data: created, error: insertError } = await supabase
+    const { data: created, error: insertError } = await service
       .from('organization_invites')
       .insert({
         organization_id: org.id,
         email: body.email,
-        role: body.role,
+        role: inviteRole,
         invited_by: user.id,
         token,
         expires_at: expiresAt,
@@ -262,7 +262,7 @@ export async function POST(request: Request, { params }: { params: { slug: strin
     actor_user_id: user.id,
     activity_type: 'member_invited',
     target_invite_id: invite.id,
-    metadata: { email: body.email, role: body.role, reissued: !!pending },
+    metadata: { email: body.email, role: inviteRole, reissued: !!pending },
   });
 
   return apiOk({ invite }, 201);

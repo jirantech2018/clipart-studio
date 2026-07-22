@@ -164,9 +164,12 @@ export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 
 // 멤버 초대 (POST /api/organizations/[slug]/invites)
+// role 은 P5-B 이후 UI 상 단일화되어 "멤버(editor)" 로만 발급됨. 스키마는
+// 후방 호환을 위해 optional 로 두고 기본값 editor. admin/owner 로 초대
+// 시도는 API 에서 별도 거부.
 export const inviteMemberSchema = z.object({
   email: z.string().trim().toLowerCase().email('올바른 이메일 형식이 아닙니다').max(200),
-  role: organizationRoleSchema,
+  role: organizationRoleSchema.optional().default('editor'),
 });
 
 // 초대 수락 시 owner 지정은 불가 (Zod refine)
