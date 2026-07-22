@@ -3,7 +3,7 @@
 // Design Ref: §5.4 Image Detail Page — full image + metadata + actions
 // Non-Negotiable Rule 3: AIGeneratedBadge required.
 
-import { ArrowLeft, Download, Link2, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Loader2, Sparkles, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -18,6 +18,11 @@ import {
   useUpdateImageVisibility,
 } from '@/features/library/hooks/useMyImages';
 import { useImageDetail } from '@/features/library/hooks/useImageDetail';
+import { ShareToOrgDialog } from '@/features/organization/components/ShareToOrgDialog';
+import {
+  useImageSharedOrgs,
+  useUnshareImage,
+} from '@/features/organization/hooks/useOrganizationShares';
 import { cn } from '@/lib/utils';
 
 export function ImageDetailView({ id }: { id: string }) {
@@ -25,6 +30,10 @@ export function ImageDetailView({ id }: { id: string }) {
   const { data, isLoading, isError, refetch } = useImageDetail(id);
   const updateVisibility = useUpdateImageVisibility();
   const [downloading, setDownloading] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  // 공유 조직 목록은 소유자에게만 의미가 있으므로 isOwner 인 경우만 fetch.
+  const sharedOrgs = useImageSharedOrgs(data?.isOwner ? id : null);
+  const unshare = useUnshareImage();
 
   if (isLoading) {
     return (
@@ -198,6 +207,63 @@ export function ImageDetailView({ id }: { id: string }) {
             </details>
           </section>
 
+          {image.isOwner && (
+            <section className="space-y-2 rounded-md border p-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">공유된 조직</h3>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShareDialogOpen(true)}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Users className="mr-1 h-3 w-3" />
+                  조직에 공유
+                </Button>
+              </div>
+              {sharedOrgs.data?.orgs && sharedOrgs.data.orgs.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {sharedOrgs.data.orgs.map((o) => (
+                    <span
+                      key={o.slug}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]"
+                    >
+                      <Link
+                        href={`/organization/${o.slug}/library`}
+                        className="hover:underline"
+                        title={`/${o.slug}`}
+                      >
+                        {o.name}
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!confirm(`${o.name} 에서 이 이미지를 내릴까요?`)) return;
+                          try {
+                            await unshare.mutateAsync({ slug: o.slug, imageId: image.id });
+                            toast.success('조직에서 내렸어요');
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : '실패');
+                          }
+                        }}
+                        className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        aria-label={`${o.name} 에서 내리기`}
+                        title={`${o.name} 에서 내리기`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  아직 어떤 조직에도 공유하지 않았어요.
+                </p>
+              )}
+            </section>
+          )}
+
           <div className="space-y-2 pt-2">
             <Link
               href={`/generate?parent=${image.id}`}
@@ -254,6 +320,14 @@ export function ImageDetailView({ id }: { id: string }) {
       </div>
 
       <LineageTree imageId={image.id} />
+
+      {image.isOwner && (
+        <ShareToOrgDialog
+          imageId={image.id}
+          open={shareDialogOpen}
+          onClose={() => setShareDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }
