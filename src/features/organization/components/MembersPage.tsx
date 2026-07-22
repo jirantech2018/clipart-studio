@@ -263,44 +263,28 @@ function PendingInvitesList({ slug }: { slug: string }) {
             <div
               key={inv.id}
               className={cn(
-                'flex flex-wrap items-center justify-between gap-2 rounded-md border p-3',
+                'space-y-2 rounded-md border p-3',
                 expired && 'opacity-60',
               )}
             >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{inv.email}</span>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                    {roleLabel(inv.role)}
-                  </span>
-                  {expired && (
-                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
-                      만료
+              {/* 상단: 이메일 · 역할 · 만료 뱃지 (좌) + 초대 취소 버튼 (우) */}
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{inv.email}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                      {roleLabel(inv.role)}
                     </span>
-                  )}
+                    {expired && (
+                      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
+                        만료
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    만료: {new Date(inv.expiresAt).toLocaleString('ko-KR')}
+                  </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground">
-                  만료: {new Date(inv.expiresAt).toLocaleString('ko-KR')}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(inv.inviteUrl);
-                      toast.success('링크를 복사했어요');
-                    } catch {
-                      toast.error('복사 실패');
-                    }
-                  }}
-                  title="링크 복사"
-                  aria-label="링크 복사"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -319,6 +303,28 @@ function PendingInvitesList({ slug }: { slug: string }) {
                   aria-label="초대 취소"
                 >
                   <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* 하단: 초대 링크 URL + 복사 버튼 — InvitesSection 새 초대 표시와 동일 패턴 */}
+              <div className="flex items-center gap-2">
+                <code className="flex-1 truncate rounded bg-background px-2 py-1 text-xs">
+                  {inv.inviteUrl}
+                </code>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inv.inviteUrl);
+                      toast.success('링크를 복사했어요');
+                    } catch {
+                      toast.error('복사 실패. 위 텍스트를 직접 선택해주세요.');
+                    }
+                  }}
+                >
+                  <Copy className="mr-1 h-3 w-3" /> 복사
                 </Button>
               </div>
             </div>
