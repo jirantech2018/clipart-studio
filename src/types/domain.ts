@@ -70,7 +70,8 @@ export interface InvitePreview {
   targetEmail: string;
   expiresAt: string;
   expired: boolean;
-  alreadyMember: boolean;
+  alreadyMember: boolean; // 로그인 사용자가 지금 이 조직의 active 멤버
+  alreadyAccepted: boolean; // 초대 자체가 이미 사용됨 (accepted_at 세팅)
   emailMismatch: boolean; // 로그인 사용자 이메일 ≠ 초대 대상 이메일
 }
 export type JobStatus = 'queued' | 'running' | 'partial' | 'done' | 'failed';

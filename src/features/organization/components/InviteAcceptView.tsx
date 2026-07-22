@@ -1,11 +1,12 @@
 'use client';
 
 // 초대 링크 진입 시 표시. 로그인 필수 (서버에서 이미 리다이렉트).
-// 초대의 상태에 따라 4가지 UX 분기:
-//   1) 정상 (수락 가능)         → "수락" 버튼
-//   2) 이미 멤버                → 조직 홈으로 안내
-//   3) 이메일 불일치            → 로그인 이메일 안내 + 재로그인 유도
-//   4) 만료 or 취소             → 재발송 안내
+// 초대의 상태에 따라 UX 분기 (우선순위 순):
+//   1) emailMismatch — 이 초대는 다른 사람 앞으로 발송됨
+//   2) expired       — 만료됨 → 재발송 요청 안내
+//   3) alreadyMember — 이미 조직 소속
+//   4) alreadyAccepted — 링크가 이미 사용됨 (강퇴됐다면 관리자에게 재초대 요청)
+//   5) 정상          — "수락하고 참여" 버튼
 
 import { AlertCircle, ArrowRight, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -75,7 +76,56 @@ export function InviteAcceptView({
     }
   }
 
-  // 이미 멤버 케이스
+  // 우선순위: emailMismatch → expired → alreadyMember → alreadyAccepted → 정상
+
+  // 이메일 불일치 — 이 초대는 다른 사람 앞으로 발송됨
+  if (inv.emailMismatch) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <AlertCircle className="h-5 w-5 text-amber-600" />
+            이 초대는 다른 사람 앞으로 발송됐어요
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>
+            초대 대상: <strong>{inv.targetEmail}</strong>
+          </p>
+          <p>
+            현재 로그인 계정: <span className="font-medium">{currentUserEmail}</span>
+          </p>
+          <p className="pt-2 text-xs text-muted-foreground">
+            초대받은 분에게 이 링크를 전달하거나, 대상 이메일로 로그인 후 다시 열어주세요.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // 만료된 초대
+  if (inv.expired) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <XCircle className="h-5 w-5 text-destructive" />
+            만료된 초대예요
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>
+            이 초대 링크는 {new Date(inv.expiresAt).toLocaleString('ko-KR')} 에 만료됐어요.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            조직 관리자에게 새 초대 링크를 요청해주세요.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // 이미 조직 멤버 (수락은 이미 완료됨 + 지금 active 멤버)
   if (inv.alreadyMember) {
     return (
       <Card>
@@ -100,47 +150,27 @@ export function InviteAcceptView({
     );
   }
 
-  // 이메일 불일치 케이스
-  if (inv.emailMismatch) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <AlertCircle className="h-5 w-5 text-amber-600" />
-            다른 이메일로 로그인되어 있어요
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p>
-            이 초대는 <strong>{inv.targetEmail}</strong> 앞으로 발송됐어요.
-          </p>
-          <p>
-            현재 로그인된 계정: <span className="font-medium">{currentUserEmail}</span>
-          </p>
-          <p className="pt-2 text-xs text-muted-foreground">
-            초대 대상 이메일로 로그인 후 다시 링크를 열어주세요.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // 만료 케이스
-  if (inv.expired) {
+  // 링크 자체는 이미 사용됨. 그런데 지금은 멤버 아님 → 이전에 강퇴됐거나 탈퇴한 경우.
+  // 관리자에게 새 초대를 요청해야 함.
+  if (inv.alreadyAccepted) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <XCircle className="h-5 w-5 text-destructive" />
-            만료된 초대예요
+            이미 사용된 초대 링크예요
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p>
-            이 초대 링크는 {new Date(inv.expiresAt).toLocaleString('ko-KR')} 에 만료됐어요.
+            이 링크는 예전에 <strong>{inv.organizationName}</strong> 초대 수락에 사용됐어요.
           </p>
-          <p className="text-xs text-muted-foreground">
-            조직 관리자에게 재발송을 요청해주세요.
+          <p>
+            지금 이 조직의 멤버가 아니라면, 이후 강퇴되었거나 탈퇴한 것일 수 있어요.
+          </p>
+          <p className="pt-2 text-xs text-muted-foreground">
+            조직 관리자에게 <strong>새 초대 링크</strong>를 요청해주세요.
+            (같은 이메일로 다시 초대하면 새 링크가 발급돼요.)
           </p>
         </CardContent>
       </Card>

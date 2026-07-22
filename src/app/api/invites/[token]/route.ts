@@ -62,7 +62,9 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   };
 
   if (row.revoked_at) return apiError('NOT_FOUND', '이 초대는 취소되었습니다');
-  if (row.accepted_at) return apiError('CONFLICT', '이 초대는 이미 사용되었습니다');
+
+  // 사용됨(accepted_at 있음) 은 에러 대신 preview 상태로 반환 → UI 가 안내 문구 제어.
+  const alreadyAccepted = !!row.accepted_at;
 
   const now = new Date();
   const expired = new Date(row.expires_at) < now;
@@ -105,6 +107,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     expiresAt: row.expires_at,
     expired,
     alreadyMember: !!existingMember,
+    alreadyAccepted,
     emailMismatch: row.email.toLowerCase() !== requesterEmail,
   };
 
