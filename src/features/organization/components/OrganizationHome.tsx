@@ -113,23 +113,23 @@ export function OrganizationHome({ slug }: { slug: string }) {
           </Card>
         </Link>
 
-        {canManage && (
-          <Link href={`/organization/${org.slug}/members`}>
-            <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
-              <CardContent className="flex items-start gap-3 py-4">
-                <div className="rounded-md bg-primary/10 p-2 text-primary">
-                  <Users className="h-5 w-5" />
+        <Link href={`/organization/${org.slug}/members`}>
+          <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
+            <CardContent className="flex items-start gap-3 py-4">
+              <div className="rounded-md bg-primary/10 p-2 text-primary">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold">
+                  {canManage ? '멤버 관리' : '멤버'}
                 </div>
-                <div>
-                  <div className="text-sm font-semibold">멤버 관리</div>
-                  <p className="text-xs text-muted-foreground">
-                    초대·역할 변경·강퇴
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        )}
+                <p className="text-xs text-muted-foreground">
+                  {canManage ? '초대·역할 변경·강퇴' : '멤버 목록·초대'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
         {org.myRole === 'owner' && (
           <Link href={`/organization/${org.slug}/settings`}>

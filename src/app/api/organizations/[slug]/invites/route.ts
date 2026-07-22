@@ -133,8 +133,11 @@ export async function POST(request: Request, { params }: { params: { slug: strin
 
   const { org, requesterRole } = await loadContext(params.slug, user.id);
   if (!org) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
-  if (requesterRole !== 'owner' && requesterRole !== 'admin') {
-    return apiError('FORBIDDEN', '조직 관리자만 초대할 수 있어요');
+  // 초대는 조직 소속 active 멤버라면 누구나 가능 (역할 변경·강퇴 등 관리 액션은
+  // 여전히 admin+ 로 제한). "우리 조직에 합류할 사람을 부를" 권리는 팀 협업의
+  // 자연스러운 부분이라고 판단.
+  if (!requesterRole) {
+    return apiError('FORBIDDEN', '조직 멤버만 초대할 수 있어요');
   }
 
   let body;
@@ -151,6 +154,11 @@ export async function POST(request: Request, { params }: { params: { slug: strin
 
   if (body.role === 'owner') {
     return apiError('FORBIDDEN', '소유자 초대는 지원하지 않아요 (소유권 이전 별도)');
+  }
+  // 권한 상향 방지: editor/viewer 는 자신보다 높은 역할(admin) 로 초대할 수 없다.
+  // 그렇지 않으면 viewer 가 admin 을 부르는 방식으로 우회 승격이 가능해진다.
+  if (body.role === 'admin' && requesterRole !== 'owner' && requesterRole !== 'admin') {
+    return apiError('FORBIDDEN', '관리자 초대는 조직 관리자만 할 수 있어요');
   }
 
   // 이미 조직 멤버인지 검증 (service role — profiles 조회 후 members 확인)
