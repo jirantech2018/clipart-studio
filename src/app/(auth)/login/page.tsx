@@ -13,16 +13,18 @@ export default async function LoginPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  const rawNext = searchParams?.next;
+  const validatedNext =
+    rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null;
+
   if (user) {
     // 이미 로그인 상태에서 공유 링크로 넘어온 경우엔 원래 페이지로 즉시 이동.
-    const rawNext = searchParams?.next;
-    const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
-    redirect(next);
+    redirect(validatedNext ?? '/');
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
-      <LoginForm />
+      <LoginForm initialNext={validatedNext} />
     </div>
   );
 }

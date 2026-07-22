@@ -13,16 +13,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createSupabaseBrowserClient } from '@/services/supabase/client';
 
-export function LoginForm() {
+interface LoginFormProps {
+  // 서버 컴포넌트에서 확실히 넘겨받는 next 경로. 클라이언트 useSearchParams 는
+  // 초기 렌더링·CSR 전환 등에서 값이 유실될 수 있어 서버 prop 을 우선한다.
+  initialNext?: string | null;
+}
+
+export function LoginForm({ initialNext }: LoginFormProps = {}) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
   const supabase = createSupabaseBrowserClient();
   const searchParams = useSearchParams();
-  // `?next=/image/xxx` 형태로 원래 페이지를 넘겨받아 로그인 후 그리로 복귀.
-  // 절대 URL 이나 외부 도메인은 무시하고 오직 사이트 내부 경로만 신뢰.
-  const rawNext = searchParams?.get('next');
+  // 우선순위: 서버 prop → 클라이언트 URL query. 서버가 확실히 넘긴 값이면
+  // 그걸 신뢰하고, 아니면 CSR 로 진입한 경우를 대비해 useSearchParams 로 보조.
+  const rawNext = initialNext ?? searchParams?.get('next') ?? null;
   const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null;
   const callbackUrl = next
     ? `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?next=${encodeURIComponent(next)}`
