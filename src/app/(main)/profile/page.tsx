@@ -1,10 +1,11 @@
-// Account info page. School Profile lives on /settings now.
+// Account info page. P5-D-B 이후: 개인 학교 설정은 조직 학교 설정으로
+// 이관되고 개인 화면에서는 참조 이미지 슬롯만 관리한다. 기존 school_profiles
+// 데이터는 DB 에 legacy 로 유지 (건드리지 않음).
 
-import { ArrowRight, School } from 'lucide-react';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ReferenceImagesSection } from '@/features/references/components/ReferenceImagesSection';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 import { ACCOUNT_TYPE_LABELS } from '@/types/domain';
 
@@ -78,36 +79,9 @@ export default async function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* P5-D-B: 개인 AI 설정 진입점. 조직 컨텍스트와 별도로 관리되며 개인
-          라이브러리 생성에만 적용된다. */}
-      <Link href="/settings" className="block">
-        <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="rounded-md bg-primary/10 p-2 text-primary">
-                  <School className="h-5 w-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">개인 AI · 참조 이미지 설정</CardTitle>
-                  <CardDescription>
-                    개인 라이브러리에서 생성할 때 자동 적용되는 학교 프로필과 참조 이미지.
-                  </CardDescription>
-                </div>
-              </div>
-              <ArrowRight
-                className="mt-2 h-4 w-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              조직 컨텍스트에서 생성할 때는 이 값 대신 각 조직의 설정이 적용됩니다.
-            </p>
-          </CardContent>
-        </Card>
-      </Link>
+      {/* 개인 참조 이미지 슬롯 — 개인 컨텍스트 생성 시 소비된다. 조직 컨텍스트
+          생성에는 자동으로 섞이지 않는다 (P5-D-C 파이프라인에서 컨텍스트 분기). */}
+      <ReferenceImagesSection />
     </div>
   );
 }
