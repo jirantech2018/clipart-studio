@@ -20,6 +20,8 @@ interface ImageWithMeta extends Image {
   thumbnailUrl: string;
   tags: string[];
   categories: string[];
+  /** 이 이미지가 공유된 조직 (개인 라이브러리 카드에 라벨 표시용). */
+  sharedOrgs: { slug: string; name: string }[];
 }
 
 function rowToImage(row: Record<string, unknown>): ImageWithMeta {
@@ -27,6 +29,15 @@ function rowToImage(row: Record<string, unknown>): ImageWithMeta {
   const thumbnailKey = (row.thumbnail_r2_key as string) ?? r2Key;
   const rawTags = (row.image_tags as Array<{ tag: string }> | null) ?? [];
   const rawCats = (row.image_categories as Array<{ category: string }> | null) ?? [];
+  const rawShares =
+    (row.image_organization_shares as Array<{
+      organizations: { slug: string; name: string; deleted_at: string | null };
+    }> | null) ?? [];
+  const sharedOrgs = rawShares
+    .map((s) => s.organizations)
+    .filter((o): o is { slug: string; name: string; deleted_at: string | null } => !!o)
+    .filter((o) => o.deleted_at === null)
+    .map((o) => ({ slug: o.slug, name: o.name }));
   return {
     id: row.id as string,
     userId: row.user_id as string,
@@ -53,6 +64,7 @@ function rowToImage(row: Record<string, unknown>): ImageWithMeta {
     thumbnailUrl: publicUrl(thumbnailKey),
     tags: rawTags.map((t) => t.tag),
     categories: rawCats.map((c) => c.category),
+    sharedOrgs,
   };
 }
 
@@ -79,7 +91,13 @@ export async function GET(request: Request) {
   const { filter, sort, limit, offset } = parsed.data;
   let query = supabase
     .from('images')
-    .select('*, image_tags(tag), image_categories(category)', { count: 'exact' })
+    .select(
+      // image_organization_shares 도 함께 join — 각 이미지의 공유 조직을
+      // 카드 라벨에 표시하기 위해. shares 는 RLS ios_select (조직 멤버 or
+      // 이미지 소유자) 로 보호되지만 여기선 소유자만 SELECT 하므로 통과.
+      '*, image_tags(tag), image_categories(category), image_organization_shares(organizations(slug, name, deleted_at))',
+      { count: 'exact' },
+    )
     .eq('user_id', user.id);
 
   // All library images are 'saved' by policy (no pending/discarded lifecycle).

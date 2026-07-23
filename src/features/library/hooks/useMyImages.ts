@@ -18,6 +18,8 @@ export interface LibraryImage extends Image {
   thumbnailUrl: string;
   tags: string[];
   categories: string[];
+  /** 서버가 채워주면 카드에 공유 조직 라벨 표시. 조직 라이브러리 응답에는 없다. */
+  sharedOrgs?: { slug: string; name: string }[];
 }
 
 export type { AspectRatio } from '@/types/domain';

@@ -7,7 +7,7 @@
 // 액션이 사라지고, 소유자가 커뮤니티에 올리려면 이미지 상세 → "조직에 공유"
 // → 조직 라이브러리에서 조직 owner 가 승격하는 흐름을 따른다.
 
-import { Download, Loader2 } from 'lucide-react';
+import { Download, Loader2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -20,6 +20,15 @@ import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 import { cn } from '@/lib/utils';
 
 import type { LibraryImage } from '@/features/library/hooks/useMyImages';
+
+// 공유 조직 라벨 포맷: 1곳이면 조직명, 여러 곳이면 "지란초 외 N".
+// title (툴팁) 에는 전체 목록을 넣어 그리드에서 마우스 오버로 확인 가능.
+function formatSharedOrgsLabel(orgs: { name: string }[]): string {
+  const first = orgs[0];
+  if (!first) return '';
+  if (orgs.length === 1) return first.name;
+  return `${first.name} 외 ${orgs.length - 1}`;
+}
 
 export function LibraryCard({ image }: { image: LibraryImage }) {
   const [downloading, setDownloading] = useState(false);
@@ -79,6 +88,15 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
 
       <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1">
         <AIGeneratedBadge />
+        {image.sharedOrgs && image.sharedOrgs.length > 0 && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm"
+            title={image.sharedOrgs.map((o) => o.name).join(', ')}
+          >
+            <Users className="h-3 w-3" aria-hidden="true" />
+            {formatSharedOrgsLabel(image.sharedOrgs)}
+          </span>
+        )}
       </div>
 
       <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
