@@ -75,21 +75,6 @@ export function ImageDetailView({ id }: { id: string }) {
     }
   }
 
-  async function handleCommunityToggle() {
-    const nextOn = !image.isOnCommunity;
-    try {
-      await updateVisibility.mutateAsync(
-        nextOn
-          ? { id: image.id, visibility: 'public', isOnCommunity: true }
-          : { id: image.id, visibility: 'private', isOnCommunity: false },
-      );
-      toast.success(nextOn ? '워크스페이스에 공개했어요' : '비공개로 전환했어요');
-      refetch();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '변경 실패');
-    }
-  }
-
   async function handleCopyLink() {
     // 소유자가 링크를 처음 복사할 때 이미지가 아직 링크 공유 가능한 상태가 아니면,
     // visibility 를 'authenticated' 로 자동 승격해서 링크를 유효하게 만든다.
@@ -139,11 +124,6 @@ export function ImageDetailView({ id }: { id: string }) {
           />
           <div className="absolute right-3 top-3 flex flex-col items-end gap-1">
             <AIGeneratedBadge />
-            {image.isOnCommunity && (
-              <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
-                공개 중
-              </span>
-            )}
           </div>
         </div>
 
@@ -300,20 +280,6 @@ export function ImageDetailView({ id }: { id: string }) {
                   <Link2 className="h-3 w-3" />
                 )}
               </Button>
-              {image.isOwner && (
-                <Button
-                  type="button"
-                  variant={image.isOnCommunity ? 'secondary' : 'outline'}
-                  onClick={handleCommunityToggle}
-                  disabled={updateVisibility.isPending}
-                  title={image.isOnCommunity ? '비공개로 전환' : '워크스페이스에 공개'}
-                >
-                  {updateVisibility.isPending ? (
-                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  ) : null}
-                  {image.isOnCommunity ? '비공개' : '공개'}
-                </Button>
-              )}
             </div>
           </div>
         </aside>

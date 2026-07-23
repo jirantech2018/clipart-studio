@@ -2,6 +2,10 @@
 
 // Design intent: pure gallery card. Metadata (prompt/categories/tags) lives on
 // the detail page. Action buttons appear on hover so the grid stays clean.
+//
+// P5-C Phase B: 커뮤니티(공유 라이브러리) 승격 UI 제거. 이 카드에서는 공개
+// 액션이 사라지고, 소유자가 커뮤니티에 올리려면 이미지 상세 → "조직에 공유"
+// → 조직 라이브러리에서 조직 owner 가 승격하는 흐름을 따른다.
 
 import { Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -11,10 +15,7 @@ import { toast } from 'sonner';
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 import { Button } from '@/components/ui/button';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
-import {
-  downloadImageFile,
-  useUpdateImageVisibility,
-} from '@/features/library/hooks/useMyImages';
+import { downloadImageFile } from '@/features/library/hooks/useMyImages';
 import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +23,6 @@ import type { LibraryImage } from '@/features/library/hooks/useMyImages';
 
 export function LibraryCard({ image }: { image: LibraryImage }) {
   const [downloading, setDownloading] = useState(false);
-  const updateVisibility = useUpdateImageVisibility();
   const selection = useMultiSelection('library');
   const selected = selection.isSelected(image.id);
 
@@ -35,20 +35,6 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
       toast.error(err instanceof Error ? err.message : '다운로드 실패');
     } finally {
       setDownloading(false);
-    }
-  }
-
-  async function handleCommunityToggle() {
-    const nextOn = !image.isOnCommunity;
-    try {
-      await updateVisibility.mutateAsync(
-        nextOn
-          ? { id: image.id, visibility: 'public', isOnCommunity: true }
-          : { id: image.id, visibility: 'private', isOnCommunity: false },
-      );
-      toast.success(nextOn ? '워크스페이스에 공개했어요' : '비공개로 전환했어요');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '변경 실패');
     }
   }
 
@@ -93,11 +79,6 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
 
       <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1">
         <AIGeneratedBadge />
-        {image.isOnCommunity && (
-          <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
-            공개 중
-          </span>
-        )}
       </div>
 
       <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
@@ -115,19 +96,6 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
             <Download className="mr-1 h-3 w-3" />
           )}
           다운로드
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={image.isOnCommunity ? 'secondary' : 'default'}
-          onClick={handleCommunityToggle}
-          disabled={updateVisibility.isPending}
-          className="h-8 px-2 shadow-md"
-        >
-          {updateVisibility.isPending ? (
-            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-          ) : null}
-          {image.isOnCommunity ? '비공개' : '공개'}
         </Button>
       </div>
     </div>

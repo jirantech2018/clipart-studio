@@ -64,31 +64,23 @@ export function useMyImages(filter: LibraryFilter, sort: LibrarySort) {
 /**
  * 이미지의 visibility 를 갱신하는 mutation. 소유자만 RLS 통과.
  *
- * P5-C Phase A 이후 서버 계약 변경:
- *   - isOnCommunity 를 넘기면 서버가 403 을 반환 (개인의 커뮤니티 직접
- *     공개 경로가 폐쇄됨). 인터페이스는 남기지만 실제로 사용하면 실패한다.
- *     UI 는 Phase B 에서 버튼 자체를 제거하는 방향으로 정리.
- *   - 링크 공유(visibility='authenticated') 는 계속 소유자가 승격 가능.
+ * P5-C Phase B 이후: 커뮤니티(is_on_community) 조작 경로는 완전히 제거.
+ * 공유 라이브러리 승격은 조직 라이브러리에서 조직 owner 만 배치 API 로 처리.
+ * 이 훅은 이제 visibility 만 다룬다 (링크 공유용 authenticated 승격 등).
  */
 export interface UpdateImageVisibilityInput {
   id: string;
-  visibility?: ImageVisibility;
-  /** @deprecated 서버가 403. 조직 라이브러리 배치 API 로 대체. */
-  isOnCommunity?: boolean;
+  visibility: ImageVisibility;
 }
 
 export function useUpdateImageVisibility() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, visibility, isOnCommunity }: UpdateImageVisibilityInput) => {
-      const body: Record<string, unknown> = {};
-      if (visibility !== undefined) body.visibility = visibility;
-      if (isOnCommunity !== undefined) body.isOnCommunity = isOnCommunity;
-
+    mutationFn: async ({ id, visibility }: UpdateImageVisibilityInput) => {
       const res = await fetch(`/api/images/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ visibility }),
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as {
