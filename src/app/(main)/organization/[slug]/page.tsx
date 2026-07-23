@@ -17,8 +17,8 @@ export default async function OrganizationHomePage({
   if (!user) redirect(`/login?next=/organization/${params.slug}`);
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <OrganizationHome slug={params.slug} />
+    <div className="mx-auto max-w-6xl">
+      <OrganizationHome slug={params.slug} currentUserId={user.id} />
     </div>
   );
 }

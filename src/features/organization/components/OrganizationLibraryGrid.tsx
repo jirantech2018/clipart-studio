@@ -45,9 +45,12 @@ const FILTER_LABELS: Record<OrgLibraryFilter, string> = {
 export function OrganizationLibraryGrid({
   slug,
   currentUserId,
+  hideOrgHeader = false,
 }: {
   slug: string;
   currentUserId: string;
+  /** 조직 홈에 embed 될 때 상단의 뒤로가기 + 조직 이름 헤더를 숨긴다. */
+  hideOrgHeader?: boolean;
 }) {
   const [filter, setFilter] = useState<OrgLibraryFilter>('all');
   const [zipPending, setZipPending] = useState(false);
@@ -324,15 +327,17 @@ export function OrganizationLibraryGrid({
 
   return (
     <div className="space-y-4">
-      <Link
-        href={`/organization/${slug}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {org.name}
-      </Link>
+      {!hideOrgHeader && (
+        <Link
+          href={`/organization/${slug}`}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {org.name}
+        </Link>
+      )}
 
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">조직 라이브러리</h1>
+        <h2 className="text-xl font-semibold tracking-tight">조직 라이브러리</h2>
         <p className="text-sm text-muted-foreground">
           멤버들이 이 조직에 공유한 이미지 모음이에요.
         </p>
