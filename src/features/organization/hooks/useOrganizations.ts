@@ -119,6 +119,38 @@ export function useUpdateOrganization() {
   });
 }
 
+export interface ActivityLogEntry {
+  id: number;
+  activityType: string;
+  actorEmail: string | null;
+  targetEmail: string | null;
+  targetImageId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export function useOrganizationActivityLogs(slug: string | null, enabled = true) {
+  return useQuery({
+    queryKey: slug ? ['organizations', slug, 'activity-logs'] : ['organizations', 'none', 'activity-logs'],
+    queryFn: async (): Promise<{ entries: ActivityLogEntry[] }> => {
+      if (!slug) throw new Error('no slug');
+      const res = await fetch(`/api/organizations/${slug}/activity-logs`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '활동 로그를 불러오지 못했어요');
+      }
+      const json = (await res.json()) as { data: { entries: ActivityLogEntry[] } };
+      return json.data;
+    },
+    enabled: enabled && !!slug,
+    staleTime: 15_000,
+  });
+}
+
 export function useDeleteOrganization() {
   const qc = useQueryClient();
   return useMutation({

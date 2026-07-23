@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { OrganizationActivityLogSection } from '@/features/organization/components/OrganizationActivityLogSection';
 import { OrgReferenceImagesSection } from '@/features/organization/components/OrgReferenceImagesSection';
 import {
   useDeleteOrganization,
@@ -65,6 +66,7 @@ export function OrganizationSettings({ slug }: { slug: string }) {
 
   const isMember = !!org.myRole;
   const isOwner = org.myRole === 'owner';
+  const canViewActivity = org.myRole === 'owner' || org.myRole === 'admin';
   if (!isMember) {
     return (
       <Card>
@@ -213,7 +215,8 @@ export function OrganizationSettings({ slug }: { slug: string }) {
       {/* 조직용 참조 이미지 슬롯 — 모든 조직 멤버가 편집 가능. */}
       <OrgReferenceImagesSection slug={slug} canEdit={isMember} />
 
-      {/* 활동 로그는 실제 구현 완료 후 노출됩니다. */}
+      {/* 활동 로그 — owner/admin 만 노출. RLS 도 동일 조건. */}
+      <OrganizationActivityLogSection slug={slug} canView={canViewActivity} />
 
       {/* 위험 영역 — 소유자만 노출. 조직 삭제는 soft delete (deleted_at 세팅) 로
           진행되며 30일 유예 후 배치가 하드 삭제할 예정. slug 를 정확히 입력해야
