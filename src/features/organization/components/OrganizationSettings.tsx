@@ -14,6 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { OrgLogoUploader } from '@/features/organization/components/OrgLogoUploader';
+import { OrgReferenceImagesSection } from '@/features/organization/components/OrgReferenceImagesSection';
+import { OrgSchoolSettingsSection } from '@/features/organization/components/OrgSchoolSettingsSection';
 import {
   useOrganization,
   useUpdateOrganization,
@@ -26,19 +29,14 @@ export function OrganizationSettings({ slug }: { slug: string }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [homepageUrl, setHomepageUrl] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-
   const org = data?.organization;
 
-  // 조직 정보가 로드되면 폼 초기값 세팅. 이후 저장 성공 시 useOrganization
-  // 캐시가 무효화되면서 이 effect 가 다시 돌아 최신 값이 반영됨.
   useEffect(() => {
     if (!org) return;
     setName(org.name);
     setDescription(org.description ?? '');
     setHomepageUrl(org.homepageUrl ?? '');
-    setAvatarUrl(org.avatarUrl ?? '');
-  }, [org?.name, org?.description, org?.homepageUrl, org?.avatarUrl]);
+  }, [org?.name, org?.description, org?.homepageUrl]);
 
   if (isLoading) {
     return (
@@ -78,7 +76,7 @@ export function OrganizationSettings({ slug }: { slug: string }) {
           name: name.trim(),
           description: description.trim(),
           homepageUrl: homepageUrl.trim() || null,
-          avatarUrl: avatarUrl.trim() || null,
+          // avatarUrl 은 로고 업로드 컴포넌트가 별도로 관리하므로 여기서는 미포함.
         },
       });
       toast.success('저장했어요');
@@ -159,19 +157,8 @@ export function OrganizationSettings({ slug }: { slug: string }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="org-avatar">로고 이미지 URL</Label>
-              <Input
-                id="org-avatar"
-                type="url"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://…"
-                maxLength={500}
-                disabled={update.isPending}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                이번 단계에서는 URL 만 입력받아요. 직접 업로드는 P5-D-B 에서 지원 예정.
-              </p>
+              <Label>로고 이미지</Label>
+              <OrgLogoUploader slug={slug} currentUrl={org.avatarUrl} />
             </div>
             <div className="flex justify-end pt-2">
               <Button type="submit" disabled={update.isPending}>
@@ -185,20 +172,9 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         </CardContent>
       </Card>
 
-      {/* 학교 AI 생성 설정 — P5-D-B 에서 채워짐 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base text-muted-foreground">
-            학교 AI 생성 설정
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            학교명 · 학교급 · 기본 프롬프트 · 학교 스타일 · 조직 참조 이미지는
-            다음 단계 (P5-D-B) 에서 이 자리에 채워집니다.
-          </p>
-        </CardContent>
-      </Card>
+      <OrgSchoolSettingsSection slug={slug} />
+
+      <OrgReferenceImagesSection slug={slug} canEdit={isOwner} />
 
       {/* 활동 로그 — P5-D-C 에서 채워짐 */}
       <Card>

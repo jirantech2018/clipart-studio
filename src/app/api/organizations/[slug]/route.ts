@@ -80,8 +80,10 @@ export async function PATCH(request: Request, { params }: { params: { slug: stri
 
   const { org, role } = await loadOrgAndRole(params.slug, user.id);
   if (!org || !role) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
-  if (role !== 'owner' && role !== 'admin') {
-    return apiError('FORBIDDEN', '조직 관리자 이상만 수정할 수 있어요');
+  // P5-D-B: 명시적으로 owner 만 허용. 036 이후 admin 은 발급되지 않지만
+  // 향후 역할 확장 시에도 조직 설정은 owner 전용으로 유지.
+  if (role !== 'owner') {
+    return apiError('FORBIDDEN', '조직 어드민만 수정할 수 있어요');
   }
 
   let body;

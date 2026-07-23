@@ -1,5 +1,7 @@
 // Account info page. School Profile lives on /settings now.
 
+import { ArrowRight, School } from 'lucide-react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,6 +77,37 @@ export default async function ProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* P5-D-B: 개인 AI 설정 진입점. 조직 컨텍스트와 별도로 관리되며 개인
+          라이브러리 생성에만 적용된다. */}
+      <Link href="/settings" className="block">
+        <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-md bg-primary/10 p-2 text-primary">
+                  <School className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">개인 AI · 참조 이미지 설정</CardTitle>
+                  <CardDescription>
+                    개인 라이브러리에서 생성할 때 자동 적용되는 학교 프로필과 참조 이미지.
+                  </CardDescription>
+                </div>
+              </div>
+              <ArrowRight
+                className="mt-2 h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">
+              조직 컨텍스트에서 생성할 때는 이 값 대신 각 조직의 설정이 적용됩니다.
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
     </div>
   );
 }
