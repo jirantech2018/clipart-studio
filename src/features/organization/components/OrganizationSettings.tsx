@@ -1,9 +1,8 @@
 'use client';
 
-// 조직 설정 페이지 (P5-D-A).
-// 이번 단계에는 기본 정보 편집만 노출 — 학교 AI 생성 설정 (P5-D-B) · 활동
-// 로그 · 위험 영역 (P5-D-C) 은 아래 placeholder 섹션으로 형체만 보여준다.
-// Owner 아닌 사람이 URL 로 진입하면 서버 API 가 403 을 반환.
+// 조직 설정 페이지 — "학교 AI 생성 설정 = 조직 기본 정보" 통합 (P5-D-B fix).
+// 학교명 = 조직명, 학교 홈페이지 = 조직 홈페이지 이므로 두 개 카드로 나누지
+// 않고 하나의 폼으로 관리. 참조 이미지 슬롯은 아래에 별도 섹션.
 
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -16,11 +15,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { OrgLogoUploader } from '@/features/organization/components/OrgLogoUploader';
 import { OrgReferenceImagesSection } from '@/features/organization/components/OrgReferenceImagesSection';
-import { OrgSchoolSettingsSection } from '@/features/organization/components/OrgSchoolSettingsSection';
 import {
   useOrganization,
   useUpdateOrganization,
 } from '@/features/organization/hooks/useOrganizations';
+import { SCHOOL_LEVEL_LABELS } from '@/types/domain';
+
+import type { SchoolLevel } from '@/types/domain';
+
+const LEVELS: SchoolLevel[] = ['elementary', 'middle', 'high'];
 
 export function OrganizationSettings({ slug }: { slug: string }) {
   const { data, isLoading } = useOrganization(slug);
@@ -29,6 +32,10 @@ export function OrganizationSettings({ slug }: { slug: string }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [homepageUrl, setHomepageUrl] = useState('');
+  const [schoolLevel, setSchoolLevel] = useState<SchoolLevel | ''>('');
+  const [basePrompt, setBasePrompt] = useState('');
+  const [styleEnabled, setStyleEnabled] = useState(true);
+
   const org = data?.organization;
 
   useEffect(() => {
@@ -36,7 +43,17 @@ export function OrganizationSettings({ slug }: { slug: string }) {
     setName(org.name);
     setDescription(org.description ?? '');
     setHomepageUrl(org.homepageUrl ?? '');
-  }, [org?.name, org?.description, org?.homepageUrl]);
+    setSchoolLevel(org.schoolLevel ?? '');
+    setBasePrompt(org.basePrompt ?? '');
+    setStyleEnabled(org.styleEnabled);
+  }, [
+    org?.name,
+    org?.description,
+    org?.homepageUrl,
+    org?.schoolLevel,
+    org?.basePrompt,
+    org?.styleEnabled,
+  ]);
 
   if (isLoading) {
     return (
@@ -66,7 +83,7 @@ export function OrganizationSettings({ slug }: { slug: string }) {
     e.preventDefault();
     if (!org) return;
     if (!name.trim()) {
-      toast.error('조직 이름은 필수예요');
+      toast.error('학교명은 필수예요');
       return;
     }
     try {
@@ -76,7 +93,9 @@ export function OrganizationSettings({ slug }: { slug: string }) {
           name: name.trim(),
           description: description.trim(),
           homepageUrl: homepageUrl.trim() || null,
-          // avatarUrl 은 로고 업로드 컴포넌트가 별도로 관리하므로 여기서는 미포함.
+          schoolLevel: schoolLevel ? schoolLevel : null,
+          basePrompt: basePrompt.trim() || null,
+          styleEnabled,
         },
       });
       toast.success('저장했어요');
@@ -97,19 +116,23 @@ export function OrganizationSettings({ slug }: { slug: string }) {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">조직 설정</h1>
         <p className="text-sm text-muted-foreground">
-          어드민만 이 페이지를 볼 수 있어요.
+          어드민만 이 페이지를 볼 수 있어요. 여기 저장한 값은 이 조직에서
+          이미지를 생성할 때 자동으로 적용돼요.
         </p>
       </div>
 
-      {/* 기본 정보 */}
+      {/* 통합 기본 정보 — 학교 AI 생성 설정 = 조직 기본 정보 */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">기본 정보</CardTitle>
+          <CardTitle className="text-base">기본 정보 · 학교 AI 생성 설정</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            학교명은 조직명과 같고, 조직 홈페이지가 곧 학교 홈페이지예요.
+          </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="org-name">조직명</Label>
+              <Label htmlFor="org-name">학교명 (조직명)</Label>
               <Input
                 id="org-name"
                 value={name}
@@ -160,11 +183,51 @@ export function OrganizationSettings({ slug }: { slug: string }) {
               <Label>로고 이미지</Label>
               <OrgLogoUploader slug={slug} currentUrl={org.avatarUrl} />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="org-level">학교급</Label>
+              <select
+                id="org-level"
+                value={schoolLevel}
+                onChange={(e) => setSchoolLevel(e.target.value as SchoolLevel | '')}
+                disabled={update.isPending}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">선택 안 함</option>
+                {LEVELS.map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {SCHOOL_LEVEL_LABELS[lvl]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="base-prompt">기본 프롬프트</Label>
+              <textarea
+                id="base-prompt"
+                value={basePrompt}
+                onChange={(e) => setBasePrompt(e.target.value)}
+                maxLength={2000}
+                disabled={update.isPending}
+                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="이 조직에서 생성하는 모든 이미지에 함께 붙일 스타일 설명"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="style-enabled"
+                type="checkbox"
+                checked={styleEnabled}
+                onChange={(e) => setStyleEnabled(e.target.checked)}
+                disabled={update.isPending}
+                className="h-4 w-4 rounded border-input"
+              />
+              <Label htmlFor="style-enabled" className="cursor-pointer text-sm font-normal">
+                학교 스타일 적용
+              </Label>
+            </div>
             <div className="flex justify-end pt-2">
               <Button type="submit" disabled={update.isPending}>
-                {update.isPending && (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                )}
+                {update.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                 저장
               </Button>
             </div>
@@ -172,8 +235,7 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         </CardContent>
       </Card>
 
-      <OrgSchoolSettingsSection slug={slug} />
-
+      {/* 조직용 참조 이미지 슬롯 */}
       <OrgReferenceImagesSection slug={slug} canEdit={isOwner} />
 
       {/* 활동 로그 — P5-D-C 에서 채워짐 */}

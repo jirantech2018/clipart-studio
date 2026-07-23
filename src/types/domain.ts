@@ -27,6 +27,12 @@ export interface Organization {
   homepageUrl: string | null;
   ownerId: string;
   maxVisibility: ImageVisibility;
+  /** 조직 (=학교) 학교급. AI 생성 스타일 힌트로 사용. */
+  schoolLevel: SchoolLevel | null;
+  /** 조직 컨텍스트 생성 시 프롬프트 앞에 붙일 학교 기본 설명. */
+  basePrompt: string | null;
+  /** 조직 컨텍스트에서 학교 스타일 (base_prompt 등) 적용 여부. */
+  styleEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

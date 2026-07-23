@@ -6,6 +6,7 @@ import type {
   Organization,
   OrganizationRole,
   OrganizationWithMyRole,
+  SchoolLevel,
 } from '@/types/domain';
 
 export interface OrganizationRow {
@@ -17,6 +18,9 @@ export interface OrganizationRow {
   homepage_url: string | null;
   owner_id: string;
   max_visibility: ImageVisibility;
+  school_level: SchoolLevel | null;
+  base_prompt: string | null;
+  style_enabled: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -32,6 +36,9 @@ export function organizationRowToDomain(row: OrganizationRow): Organization {
     homepageUrl: row.homepage_url,
     ownerId: row.owner_id,
     maxVisibility: row.max_visibility,
+    schoolLevel: row.school_level,
+    basePrompt: row.base_prompt,
+    styleEnabled: row.style_enabled,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

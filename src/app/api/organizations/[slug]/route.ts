@@ -104,6 +104,9 @@ export async function PATCH(request: Request, { params }: { params: { slug: stri
   if (body.homepageUrl !== undefined) update.homepage_url = body.homepageUrl;
   if (body.avatarUrl !== undefined) update.avatar_url = body.avatarUrl;
   if (body.maxVisibility !== undefined) update.max_visibility = body.maxVisibility;
+  if (body.schoolLevel !== undefined) update.school_level = body.schoolLevel;
+  if (body.basePrompt !== undefined) update.base_prompt = body.basePrompt;
+  if (body.styleEnabled !== undefined) update.style_enabled = body.styleEnabled;
 
   if (Object.keys(update).length === 0) {
     const count = await memberCount(org.id);

@@ -158,6 +158,10 @@ export const updateOrganizationSchema = z.object({
     .optional(),
   avatarUrl: z.string().trim().url().max(500).nullable().optional(),
   maxVisibility: imageVisibilitySchema.optional(),
+  // P5-D-B: 학교 AI 생성 관련 필드도 조직 기본 정보의 일부로 통합.
+  schoolLevel: schoolLevelSchema.nullable().optional(),
+  basePrompt: z.string().max(2000).nullable().optional(),
+  styleEnabled: z.boolean().optional(),
 });
 
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
