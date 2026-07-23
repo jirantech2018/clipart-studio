@@ -346,8 +346,9 @@ export function OrganizationLibraryGrid({
         <Link
           href={`/generate?org=${slug}`}
           className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
+          title="이 조직 AI 설정(학교 스타일·기본 프롬프트·조직 참조 이미지)으로 이미지 만들기. 생성물은 내 라이브러리에 저장돼요."
         >
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />이 조직에서 생성
+          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />이 조직 AI 설정으로 만들기
         </Link>
       </div>
 

@@ -210,17 +210,23 @@ export function GenerationForm({
           {chaining ? '이 이미지로 생성 (i2i)' : 'AI 이미지 만들기'}
         </CardTitle>
         {isOrgContext && (
-          <div className="mt-2 inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{orgContext.name} 에서 생성</span>
-            <Link
-              href="/generate"
-              className="text-[10px] text-primary/70 underline-offset-4 hover:underline"
-              title="개인 컨텍스트로 전환"
-            >
-              (개인으로 전환)
-            </Link>
-          </div>
+          <>
+            <div className="mt-2 inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{orgContext.name} AI 설정 적용</span>
+              <Link
+                href="/generate"
+                className="text-[10px] text-primary/70 underline-offset-4 hover:underline"
+                title="개인 컨텍스트로 전환"
+              >
+                (개인으로 전환)
+              </Link>
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              생성한 이미지는 항상 내 라이브러리에 저장돼요. 조직에 공유하려면
+              생성 후 이미지 상세에서 &quot;조직에 공유&quot;를 눌러주세요.
+            </p>
+          </>
         )}
         {orgAccessError && (
           <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">

@@ -34,7 +34,7 @@ export function OrgReferenceLibrarySection({
         <CardTitle className="flex items-center gap-2 text-base">
           <LinkIcon className="h-4 w-4" />
           조직 참조 이미지 (선택)
-          <span className="text-xs font-normal text-muted-foreground">— {orgName}</span>
+          <span className="text-xs font-normal text-muted-foreground">— {orgName} AI 설정</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
