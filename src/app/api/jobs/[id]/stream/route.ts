@@ -53,6 +53,7 @@ function jobFromRow(row: Record<string, unknown>): GenerationJob {
     error: (row.error as string) ?? null,
     createdAt: row.created_at as string,
     completedAt: (row.completed_at as string) ?? null,
+    orgId: (row.org_id as string) ?? null,
   };
 }
 
@@ -107,6 +108,21 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .eq('user_id', user.id)
     .maybeSingle();
   const schoolProfile = schoolProfileFromRow(spRow);
+
+  // 조직 컨텍스트 job 이면 조직 base_prompt 스냅샷 로드 (job.orgId 는 생성
+  // 시점에 활성 조직으로 확정). 조직이 그 사이 삭제됐다면 (FK ON DELETE
+  // SET NULL 로 org_id 가 NULL 이 되어 있거나 organizations 조회가 miss)
+  // 조직 힌트 없이 개인 컨텍스트처럼 진행.
+  let orgBasePrompt: string | null = null;
+  if (job.orgId) {
+    const orgService = createSupabaseServiceClient();
+    const { data: orgRow } = await orgService
+      .from('organizations')
+      .select('base_prompt')
+      .eq('id', job.orgId)
+      .maybeSingle();
+    orgBasePrompt = (orgRow as { base_prompt: string | null } | null)?.base_prompt ?? null;
+  }
 
   const service = createSupabaseServiceClient();
   await service
@@ -188,6 +204,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
                 job,
                 order: chunkStart + i,
                 schoolProfile,
+                orgBasePrompt,
                 isDiversityChunk: isDiversity,
                 referenceImage,
                 structuredPrompt,

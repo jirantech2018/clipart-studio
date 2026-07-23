@@ -62,10 +62,24 @@ export const createJobSchema = z
     schoolProfileApplied: z.boolean().default(true),
     generationMode: generationModeSchema.default('text2img'),
     aspectRatio: aspectRatioSchema.default('square'),
+    // P5-D-C: /generate?org=<slug> 컨텍스트에서 사용할 조직 정보.
+    // orgSlug 가 있으면 그 조직의 base_prompt 를 소비하고 (styleEnabled 등은
+    // 배제 — 조직 선택 자체가 apply 신호), orgReferenceId 가 있으면 그 조직
+    // 참조 이미지를 img2img 참조로 사용한다.
+    orgSlug: z.string().min(1).max(64).nullable().optional(),
+    orgReferenceId: z.string().uuid().nullable().optional(),
   })
   .refine((data) => !(data.referenceImageId && data.customReferenceId), {
     message: '라이브러리 참조와 업로드 참조는 동시에 사용할 수 없어요',
     path: ['customReferenceId'],
+  })
+  .refine((data) => !(data.customReferenceId && data.orgReferenceId), {
+    message: '개인·조직 참조 이미지는 동시에 사용할 수 없어요',
+    path: ['orgReferenceId'],
+  })
+  .refine((data) => !(data.orgReferenceId && !data.orgSlug), {
+    message: '조직 참조 이미지는 조직 컨텍스트에서만 사용할 수 있어요',
+    path: ['orgReferenceId'],
   });
 
 export type CreateJobInput = z.infer<typeof createJobSchema>;

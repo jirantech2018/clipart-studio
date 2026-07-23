@@ -154,10 +154,11 @@ export function GenerationForm({
   async function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    // 개인 참조는 그대로 서버로 전달. 조직 참조는 다음 슬라이스에서 서버
-    // 파이프라인이 orgSlug + orgReferenceId 로 소비하기 전까지는 클라이언트
-    // 상태에만 유지 (개인 슬롯 자리로 보내지 않음).
+    // 개인/조직 참조는 상호 배타적. 개인 컨텍스트에서는 customReferenceId,
+    // 조직 컨텍스트에서는 orgReferenceId 를 서버가 소비.
     const effectiveCustomRef = chaining ? null : customReferenceId;
+    const effectiveOrgRef = chaining || !isOrgContext ? null : orgReferenceId;
+    const anyReference = !!effectiveCustomRef || !!effectiveOrgRef;
     const parsed = createJobSchema.safeParse({
       prompt,
       batchSize,
@@ -165,8 +166,10 @@ export function GenerationForm({
       referenceImageId: parent?.id ?? null,
       customReferenceId: effectiveCustomRef,
       schoolProfileApplied,
-      generationMode: chaining || effectiveCustomRef ? 'img2img' : 'text2img',
+      generationMode: chaining || anyReference ? 'img2img' : 'text2img',
       aspectRatio,
+      orgSlug: isOrgContext ? orgContext.slug : null,
+      orgReferenceId: effectiveOrgRef,
     });
     if (!parsed.success) {
       const first = parsed.error.issues[0];

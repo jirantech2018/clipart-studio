@@ -27,6 +27,8 @@ interface RunOneParams {
   job: GenerationJob;
   order: number; // 0-based within the batch
   schoolProfile: SchoolProfile | null;
+  /** P5-D-C: 조직 컨텍스트 job (job.orgId 있음) 일 때 그 조직의 base_prompt 스냅샷. */
+  orgBasePrompt?: string | null;
   isDiversityChunk: boolean;
   /** Preloaded reference bytes for chaining; caller fetches once per batch. */
   referenceImage?: ReferenceImage | null;
@@ -83,6 +85,7 @@ export async function runOne({
   job,
   order,
   schoolProfile,
+  orgBasePrompt,
   isDiversityChunk,
   referenceImage,
   structuredPrompt,
@@ -91,7 +94,14 @@ export async function runOne({
 }: RunOneParams): Promise<PipelineResult> {
   const adapter = primaryAdapter();
 
-  const merged = mergePrompt(job.prompt, schoolProfile, job.schoolProfileApplied);
+  // 조직 컨텍스트 job 이면 조직 base_prompt 를 앞에 병합, 그렇지 않으면
+  // 기존 개인 school_profile 로직 그대로. 두 소스는 상호 배타적이다 (조직
+  // 선택 자체가 학교 설정 apply 신호이므로 개인 school_profile 은 무시).
+  const merged = job.orgId
+    ? orgBasePrompt
+      ? `${job.prompt}. ${orgBasePrompt}`
+      : job.prompt
+    : mergePrompt(job.prompt, schoolProfile, job.schoolProfileApplied);
   // 사용자 자연어를 structurePrompt 결과로 라벨링된 형식으로 재조립. structuredPrompt
   // 없으면 원본 그대로.
   const userSection = structuredPrompt

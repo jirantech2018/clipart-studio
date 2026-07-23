@@ -181,6 +181,8 @@ export interface GenerationJob {
   error: string | null;
   createdAt: string;
   completedAt: string | null;
+  /** 조직 컨텍스트에서 생성된 job (P5-D-C). NULL 이면 개인 컨텍스트. */
+  orgId: string | null;
 }
 
 export interface ReferenceImageSlot {

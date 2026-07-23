@@ -195,32 +195,8 @@ export function OrganizationSettings({ slug }: { slug: string }) {
       {/* 조직용 참조 이미지 슬롯 — 모든 조직 멤버가 편집 가능. */}
       <OrgReferenceImagesSection slug={slug} canEdit={isMember} />
 
-      {/* 활동 로그 — P5-D-C 에서 채워짐 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base text-muted-foreground">활동 로그</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            초대 · 멤버 변경 · 조직 공유 · 커뮤니티 공개/해제 이력이 P5-D-C 에서
-            여기 표시됩니다.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* 위험 영역 — owner 만 노출. P5-D-C 에서 조직 삭제 UI 통합. */}
-      {isOwner && (
-        <Card className="border-destructive/40">
-          <CardHeader>
-            <CardTitle className="text-base text-destructive">위험 영역</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              조직 삭제는 P5-D-C 에서 여기 통합됩니다.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {/* 활동 로그 · 위험 영역은 실제 구현 완료 후 노출됩니다.
+          현재 placeholder 상태로 사용자에게 미완성 기능처럼 보이지 않도록 숨김. */}
     </div>
   );
 }

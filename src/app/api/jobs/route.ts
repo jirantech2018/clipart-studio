@@ -8,7 +8,10 @@ import { ZodError } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';
 import { InsufficientCreditsError, reserveCredits } from '@/services/credit';
-import { createSupabaseServerClient } from '@/services/supabase/server';
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from '@/services/supabase/server';
 import { createJobSchema } from '@/types/schemas';
 
 export async function POST(request: Request) {
@@ -62,8 +65,37 @@ export async function POST(request: Request) {
     throw err;
   }
 
+  // 조직 컨텍스트 판별. orgSlug 가 있으면 조직 존재 + 요청자가 active 멤버
+  // 인지 확인 후 org_id 를 스냅샷으로 저장. 실패 시 개인 컨텍스트로 폴백
+  // 하지 않고 오류 반환 (사용자 명세 Q3(b)).
+  let orgIdSnapshot: string | null = null;
+  if (body.orgSlug) {
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('slug', body.orgSlug)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!orgRow) {
+      return apiError('VALIDATION_ERROR', '요청한 조직을 찾을 수 없어요');
+    }
+    const orgId = (orgRow as { id: string }).id;
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select('user_id')
+      .eq('organization_id', orgId)
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (!member) {
+      return apiError('FORBIDDEN', '이 조직의 멤버가 아니에요');
+    }
+    orgIdSnapshot = orgId;
+  }
+
   // 업로드 참조 이미지 슬롯이 지정됐다면 R2 키를 해석해 job에 스냅샷으로 저장.
   // 이후 사용자가 슬롯을 삭제해도 진행 중인 job은 영향 받지 않는다.
+  // 개인/조직 참조 중 하나만 있음 (schema refine 으로 강제).
   let customReferenceR2Key: string | null = null;
   if (body.customReferenceId) {
     const { data: ref } = await supabase
@@ -76,6 +108,18 @@ export async function POST(request: Request) {
       return apiError('VALIDATION_ERROR', '선택한 참조 이미지를 찾을 수 없어요');
     }
     customReferenceR2Key = ref.r2_key as string;
+  } else if (body.orgReferenceId && orgIdSnapshot) {
+    // 조직 참조 이미지는 service_role 로 조회 (요청자가 active 멤버임은 위에서 확인).
+    const service = createSupabaseServiceClient();
+    const { data: orgRef } = await service
+      .from('organization_reference_images')
+      .select('r2_key, organization_id')
+      .eq('id', body.orgReferenceId)
+      .maybeSingle();
+    if (!orgRef || (orgRef as { organization_id: string }).organization_id !== orgIdSnapshot) {
+      return apiError('VALIDATION_ERROR', '선택한 조직 참조 이미지를 찾을 수 없어요');
+    }
+    customReferenceR2Key = (orgRef as { r2_key: string }).r2_key;
   }
 
   const { data: job, error: jobError } = await supabase
@@ -91,6 +135,7 @@ export async function POST(request: Request) {
       aspect_ratio: body.aspectRatio,
       reserved_credits: body.batchSize,
       status: 'queued',
+      org_id: orgIdSnapshot,
     })
     .select('id')
     .single();
