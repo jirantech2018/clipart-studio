@@ -115,9 +115,6 @@ export function OrganizationSettings({ slug }: { slug: string }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">기본 정보 · 학교 AI 생성 설정</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            학교명은 조직명과 같고, 조직 홈페이지가 곧 학교 홈페이지예요.
-          </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
