@@ -28,7 +28,6 @@ export function OrganizationSettings({ slug }: { slug: string }) {
   const update = useUpdateOrganization();
 
   const [name, setName] = useState('');
-  const [homepageUrl, setHomepageUrl] = useState('');
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel | ''>('');
   const [basePrompt, setBasePrompt] = useState('');
   const [styleEnabled, setStyleEnabled] = useState(true);
@@ -38,13 +37,11 @@ export function OrganizationSettings({ slug }: { slug: string }) {
   useEffect(() => {
     if (!org) return;
     setName(org.name);
-    setHomepageUrl(org.homepageUrl ?? '');
     setSchoolLevel(org.schoolLevel ?? '');
     setBasePrompt(org.basePrompt ?? '');
     setStyleEnabled(org.styleEnabled);
   }, [
     org?.name,
-    org?.homepageUrl,
     org?.schoolLevel,
     org?.basePrompt,
     org?.styleEnabled,
@@ -86,7 +83,6 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         slug,
         patch: {
           name: name.trim(),
-          homepageUrl: homepageUrl.trim() || null,
           schoolLevel: schoolLevel ? schoolLevel : null,
           basePrompt: basePrompt.trim() || null,
           styleEnabled,
@@ -125,7 +121,8 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 학교명 + 홈페이지 URL 2단 (좁은 화면에서는 자동으로 세로 배치) */}
+            {/* 학교명 + URL 2단 (좁은 화면에서는 자동으로 세로 배치).
+                URL 은 조직 슬러그로 편집 불가. */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="org-name">학교명 (조직명)</Label>
@@ -139,31 +136,18 @@ export function OrganizationSettings({ slug }: { slug: string }) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="org-homepage">홈페이지 URL</Label>
+                <Label htmlFor="org-slug">URL</Label>
                 <Input
-                  id="org-homepage"
-                  type="url"
-                  value={homepageUrl}
-                  onChange={(e) => setHomepageUrl(e.target.value)}
-                  placeholder="https://…"
-                  maxLength={500}
-                  disabled={update.isPending}
+                  id="org-slug"
+                  value={`/${org.slug}`}
+                  readOnly
+                  disabled
+                  className="text-muted-foreground"
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  슬러그 변경은 이번 단계에서 지원하지 않아요.
+                </p>
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="org-slug">URL</Label>
-              <Input
-                id="org-slug"
-                value={`/${org.slug}`}
-                readOnly
-                disabled
-                className="text-muted-foreground"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                슬러그 변경은 이번 단계에서 지원하지 않아요.
-              </p>
             </div>
 
             {/* 학교급 버튼 그룹 — 개인 /settings 학교설정 화면과 동일한 UX */}
