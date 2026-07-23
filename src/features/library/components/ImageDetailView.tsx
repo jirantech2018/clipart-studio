@@ -289,7 +289,7 @@ export function ImageDetailView({ id }: { id: string }) {
 
       {image.isOwner && (
         <ShareToOrgDialog
-          imageId={image.id}
+          imageIds={[image.id]}
           open={shareDialogOpen}
           onClose={() => setShareDialogOpen(false)}
         />

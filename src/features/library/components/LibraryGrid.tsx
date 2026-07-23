@@ -5,7 +5,7 @@
 // P2a: 다중 선택 인프라 위에 [ZIP 다운로드] 액션을 하나만 노출. 나중에
 // [조직에 공유] 등의 액션이 추가되면 actions 배열에 항목을 얹기만 하면 됨.
 
-import { Download, Loader2 } from 'lucide-react';
+import { Download, Loader2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ import {
   downloadImagesAsZip,
   useMyImages,
 } from '@/features/library/hooks/useMyImages';
+import { ShareToOrgDialog } from '@/features/organization/components/ShareToOrgDialog';
 import { useIntersection } from '@/lib/hooks/useIntersection';
 import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 
@@ -29,13 +30,20 @@ export function LibraryGrid() {
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('newest');
   const [zipPending, setZipPending] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const selection = useMultiSelection('library');
 
-  // 페이지에서 벗어나면 선택 상태 초기화 (다시 들어왔을 때 지난 선택이 남아있지 않도록).
+  // 페이지에서 벗어나면 선택 상태 초기화.
   useEffect(() => {
     return () => selection.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 필터·정렬 변경 시에도 선택 초기화 (사용자 요구 B-2.5 §5).
+  useEffect(() => {
+    selection.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, sort]);
 
   const {
     data,
@@ -62,7 +70,7 @@ export function LibraryGrid() {
   const actions: MultiSelectAction[] = [
     {
       key: 'download-zip',
-      label: zipPending ? 'ZIP 만드는 중…' : 'ZIP 다운로드',
+      label: zipPending ? 'ZIP 만드는 중…' : `ZIP 다운로드 (${selection.count})`,
       icon: zipPending ? Loader2 : Download,
       variant: 'default',
       isPending: zipPending,
@@ -78,6 +86,15 @@ export function LibraryGrid() {
         } finally {
           setZipPending(false);
         }
+      },
+    },
+    {
+      key: 'share-orgs',
+      label: `조직에 공유 (${selection.count})`,
+      icon: Users,
+      variant: 'outline',
+      onClick: () => {
+        setShareDialogOpen(true);
       },
     },
   ];
@@ -151,6 +168,13 @@ export function LibraryGrid() {
         selectedIds={selection.selectedIds}
         actions={actions}
         onClear={selection.clear}
+      />
+
+      <ShareToOrgDialog
+        imageIds={selection.selectedIds}
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        onDone={() => selection.clear()}
       />
     </div>
   );

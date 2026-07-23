@@ -191,6 +191,78 @@ export function usePublishToCommunity(slug: string) {
   });
 }
 
+// P5-C Phase B-2.5: 개인 라이브러리에서 여러 이미지 × 여러 조직 배치 공유.
+// 조직 라이브러리까지만 이동하고 커뮤니티 공개는 절대 자동 승격되지 않는다.
+
+export interface ShareBatchResult {
+  createdCount: number;
+  duplicateCount: number;
+  skippedCount: number;
+  touchedOrgIds: string[];
+}
+
+export function useShareToMultipleOrgs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      imageIds: string[];
+      organizationIds: string[];
+    }): Promise<ShareBatchResult> => {
+      const res = await fetch('/api/images/share-organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '공유 실패');
+      }
+      const json = (await res.json()) as { data: ShareBatchResult };
+      return json.data;
+    },
+    onSuccess: (data, vars) => {
+      // 실제 새로 얹힌 조직 라이브러리 리스트를 새로고침.
+      for (const orgId of data.touchedOrgIds) {
+        // org-images 는 slug 키라 id 로는 매칭 안 됨. 대신 전체 invalidate.
+        qc.invalidateQueries({ queryKey: ['org-images'] });
+        void orgId; // 참조 유지
+        break;
+      }
+      // 개별 이미지 shared-orgs 캐시 무효화.
+      for (const id of vars.imageIds) {
+        qc.invalidateQueries({ queryKey: ['image-shared-orgs', id] });
+      }
+    },
+  });
+}
+
+export interface SharePreview {
+  eligibleImageCount: number;
+  perOrg: { organizationId: string; existingCount: number }[];
+}
+
+export function useSharePreview(imageIds: string[], enabled: boolean) {
+  return useQuery({
+    queryKey: ['share-preview', imageIds.slice().sort().join(',')] as const,
+    queryFn: async (): Promise<SharePreview> => {
+      const res = await fetch('/api/images/share-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageIds }),
+      });
+      if (!res.ok) {
+        throw new Error('preview 조회 실패');
+      }
+      const json = (await res.json()) as { data: SharePreview };
+      return json.data;
+    },
+    enabled: enabled && imageIds.length > 0,
+    staleTime: 30_000,
+  });
+}
+
 // P5-C Phase B-2: 조직 라이브러리 ZIP 다운로드.
 // 개인 라이브러리와 별도 endpoint 를 쓰기 때문에 downloadImagesAsZip 을
 // 확장하지 않고 여기 로컬 헬퍼로 둔다. 응답이 성공하면 브라우저 저장 다이얼로그.
