@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation';
 
 import { GenerationForm } from '@/features/generation/components/GenerationForm';
 import { BatchProgressPanel } from '@/features/generation/components/BatchProgressPanel';
+import { SchoolContextCard } from '@/features/generation/components/SchoolContextCard';
 import { ReferenceLibrarySection } from '@/features/references/components/ReferenceLibrarySection';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
@@ -131,9 +132,16 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
           orgContext={orgContext}
           orgAccessError={orgAccessError}
         />
-        {/* 조직 참조 이미지는 폼 내부 학교 설정 배너 안에서 인라인 관리한다.
-            개인 컨텍스트에서만 하단에 개인 참조 슬롯 카드 노출. */}
-        {!parent && !orgContext && <ReferenceLibrarySection />}
+        {/* 폼 아래에 개인 참조 이미지 카드 (개인/조직 무관하게 항상 표시).
+            그 아래에 학교 설정 적용 카드 — 우측 드롭다운으로 개인/조직 선택. */}
+        {!parent && <ReferenceLibrarySection />}
+        {!parent && (
+          <SchoolContextCard
+            orgContext={orgContext}
+            hasSchoolProfile={!!schoolProfile}
+            personalSchoolName={(schoolProfile?.school_name as string) ?? null}
+          />
+        )}
       </div>
       <div className="min-w-0">
         <BatchProgressPanel />

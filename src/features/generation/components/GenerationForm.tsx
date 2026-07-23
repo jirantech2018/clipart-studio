@@ -7,7 +7,7 @@
 //   - PresetChips are rendered
 //   - generationMode = 'img2img', referenceImageId is passed to the job
 
-import { Building2, Link as LinkIcon, Loader2, Sparkles, User, X } from 'lucide-react';
+import { Link as LinkIcon, Sparkles, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -20,17 +20,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { PresetChips } from '@/features/generation/components/PresetChips';
 import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCreateJob';
 import { usePromptSuggestions } from '@/features/generation/hooks/usePromptSuggestions';
-import { SchoolStyleToggle } from '@/features/generation/components/SchoolStyleToggle';
 import { useOrganizationReferenceImages } from '@/features/organization/hooks/useOrganizationReferenceImages';
-import { useMyOrganizations } from '@/features/organization/hooks/useOrganizations';
 import { useReferenceImages } from '@/features/references/hooks/useReferenceImages';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useGenerationDraftStore } from '@/lib/store/generationDraftStore';
 import { useGenerationStore } from '@/lib/store/generationStore';
 import { useOrgReferenceStore } from '@/lib/store/orgReferenceStore';
 import { useReferenceStore } from '@/lib/store/referenceStore';
+import { useSchoolApplyStore } from '@/lib/store/schoolApplyStore';
 import { cn } from '@/lib/utils';
-import { SCHOOL_LEVEL_LABELS } from '@/types/domain';
 
 import type { OrgGenerationContext } from '@/app/(main)/generate/page';
 import {
@@ -99,11 +97,15 @@ export function GenerationForm({
 
   const [prompt, setPrompt] = useState<string>(parent?.prompt ?? '');
   const [batchSize, setBatchSize] = useState<number>(5);
-  // 조직 컨텍스트일 때는 조직의 style_enabled 기본값을 반영. 개인 컨텍스트는
-  // 기존 hasSchoolProfile 동작 그대로.
-  const [schoolProfileApplied, setSchoolProfileApplied] = useState(
-    isOrgContext ? orgContext.styleEnabled : hasSchoolProfile,
-  );
+  // 학교 스타일 적용은 SchoolContextCard 와 공유. 페이지 진입 시 컨텍스트
+  // 기본값으로 초기화한다.
+  const schoolProfileApplied = useSchoolApplyStore((s) => s.applied);
+  const initSchoolApplied = useSchoolApplyStore((s) => s.initFromContext);
+  useEffect(() => {
+    initSchoolApplied(isOrgContext ? orgContext.styleEnabled : hasSchoolProfile);
+    // 슬러그가 바뀌거나 개인 프로필 유무가 변할 때만 초기화.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgContext?.slug, hasSchoolProfile]);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('square');
 
   // 참조 이미지 스토어 — 개인/조직 별도. 조직 컨텍스트에서는 개인 슬롯 선택
@@ -467,233 +469,10 @@ export function GenerationForm({
             </div>
           </div>
 
-          {/* 학교 설정 적용 배너 — 개인 vs 조직 컨텍스트 스위칭 + 상세 요약 */}
-          <SchoolContextBanner
-            orgContext={orgContext}
-            hasSchoolProfile={hasSchoolProfile}
-            personalSchoolName={schoolName}
-            checked={schoolProfileApplied}
-            onCheckedChange={setSchoolProfileApplied}
-          />
+          {/* 학교 스타일 적용 UI 는 폼 아래 SchoolContextCard 로 이동. */}
 
         </form>
       </CardContent>
     </Card>
-  );
-}
-
-// ─── School Context Banner ─────────────────────────────────────────
-// 학교 설정 소스 (개인 or 내가 속한 조직) 를 선택하고, 선택된 것의 학교
-// 설정 요약 + 스타일 적용 토글 + (조직인 경우) 참조 이미지 슬롯을 인라인으로
-// 노출한다. URL `?org=` 파라미터로 컨텍스트 상태를 저장 — 새로고침해도 유지.
-
-function SchoolContextBanner({
-  orgContext,
-  hasSchoolProfile,
-  personalSchoolName,
-  checked,
-  onCheckedChange,
-}: {
-  orgContext: OrgGenerationContext | null | undefined;
-  hasSchoolProfile: boolean;
-  personalSchoolName: string | null;
-  checked: boolean;
-  onCheckedChange: (next: boolean) => void;
-}) {
-  const router = useRouter();
-  const { data: orgListData, isLoading: orgsLoading } = useMyOrganizations();
-  const orgs = orgListData?.organizations ?? [];
-  const orgRefs = useOrganizationReferenceImages(orgContext?.slug ?? null);
-  const orgReferenceId = useOrgReferenceStore((s) => s.selectedOrgReferenceId);
-  const selectOrgReference = useOrgReferenceStore((s) => s.select);
-
-  const isOrg = !!orgContext;
-  const selectedSlug = orgContext?.slug ?? null;
-
-  function switchTo(slug: string | null) {
-    if (slug === selectedSlug) return;
-    router.replace(slug ? `/generate?org=${slug}` : '/generate');
-    router.refresh();
-  }
-
-  // 개인 컨텍스트에 개인 school_profile 조차 없으면 배너 자체 숨김 —
-  // 조직도 없으면 표시할 소스가 하나도 없음.
-  if (!isOrg && !hasSchoolProfile && orgs.length === 0) return null;
-
-  return (
-    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-medium">학교 설정 적용</div>
-        <div className="text-[10px] text-muted-foreground">
-          어느 학교 AI 설정을 쓸까요?
-        </div>
-      </div>
-
-      {/* 소스 선택 pills — 개인 / 각 조직 */}
-      <div className="flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          onClick={() => switchTo(null)}
-          aria-pressed={!isOrg}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-            !isOrg
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-input bg-background text-muted-foreground hover:bg-accent',
-          )}
-        >
-          <User className="h-3 w-3" aria-hidden="true" />
-          개인
-        </button>
-        {orgsLoading && orgs.length === 0 && (
-          <span className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            조직 목록…
-          </span>
-        )}
-        {orgs.map((org) => {
-          const active = org.slug === selectedSlug;
-          return (
-            <button
-              key={org.slug}
-              type="button"
-              onClick={() => switchTo(org.slug)}
-              aria-pressed={active}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                active
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-background text-muted-foreground hover:bg-accent',
-              )}
-            >
-              <Building2 className="h-3 w-3" aria-hidden="true" />
-              {org.name}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 선택된 소스 상세 */}
-      {isOrg && orgContext ? (
-        <div className="space-y-3 rounded-md bg-background p-3">
-          <div className="space-y-1 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">학교명</span>
-              <span className="font-medium">{orgContext.name}</span>
-            </div>
-            {orgContext.schoolLevel && (
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">학교급</span>
-                <span className="font-medium">
-                  {SCHOOL_LEVEL_LABELS[orgContext.schoolLevel]}
-                </span>
-              </div>
-            )}
-            {orgContext.basePrompt && (
-              <div className="space-y-0.5">
-                <div className="text-muted-foreground">기본 프롬프트</div>
-                <p
-                  className="line-clamp-2 rounded bg-muted/40 p-1.5 text-[11px] font-mono text-foreground"
-                  title={orgContext.basePrompt}
-                >
-                  {orgContext.basePrompt}
-                </p>
-              </div>
-            )}
-            <Link
-              href={`/organization/${orgContext.slug}/settings`}
-              className="text-[10px] text-primary underline-offset-4 hover:underline"
-            >
-              조직 설정 열기 →
-            </Link>
-          </div>
-
-          <SchoolStyleToggle
-            hasSchoolProfile
-            schoolName={orgContext.name}
-            checked={checked}
-            onChange={onCheckedChange}
-          />
-
-          {/* 조직 참조 이미지 슬롯 인라인 */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">조직 참조 이미지 (선택)</span>
-              <Link
-                href={`/organization/${orgContext.slug}/settings`}
-                className="text-[10px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                슬롯 관리
-              </Link>
-            </div>
-            {orgRefs.isLoading ? (
-              <div className="grid grid-cols-5 gap-1.5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="aspect-square animate-pulse rounded bg-muted"
-                    aria-hidden="true"
-                  />
-                ))}
-              </div>
-            ) : (orgRefs.data?.references.length ?? 0) === 0 ? (
-              <div className="rounded border border-dashed p-3 text-center text-[11px] text-muted-foreground">
-                조직 참조 이미지가 없어요.{' '}
-                <Link
-                  href={`/organization/${orgContext.slug}/settings`}
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  조직 설정에서 추가하기 →
-                </Link>
-              </div>
-            ) : (
-              <div className="grid grid-cols-5 gap-1.5">
-                {(orgRefs.data?.references ?? []).map((ref) => {
-                  const active = orgReferenceId === ref.id;
-                  return (
-                    <button
-                      key={ref.id}
-                      type="button"
-                      onClick={() => selectOrgReference(active ? null : ref.id)}
-                      aria-pressed={active}
-                      title={ref.filename ?? '참조 이미지'}
-                      className={cn(
-                        'group relative aspect-square overflow-hidden rounded border-2 bg-muted transition-all',
-                        active
-                          ? 'border-primary ring-2 ring-primary/30'
-                          : 'border-transparent hover:border-muted-foreground/40',
-                      )}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={ref.url}
-                        alt={ref.filename ?? '참조 이미지'}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        // 개인 컨텍스트 요약
-        <div className="rounded-md bg-background p-3">
-          <SchoolStyleToggle
-            hasSchoolProfile={hasSchoolProfile}
-            schoolName={personalSchoolName}
-            checked={checked}
-            onChange={onCheckedChange}
-          />
-          {!hasSchoolProfile && orgs.length > 0 && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              개인 학교 설정이 없어요. 위에서 조직을 선택하면 그 조직 AI 설정을 쓸 수 있어요.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
