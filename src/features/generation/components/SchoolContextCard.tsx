@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOrganizationReferenceImages } from '@/features/organization/hooks/useOrganizationReferenceImages';
 import { useMyOrganizations } from '@/features/organization/hooks/useOrganizations';
 import { useOrgReferenceStore } from '@/lib/store/orgReferenceStore';
+import { useReferenceStore } from '@/lib/store/referenceStore';
 import { useSchoolApplyStore } from '@/lib/store/schoolApplyStore';
 import { cn } from '@/lib/utils';
 import { SCHOOL_LEVEL_LABELS } from '@/types/domain';
@@ -38,6 +39,18 @@ export function SchoolContextCard({ orgContext }: Props) {
   const orgReferenceId = useOrgReferenceStore((s) => s.selectedOrgReferenceId);
   const selectOrgReference = useOrgReferenceStore((s) => s.select);
   const clearOrgReference = useOrgReferenceStore((s) => s.clear);
+  const clearCustomReference = useReferenceStore((s) => s.clear);
+
+  // 조직 참조를 새로 선택하면 개인 참조는 자동 해제 (상호 배타).
+  function toggleOrgReference(id: string) {
+    const active = orgReferenceId === id;
+    if (active) {
+      selectOrgReference(null);
+    } else {
+      clearCustomReference();
+      selectOrgReference(id);
+    }
+  }
 
   // 조직 선택 자체가 "학교 설정 적용" 을 의미. 별도 토글 없음 — 사용자가
   // 조직을 선택하면 자동 true, "설정 안 함" 이면 false.
@@ -162,7 +175,7 @@ export function SchoolContextCard({ orgContext }: Props) {
                       <button
                         key={ref.id}
                         type="button"
-                        onClick={() => selectOrgReference(active ? null : ref.id)}
+                        onClick={() => toggleOrgReference(ref.id)}
                         aria-pressed={active}
                         title={ref.filename ?? '참조 이미지'}
                         className={cn(

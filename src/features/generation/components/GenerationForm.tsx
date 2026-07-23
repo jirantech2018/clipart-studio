@@ -112,24 +112,23 @@ export function GenerationForm({
   const { data: orgReferenceData } = useOrganizationReferenceImages(
     isOrgContext ? orgContext.slug : null,
   );
-  const selectedReference = chaining
-    ? null
-    : isOrgContext
-      ? orgReferenceId
-        ? orgReferenceData?.references.find((r) => r.id === orgReferenceId) ?? null
-        : null
-      : customReferenceId
-        ? referenceData?.slots.find((s) => s.id === customReferenceId) ?? null
-        : null;
 
-  // 컨텍스트 스위칭 시 반대 스토어 초기화 — 개인/조직 자동 mix 방지 안전장치.
-  useEffect(() => {
-    if (isOrgContext) {
-      clearCustomReference();
-    } else {
-      clearOrgReference();
-    }
-  }, [isOrgContext, clearCustomReference, clearOrgReference]);
+  // 상단 참조 이미지 표시: 컨텍스트에 상관없이 개인/조직 스토어 어느 쪽이
+  // 세팅됐든 그 슬롯을 상단에 노출한다. 두 카드가 상호 배타적으로 clear 되어
+  // 있어 동시에 두 개가 세팅되는 일은 없다.
+  const personalSlot =
+    !chaining && customReferenceId
+      ? referenceData?.slots.find((s) => s.id === customReferenceId) ?? null
+      : null;
+  const orgSlot =
+    !chaining && orgReferenceId
+      ? orgReferenceData?.references.find((r) => r.id === orgReferenceId) ?? null
+      : null;
+  const selectedReference = personalSlot ?? orgSlot;
+  const isSelectedFromOrg = !!orgSlot && !personalSlot;
+  const clearSelectedReference = isSelectedFromOrg
+    ? clearOrgReference
+    : clearCustomReference;
 
   // 우측 BatchProgressPanel 이 idle 상태에서도 빈 슬롯을 미리 그리도록,
   // 배치 크기/이미지 비율이 바뀌면 draft store 로 push.
@@ -155,13 +154,10 @@ export function GenerationForm({
   async function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    // 조직 컨텍스트일 때는 개인 customReferenceId 대신 orgReferenceId 를 사용.
-    // 서버 계약(P5-D-C 다음 슬라이스)에서 orgSlug / orgReferenceId 를 정식으로
-    // 소비하기 전까지는, 우선 기존 customReferenceId 자리로 orgReferenceId 를
-    // 보내지 않고 null 을 넘긴다 (개인 리소스와 충돌 방지). 즉 지금은 프롬프트
-    // + 조직 컨텍스트 배지만 클라이언트에 반영되며, 실제 조직 참조 이미지
-    // 파이프라인은 다음 세션에서 연결.
-    const effectiveCustomRef = chaining || isOrgContext ? null : customReferenceId;
+    // 개인 참조는 그대로 서버로 전달. 조직 참조는 다음 슬라이스에서 서버
+    // 파이프라인이 orgSlug + orgReferenceId 로 소비하기 전까지는 클라이언트
+    // 상태에만 유지 (개인 슬롯 자리로 보내지 않음).
+    const effectiveCustomRef = chaining ? null : customReferenceId;
     const parsed = createJobSchema.safeParse({
       prompt,
       batchSize,
@@ -261,7 +257,7 @@ export function GenerationForm({
               />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium">
-                  {isOrgContext ? '조직 참조 이미지' : '참조 이미지'}
+                  {isSelectedFromOrg ? '조직 참조 이미지' : '개인 참조 이미지'}
                 </p>
                 <p
                   className="line-clamp-2 text-xs text-muted-foreground"
@@ -271,7 +267,7 @@ export function GenerationForm({
                 </p>
                 <Link
                   href={
-                    isOrgContext && orgContext
+                    isSelectedFromOrg && orgContext
                       ? `/organization/${orgContext.slug}/settings`
                       : '/profile'
                   }
@@ -282,7 +278,7 @@ export function GenerationForm({
               </div>
               <button
                 type="button"
-                onClick={isOrgContext ? clearOrgReference : clearCustomReference}
+                onClick={clearSelectedReference}
                 disabled={inFlight}
                 className="rounded p-1 text-muted-foreground hover:bg-accent"
                 aria-label="참조 이미지 해제"

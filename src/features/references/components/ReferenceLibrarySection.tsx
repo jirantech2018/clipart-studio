@@ -10,16 +10,29 @@ import Link from 'next/link';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useReferenceImages } from '@/features/references/hooks/useReferenceImages';
-import { useReferenceStore } from '@/lib/store/referenceStore';
 import { useGenerationStore } from '@/lib/store/generationStore';
+import { useOrgReferenceStore } from '@/lib/store/orgReferenceStore';
+import { useReferenceStore } from '@/lib/store/referenceStore';
 import { cn } from '@/lib/utils';
 
 export function ReferenceLibrarySection() {
   const { data, isLoading } = useReferenceImages();
   const selectedReferenceId = useReferenceStore((s) => s.selectedReferenceId);
   const select = useReferenceStore((s) => s.select);
+  const clearOrgReference = useOrgReferenceStore((s) => s.clear);
   const streamStatus = useGenerationStore((s) => s.streamStatus);
   const inFlight = streamStatus === 'starting' || streamStatus === 'streaming';
+
+  // 개인 참조를 새로 선택하면 조직 참조는 해제해서 상단에 하나만 뜨도록 한다.
+  function toggleSelect(id: string) {
+    const active = selectedReferenceId === id;
+    if (active) {
+      select(null);
+    } else {
+      clearOrgReference();
+      select(id);
+    }
+  }
 
   const slots = data?.slots ?? [];
 
@@ -58,7 +71,7 @@ export function ReferenceLibrarySection() {
                   key={slot.id}
                   type="button"
                   disabled={inFlight}
-                  onClick={() => select(active ? null : slot.id)}
+                  onClick={() => toggleSelect(slot.id)}
                   aria-pressed={active}
                   title={slot.filename ?? '참조 이미지'}
                   className={cn(
