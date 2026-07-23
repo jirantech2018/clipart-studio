@@ -4,7 +4,7 @@
 // the detail page. Actions (download) + download count appear on hover.
 
 import { useQueryClient } from '@tanstack/react-query';
-import { Download, Loader2 } from 'lucide-react';
+import { Building2, Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -76,8 +76,17 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
         />
       </div>
 
-      <div className="pointer-events-none absolute right-2 top-2">
+      <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1">
         <AIGeneratedBadge />
+        {image.sourceOrgSlug && image.sourceOrgName && (
+          <span
+            className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm"
+            title={`${image.sourceOrgName} 에서 큐레이션됨`}
+          >
+            <Building2 className="h-3 w-3" aria-hidden="true" />
+            {image.sourceOrgName}
+          </span>
+        )}
       </div>
 
       <div className="absolute bottom-2 right-2 flex items-center gap-1.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">

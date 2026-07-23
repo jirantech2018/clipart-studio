@@ -118,13 +118,12 @@ export async function POST(request: Request, { params }: { params: { slug: strin
     return apiError('INTERNAL_ERROR', '공개 처리 실패');
   }
 
-  // 활동 로그
+  // 활동 로그 — Phase B-3 이후 전용 activity type 사용.
   await service.from('organization_activity_logs').insert({
     organization_id: orgId,
     actor_user_id: user.id,
-    activity_type: 'image_shared', // TODO(phase-B): 전용 activity type 검토
+    activity_type: 'community_published',
     metadata: {
-      action: 'community_publish',
       image_ids: eligibleIds,
       count: count ?? eligibleIds.length,
     },
@@ -190,9 +189,8 @@ export async function DELETE(request: Request, { params }: { params: { slug: str
   await service.from('organization_activity_logs').insert({
     organization_id: orgId,
     actor_user_id: user.id,
-    activity_type: 'image_unshared', // TODO(phase-B): 전용 activity type 검토
+    activity_type: 'community_unpublished',
     metadata: {
-      action: 'community_unpublish',
       image_ids: body.imageIds,
       count: count ?? 0,
     },

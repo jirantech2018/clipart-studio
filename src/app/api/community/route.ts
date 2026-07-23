@@ -35,6 +35,9 @@ interface CommunityImage {
   authorType: AccountType;
   authorSchoolName: string | null;
   downloadCount: number;
+  /** 이 이미지를 공유 라이브러리에 큐레이션한 조직. Grandfather 는 null. */
+  sourceOrgSlug: string | null;
+  sourceOrgName: string | null;
 }
 
 function rowToImage(row: Record<string, unknown>): CommunityImage {
@@ -60,6 +63,8 @@ function rowToImage(row: Record<string, unknown>): CommunityImage {
     authorType: row.author_type as AccountType,
     authorSchoolName: (row.author_school_name as string) ?? null,
     downloadCount: Number(row.download_count ?? 0),
+    sourceOrgSlug: (row.source_organization_slug as string) ?? null,
+    sourceOrgName: (row.source_organization_name as string) ?? null,
   };
 }
 

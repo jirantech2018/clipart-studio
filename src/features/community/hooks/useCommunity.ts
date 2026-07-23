@@ -26,6 +26,9 @@ export interface CommunityImage {
   authorType: AccountType;
   authorSchoolName: string | null;
   downloadCount: number;
+  /** 큐레이션 출처 조직. Grandfather 이미지는 null. */
+  sourceOrgSlug: string | null;
+  sourceOrgName: string | null;
 }
 
 interface CommunityResponse {
