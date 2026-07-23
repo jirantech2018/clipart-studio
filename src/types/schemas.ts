@@ -11,7 +11,13 @@ export const accountTypeSchema = z.enum([
   'general',
 ]);
 
-export const schoolLevelSchema = z.enum(['elementary', 'middle', 'high']);
+export const schoolLevelSchema = z.enum([
+  'kindergarten',
+  'elementary',
+  'middle',
+  'high',
+  'other',
+]);
 
 export const updateProfileSchema = z.object({
   accountType: accountTypeSchema.optional(),

@@ -13,24 +13,21 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { OrgLogoUploader } from '@/features/organization/components/OrgLogoUploader';
 import { OrgReferenceImagesSection } from '@/features/organization/components/OrgReferenceImagesSection';
 import {
   useOrganization,
   useUpdateOrganization,
 } from '@/features/organization/hooks/useOrganizations';
-import { SCHOOL_LEVEL_LABELS } from '@/types/domain';
+import { cn } from '@/lib/utils';
+import { SCHOOL_LEVEL_LABELS, SCHOOL_LEVEL_ORDER } from '@/types/domain';
 
 import type { SchoolLevel } from '@/types/domain';
-
-const LEVELS: SchoolLevel[] = ['elementary', 'middle', 'high'];
 
 export function OrganizationSettings({ slug }: { slug: string }) {
   const { data, isLoading } = useOrganization(slug);
   const update = useUpdateOrganization();
 
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [homepageUrl, setHomepageUrl] = useState('');
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel | ''>('');
   const [basePrompt, setBasePrompt] = useState('');
@@ -41,14 +38,12 @@ export function OrganizationSettings({ slug }: { slug: string }) {
   useEffect(() => {
     if (!org) return;
     setName(org.name);
-    setDescription(org.description ?? '');
     setHomepageUrl(org.homepageUrl ?? '');
     setSchoolLevel(org.schoolLevel ?? '');
     setBasePrompt(org.basePrompt ?? '');
     setStyleEnabled(org.styleEnabled);
   }, [
     org?.name,
-    org?.description,
     org?.homepageUrl,
     org?.schoolLevel,
     org?.basePrompt,
@@ -91,7 +86,6 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         slug,
         patch: {
           name: name.trim(),
-          description: description.trim(),
           homepageUrl: homepageUrl.trim() || null,
           schoolLevel: schoolLevel ? schoolLevel : null,
           basePrompt: basePrompt.trim() || null,
@@ -131,17 +125,33 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="org-name">학교명 (조직명)</Label>
-              <Input
-                id="org-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                maxLength={100}
-                disabled={update.isPending}
-              />
+            {/* 학교명 + 홈페이지 URL 2단 (좁은 화면에서는 자동으로 세로 배치) */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="org-name">학교명 (조직명)</Label>
+                <Input
+                  id="org-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  maxLength={100}
+                  disabled={update.isPending}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="org-homepage">홈페이지 URL</Label>
+                <Input
+                  id="org-homepage"
+                  type="url"
+                  value={homepageUrl}
+                  onChange={(e) => setHomepageUrl(e.target.value)}
+                  placeholder="https://…"
+                  maxLength={500}
+                  disabled={update.isPending}
+                />
+              </div>
             </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="org-slug">URL</Label>
               <Input
@@ -155,50 +165,33 @@ export function OrganizationSettings({ slug }: { slug: string }) {
                 슬러그 변경은 이번 단계에서 지원하지 않아요.
               </p>
             </div>
+
+            {/* 학교급 버튼 그룹 — 개인 /settings 학교설정 화면과 동일한 UX */}
             <div className="space-y-1.5">
-              <Label htmlFor="org-description">설명</Label>
-              <textarea
-                id="org-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                maxLength={500}
-                disabled={update.isPending}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="조직 소개를 짧게 적어주세요"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="org-homepage">홈페이지 URL</Label>
-              <Input
-                id="org-homepage"
-                type="url"
-                value={homepageUrl}
-                onChange={(e) => setHomepageUrl(e.target.value)}
-                placeholder="https://…"
-                maxLength={500}
-                disabled={update.isPending}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>로고 이미지</Label>
-              <OrgLogoUploader slug={slug} currentUrl={org.avatarUrl} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="org-level">학교급</Label>
-              <select
-                id="org-level"
-                value={schoolLevel}
-                onChange={(e) => setSchoolLevel(e.target.value as SchoolLevel | '')}
-                disabled={update.isPending}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">선택 안 함</option>
-                {LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl}>
-                    {SCHOOL_LEVEL_LABELS[lvl]}
-                  </option>
-                ))}
-              </select>
+              <Label>학교급</Label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {SCHOOL_LEVEL_ORDER.map((lvl) => {
+                  const selected = schoolLevel === lvl;
+                  return (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => setSchoolLevel(selected ? '' : lvl)}
+                      disabled={update.isPending}
+                      aria-pressed={selected}
+                      className={cn(
+                        'inline-flex h-9 items-center justify-center rounded-md border px-3 text-xs font-medium transition-colors',
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                          : 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground',
+                        update.isPending && 'cursor-not-allowed opacity-50',
+                      )}
+                    >
+                      {SCHOOL_LEVEL_LABELS[lvl]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="base-prompt">기본 프롬프트</Label>

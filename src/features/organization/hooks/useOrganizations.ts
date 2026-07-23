@@ -88,7 +88,7 @@ export interface UpdateOrganizationInput {
     avatarUrl?: string | null;
     maxVisibility?: 'private' | 'organization' | 'authenticated' | 'public';
     // 통합된 조직 설정 = 학교 AI 생성 설정
-    schoolLevel?: 'elementary' | 'middle' | 'high' | null;
+    schoolLevel?: 'kindergarten' | 'elementary' | 'middle' | 'high' | 'other' | null;
     basePrompt?: string | null;
     styleEnabled?: boolean;
   };

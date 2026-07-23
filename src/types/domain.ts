@@ -2,7 +2,7 @@
 // Design Ref: §3.1 Entity Definition
 
 export type AccountType = 'teacher' | 'student' | 'school' | 'school_staff' | 'general';
-export type SchoolLevel = 'elementary' | 'middle' | 'high';
+export type SchoolLevel = 'kindergarten' | 'elementary' | 'middle' | 'high' | 'other';
 export type ImageStatus = 'pending' | 'saved' | 'discarded';
 
 // 이미지의 접근 범위. 각 값은 누적적 (public 이 가장 넓음):
@@ -116,10 +116,21 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 };
 
 export const SCHOOL_LEVEL_LABELS: Record<SchoolLevel, string> = {
+  kindergarten: '유치원',
   elementary: '초등학교',
   middle: '중학교',
   high: '고등학교',
+  other: '특수학교 · 기타',
 };
+
+/** 조직 설정 폼의 학교급 버튼 그룹 표시 순서. */
+export const SCHOOL_LEVEL_ORDER: SchoolLevel[] = [
+  'kindergarten',
+  'elementary',
+  'middle',
+  'high',
+  'other',
+];
 
 export const ACCOUNT_TYPE_BADGE: Record<AccountType, string> = {
   teacher: '👤',
