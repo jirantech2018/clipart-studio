@@ -8,7 +8,6 @@ import { redirect } from 'next/navigation';
 
 import { GenerationForm } from '@/features/generation/components/GenerationForm';
 import { BatchProgressPanel } from '@/features/generation/components/BatchProgressPanel';
-import { OrgReferenceLibrarySection } from '@/features/references/components/OrgReferenceLibrarySection';
 import { ReferenceLibrarySection } from '@/features/references/components/ReferenceLibrarySection';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
@@ -132,9 +131,8 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
           orgContext={orgContext}
           orgAccessError={orgAccessError}
         />
-        {!parent && orgContext && (
-          <OrgReferenceLibrarySection slug={orgContext.slug} orgName={orgContext.name} />
-        )}
+        {/* 조직 참조 이미지는 폼 내부 학교 설정 배너 안에서 인라인 관리한다.
+            개인 컨텍스트에서만 하단에 개인 참조 슬롯 카드 노출. */}
         {!parent && !orgContext && <ReferenceLibrarySection />}
       </div>
       <div className="min-w-0">
