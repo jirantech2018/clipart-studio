@@ -1,10 +1,13 @@
 'use client';
 
+// 학교설정 항목은 P5-D-A 이후 각 조직의 설정 페이지로 이동. 개인 프로필
+// (개인 컨텍스트) 의 school_profiles 는 병존하지만 사이드바 진입점은 없앤다.
+// 기존 사용자는 /settings URL 로 직접 접근 가능 (계정 메뉴 통합은 후속 세션).
+
 import {
   Building2,
   Home,
   Image as ImageIcon,
-  School,
   Shield,
   Sparkles,
   Users,
@@ -23,11 +26,10 @@ const NAV_ITEMS = [
 ];
 
 interface AppSidebarProps {
-  hasSchoolProfile: boolean;
   isAdmin: boolean;
 }
 
-export function AppSidebar({ hasSchoolProfile, isAdmin }: AppSidebarProps) {
+export function AppSidebar({ isAdmin }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -53,34 +55,22 @@ export function AppSidebar({ hasSchoolProfile, isAdmin }: AppSidebarProps) {
           );
         })}
 
-        <div className="border-t pt-2" />
-
-        <Link
-          href="/settings"
-          className={cn(
-            'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-            pathname === '/settings'
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-          )}
-        >
-          <School className="h-4 w-4" aria-hidden="true" />
-          {hasSchoolProfile ? '학교설정' : '학교설정 추가'}
-        </Link>
-
         {isAdmin && (
-          <Link
-            href="/admin"
-            className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              pathname === '/admin'
-                ? 'bg-accent text-accent-foreground'
-                : 'text-primary hover:bg-accent',
-            )}
-          >
-            <Shield className="h-4 w-4" aria-hidden="true" />
-            관리자 · 학습 공간
-          </Link>
+          <>
+            <div className="border-t pt-2" />
+            <Link
+              href="/admin"
+              className={cn(
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                pathname === '/admin'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-primary hover:bg-accent',
+              )}
+            >
+              <Shield className="h-4 w-4" aria-hidden="true" />
+              관리자 · 학습 공간
+            </Link>
+          </>
         )}
       </nav>
     </aside>

@@ -35,12 +35,6 @@ export default async function MainLayout({ children }: PropsWithChildren) {
     .eq('id', user.id)
     .single();
 
-  const { data: schoolProfile } = await supabase
-    .from('school_profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
   return (
     <div className="flex min-h-screen flex-col">
       <AppHeader
@@ -48,7 +42,7 @@ export default async function MainLayout({ children }: PropsWithChildren) {
         creditsResetAt={profile?.credits_reset_at ?? null}
       />
       <div className="flex flex-1">
-        <AppSidebar hasSchoolProfile={!!schoolProfile} isAdmin={isAdmin(user.email)} />
+        <AppSidebar isAdmin={isAdmin(user.email)} />
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
