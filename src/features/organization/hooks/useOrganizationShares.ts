@@ -191,6 +191,45 @@ export function usePublishToCommunity(slug: string) {
   });
 }
 
+// P5-C Phase B-2: 조직 라이브러리 ZIP 다운로드.
+// 개인 라이브러리와 별도 endpoint 를 쓰기 때문에 downloadImagesAsZip 을
+// 확장하지 않고 여기 로컬 헬퍼로 둔다. 응답이 성공하면 브라우저 저장 다이얼로그.
+export async function downloadOrgImagesAsZip(
+  slug: string,
+  imageIds: string[],
+): Promise<void> {
+  const res = await fetch(`/api/organizations/${slug}/download-zip`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageIds }),
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as {
+      error?: { message?: string };
+    } | null;
+    throw new Error(json?.error?.message ?? 'ZIP 다운로드 실패');
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  const filename = utf8Match?.[1]
+    ? decodeURIComponent(utf8Match[1])
+    : `${slug}-${new Date().toISOString().slice(0, 10)}.zip`;
+
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 500);
+  }
+}
+
 export function useUnpublishFromCommunity(slug: string) {
   const qc = useQueryClient();
   return useMutation({

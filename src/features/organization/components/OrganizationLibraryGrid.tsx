@@ -1,23 +1,40 @@
 'use client';
 
 // 조직에 공유된 이미지 그리드. LibraryGrid 와 유사한 무한 스크롤 패턴.
-// P5-C Phase B-1: 공개 상태 필터 (전체/미공개/공유 라이브러리 공개 중) +
-// owner 전용 단일 공개·해제 액션 (카드 hover).
-// multi-select / ZIP 은 Phase B-2 로 미룸.
+// P5-C Phase B-2: multi-select 인프라 + 액션바 (ZIP · owner 전용 공개/해제/제거).
+//
+// 다중선택 대상 자동 필터 정책 (사용자 결정 - a):
+//   선택된 이미지가 여러 상태로 섞여 있어도 액션을 막지 않는다. 각 액션은
+//   자기 자격에 맞는 이미지만 대상으로 삼고, 대상 개수를 버튼 라벨에
+//   표시한다. 대상 0 이면 비활성화. 완료 후 성공/제외/실패 개수를 toast 로.
 
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Globe2, GlobeLock, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
+import { MultiSelectActionBar } from '@/components/multiselect/MultiSelectActionBar';
+import type { MultiSelectAction } from '@/components/multiselect/MultiSelectActionBar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { OrganizationImageCard } from '@/features/organization/components/OrganizationImageCard';
-import { useOrganizationImages } from '@/features/organization/hooks/useOrganizationShares';
+import {
+  OrganizationImageCard,
+  resolveStatus,
+} from '@/features/organization/components/OrganizationImageCard';
+import {
+  downloadOrgImagesAsZip,
+  useOrganizationImages,
+  usePublishToCommunity,
+  useUnpublishFromCommunity,
+  useUnshareImage,
+} from '@/features/organization/hooks/useOrganizationShares';
 import { useOrganization } from '@/features/organization/hooks/useOrganizations';
 import { useIntersection } from '@/lib/hooks/useIntersection';
+import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 import { cn } from '@/lib/utils';
 
 import type { OrgLibraryFilter } from '@/features/organization/hooks/useOrganizationShares';
+import type { SelectionScope } from '@/lib/store/selectionStore';
 
 const FILTER_LABELS: Record<OrgLibraryFilter, string> = {
   all: '전체',
@@ -33,6 +50,8 @@ export function OrganizationLibraryGrid({
   currentUserId: string;
 }) {
   const [filter, setFilter] = useState<OrgLibraryFilter>('all');
+  const [zipPending, setZipPending] = useState(false);
+  const [batchUnsharePending, setBatchUnsharePending] = useState(false);
   const { data: orgData, isLoading: orgLoading } = useOrganization(slug);
   const {
     data,
@@ -45,11 +64,69 @@ export function OrganizationLibraryGrid({
   } = useOrganizationImages(slug, filter, 'newest');
 
   const org = orgData?.organization;
-  // owner 만 커뮤니티 승격/해제 액션과 다른 사람 이미지 조직 제거가 가능.
   const isOrgOwner = org?.myRole === 'owner';
   const orgId = org?.id ?? null;
 
-  const images = data?.pages.flatMap((p) => p.images) ?? [];
+  const selectionScope: SelectionScope = `organization:${slug}`;
+  const selection = useMultiSelection(selectionScope);
+
+  const publish = usePublishToCommunity(slug);
+  const unpublish = useUnpublishFromCommunity(slug);
+  const unshare = useUnshareImage();
+
+  const images = useMemo(
+    () => data?.pages.flatMap((p) => p.images) ?? [],
+    [data],
+  );
+
+  // id → image 매핑. 액션 자격 판단에 사용.
+  const imageIndex = useMemo(() => {
+    const map = new Map(images.map((i) => [i.id, i]));
+    return map;
+  }, [images]);
+
+  // 현재 선택된 것 중 로드된 이미지들만 (다른 페이지에 있어도 store 에는 있을 수 있음).
+  const selectedResolved = useMemo(
+    () =>
+      selection.selectedIds
+        .map((id) => imageIndex.get(id))
+        .filter((v): v is NonNullable<typeof v> => !!v),
+    [selection.selectedIds, imageIndex],
+  );
+
+  const publishTargetIds = useMemo(
+    () =>
+      selectedResolved
+        .filter((img) => resolveStatus(img, orgId) === 'unpublished')
+        .map((img) => img.id),
+    [selectedResolved, orgId],
+  );
+  const unpublishTargetIds = useMemo(
+    () =>
+      selectedResolved
+        .filter((img) => resolveStatus(img, orgId) === 'publishedByThisOrg')
+        .map((img) => img.id),
+    [selectedResolved, orgId],
+  );
+  // ZIP / 조직에서 제거는 선택된 전부 대상.
+  const totalSelectedIds = selection.selectedIds;
+  // "조직에서 제거" 안내 — 이 조직 소스로 커뮤니티 공개 중인 게 포함되면 표시.
+  const removeAlsoUnpublishes = useMemo(
+    () =>
+      selectedResolved.filter((img) => resolveStatus(img, orgId) === 'publishedByThisOrg')
+        .length,
+    [selectedResolved, orgId],
+  );
+
+  // 필터·조직 변경 시 선택 초기화. 페이지 언마운트 시에도.
+  useEffect(() => {
+    selection.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, filter]);
+  useEffect(() => {
+    return () => selection.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onSentinel = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -60,6 +137,183 @@ export function OrganizationLibraryGrid({
   const sentinelRef = useIntersection(onSentinel, {
     enabled: hasNextPage && !isFetchingNextPage,
   });
+
+  // 배치 액션 핸들러들.
+
+  async function handleBatchPublish() {
+    const targets = publishTargetIds;
+    const excluded = selection.count - targets.length;
+    if (targets.length === 0) return;
+    if (
+      !confirm(
+        `${targets.length}개 이미지를 공유 라이브러리에 공개할까요?` +
+          (excluded > 0 ? `\n(대상 아님으로 제외: ${excluded}개)` : ''),
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await publish.mutateAsync(targets);
+      const success = res.publishedCount;
+      const serverSkipped = res.skippedCount;
+      const totalExcluded = excluded + serverSkipped;
+      toast.success(
+        totalExcluded > 0
+          ? `공개 완료 ${success}개 · 제외 ${totalExcluded}개`
+          : `공개 완료 ${success}개`,
+      );
+      selection.clear();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '공개 실패');
+    }
+  }
+
+  async function handleBatchUnpublish() {
+    const targets = unpublishTargetIds;
+    const excluded = selection.count - targets.length;
+    if (targets.length === 0) return;
+    if (
+      !confirm(
+        `${targets.length}개 이미지를 공유 라이브러리에서 해제할까요?` +
+          (excluded > 0 ? `\n(대상 아님으로 제외: ${excluded}개)` : ''),
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await unpublish.mutateAsync(targets);
+      const success = res.unpublishedCount;
+      const serverSkipped = targets.length - success;
+      const totalExcluded = excluded + serverSkipped;
+      toast.success(
+        totalExcluded > 0
+          ? `해제 완료 ${success}개 · 제외 ${totalExcluded}개`
+          : `해제 완료 ${success}개`,
+      );
+      selection.clear();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '해제 실패');
+    }
+  }
+
+  async function handleBatchZip() {
+    if (zipPending) return;
+    const ids = totalSelectedIds;
+    if (ids.length === 0) return;
+    setZipPending(true);
+    try {
+      await downloadOrgImagesAsZip(slug, ids);
+      toast.success('다운로드를 시작했어요');
+      selection.clear();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'ZIP 다운로드 실패');
+    } finally {
+      setZipPending(false);
+    }
+  }
+
+  async function handleBatchRemove() {
+    if (batchUnsharePending) return;
+    const ids = totalSelectedIds;
+    if (ids.length === 0) return;
+    const notice =
+      removeAlsoUnpublishes > 0
+        ? `\n\n선택 중 ${removeAlsoUnpublishes}개는 현재 조직을 통해 공유 라이브러리에도 공개돼 있어요. 조직에서 제거하면 공유 라이브러리에서도 자동으로 내려갑니다.`
+        : '';
+    if (
+      !confirm(
+        `${ids.length}개 이미지를 조직 라이브러리에서 내릴까요? (원본은 그대로 유지됩니다)${notice}`,
+      )
+    ) {
+      return;
+    }
+    setBatchUnsharePending(true);
+    // 개별 unshare 를 병렬 처리하고 개별 결과 집계.
+    let success = 0;
+    let failed = 0;
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          await unshare.mutateAsync({ slug, imageId: id });
+          success += 1;
+        } catch {
+          failed += 1;
+        }
+      }),
+    );
+    setBatchUnsharePending(false);
+    if (failed === 0) {
+      toast.success(`조직에서 내렸어요 ${success}개`);
+    } else {
+      toast.error(`제거 ${success}개 · 실패 ${failed}개`);
+    }
+    selection.clear();
+  }
+
+  const actions: MultiSelectAction[] = useMemo(() => {
+    const list: MultiSelectAction[] = [];
+
+    list.push({
+      key: 'download-zip',
+      label: zipPending
+        ? 'ZIP 만드는 중…'
+        : `ZIP 다운로드 (${totalSelectedIds.length})`,
+      icon: zipPending ? Loader2 : Download,
+      variant: 'default',
+      isPending: zipPending,
+      onClick: handleBatchZip,
+      disabled: totalSelectedIds.length === 0,
+    });
+
+    if (isOrgOwner) {
+      list.push({
+        key: 'publish',
+        label: publish.isPending
+          ? '공개 중…'
+          : `공유 라이브러리 공개 (${publishTargetIds.length})`,
+        icon: publish.isPending ? Loader2 : Globe2,
+        variant: 'outline',
+        isPending: publish.isPending,
+        onClick: handleBatchPublish,
+        disabled: publishTargetIds.length === 0,
+      });
+      list.push({
+        key: 'unpublish',
+        label: unpublish.isPending
+          ? '해제 중…'
+          : `공유 라이브러리 해제 (${unpublishTargetIds.length})`,
+        icon: unpublish.isPending ? Loader2 : GlobeLock,
+        variant: 'outline',
+        isPending: unpublish.isPending,
+        onClick: handleBatchUnpublish,
+        disabled: unpublishTargetIds.length === 0,
+      });
+    }
+
+    list.push({
+      key: 'remove',
+      label: batchUnsharePending
+        ? '제거 중…'
+        : `조직에서 제거 (${totalSelectedIds.length})`,
+      icon: batchUnsharePending ? Loader2 : Trash2,
+      variant: 'destructive',
+      isPending: batchUnsharePending,
+      onClick: handleBatchRemove,
+      disabled: totalSelectedIds.length === 0,
+    });
+
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    zipPending,
+    publish.isPending,
+    unpublish.isPending,
+    batchUnsharePending,
+    totalSelectedIds.length,
+    publishTargetIds.length,
+    unpublishTargetIds.length,
+    isOrgOwner,
+  ]);
 
   if (orgLoading) {
     return <div className="h-40 animate-pulse rounded-lg bg-muted" />;
@@ -148,6 +402,7 @@ export function OrganizationLibraryGrid({
                 <OrganizationImageCard
                   slug={slug}
                   orgId={orgId}
+                  selectionScope={selectionScope}
                   image={image}
                   canUnshare={image.userId === currentUserId || isOrgOwner}
                   isOrgOwner={isOrgOwner}
@@ -168,12 +423,18 @@ export function OrganizationLibraryGrid({
           )}
           {!hasNextPage && (
             <div className="flex justify-center py-4 text-xs text-muted-foreground">
-              <Loader2 className="mr-1 h-3 w-3 opacity-0" aria-hidden="true" />
               모두 불러왔어요
             </div>
           )}
         </>
       )}
+
+      <MultiSelectActionBar
+        count={selection.count}
+        selectedIds={totalSelectedIds}
+        actions={actions}
+        onClear={selection.clear}
+      />
     </div>
   );
 }

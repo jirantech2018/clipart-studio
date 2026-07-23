@@ -21,19 +21,22 @@ import { toast } from 'sonner';
 
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 import { Button } from '@/components/ui/button';
+import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { downloadImageFile } from '@/features/library/hooks/useMyImages';
 import {
   usePublishToCommunity,
   useUnpublishFromCommunity,
   useUnshareImage,
 } from '@/features/organization/hooks/useOrganizationShares';
+import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 import { cn } from '@/lib/utils';
 
 import type { OrganizationImage } from '@/features/organization/hooks/useOrganizationShares';
+import type { SelectionScope } from '@/lib/store/selectionStore';
 
-type PublishStatus = 'unpublished' | 'publishedByThisOrg' | 'grandfather' | 'publishedByOtherOrg';
+export type PublishStatus = 'unpublished' | 'publishedByThisOrg' | 'grandfather' | 'publishedByOtherOrg';
 
-function resolveStatus(
+export function resolveStatus(
   image: OrganizationImage,
   currentOrgId: string | null,
 ): PublishStatus {
@@ -62,12 +65,14 @@ const STATUS_TONE: Record<PublishStatus, string> = {
 export function OrganizationImageCard({
   slug,
   orgId,
+  selectionScope,
   image,
   canUnshare,
   isOrgOwner,
 }: {
   slug: string;
   orgId: string | null;
+  selectionScope: SelectionScope;
   image: OrganizationImage;
   canUnshare: boolean;
   isOrgOwner: boolean;
@@ -76,6 +81,8 @@ export function OrganizationImageCard({
   const unshare = useUnshareImage();
   const publish = usePublishToCommunity(slug);
   const unpublish = useUnpublishFromCommunity(slug);
+  const selection = useMultiSelection(selectionScope);
+  const selected = selection.isSelected(image.id);
 
   const status = resolveStatus(image, orgId);
   const busy = publish.isPending || unpublish.isPending;
@@ -123,7 +130,10 @@ export function OrganizationImageCard({
 
   return (
     <div
-      className="group relative overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow"
+      className={cn(
+        'group relative overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow',
+        selected && 'ring-2 ring-primary ring-offset-2',
+      )}
       style={{ aspectRatio: `${image.width} / ${image.height}` }}
     >
       <Link
@@ -140,6 +150,21 @@ export function OrganizationImageCard({
           loading="lazy"
         />
       </Link>
+
+      <div
+        className={cn(
+          'absolute left-2 top-2 transition-opacity',
+          selected
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
+        )}
+      >
+        <SelectionCheckbox
+          checked={selected}
+          onCheckedChange={() => selection.toggle(image.id)}
+          ariaLabel={selected ? '선택 해제' : '선택'}
+        />
+      </div>
 
       <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1">
         <AIGeneratedBadge />
