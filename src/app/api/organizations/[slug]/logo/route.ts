@@ -10,7 +10,10 @@ import { randomUUID } from 'node:crypto';
 
 import { apiError, apiOk } from '@/lib/api-error';
 import { deleteObject, publicUrl, putObject } from '@/services/r2/upload';
-import { createSupabaseServerClient } from '@/services/supabase/server';
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from '@/services/supabase/server';
 
 import type { OrganizationRole } from '@/types/domain';
 
@@ -76,8 +79,8 @@ export async function POST(request: Request, { params }: { params: { slug: strin
 
   const { orgId, prevUrl, role } = await loadContext(params.slug, user.id);
   if (!orgId) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
-  if (role !== 'owner') {
-    return apiError('FORBIDDEN', '조직 어드민만 로고를 변경할 수 있어요');
+  if (!role) {
+    return apiError('FORBIDDEN', '조직 멤버만 로고를 변경할 수 있어요');
   }
 
   let form: FormData;
@@ -126,7 +129,10 @@ export async function POST(request: Request, { params }: { params: { slug: strin
 
   const newUrl = publicUrl(key);
 
-  const { error: updateError } = await supabase
+  // Non-owner 도 UPDATE 가능하도록 service_role 로 처리. RLS orgs_update 는
+  // 여전히 owner_id 만 허용.
+  const service = createSupabaseServiceClient();
+  const { error: updateError } = await service
     .from('organizations')
     .update({ avatar_url: newUrl })
     .eq('id', orgId);

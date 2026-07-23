@@ -11,7 +11,10 @@ import { randomUUID } from 'node:crypto';
 
 import { apiError, apiOk } from '@/lib/api-error';
 import { deleteObject, publicUrl, putObject } from '@/services/r2/upload';
-import { createSupabaseServerClient } from '@/services/supabase/server';
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from '@/services/supabase/server';
 
 import type { OrganizationRole } from '@/types/domain';
 
@@ -135,8 +138,8 @@ export async function POST(request: Request, { params }: { params: { slug: strin
 
   const { orgId, role } = await loadContext(params.slug, user.id);
   if (!orgId) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
-  if (role !== 'owner') {
-    return apiError('FORBIDDEN', '조직 어드민만 업로드할 수 있어요');
+  if (!role) {
+    return apiError('FORBIDDEN', '조직 멤버만 업로드할 수 있어요');
   }
 
   const { count: existing } = await supabase
@@ -197,7 +200,8 @@ export async function POST(request: Request, { params }: { params: { slug: strin
   }
 
   // sort_order 는 마지막 값 + 1 (없으면 0). 사용자가 나중에 조정.
-  const { data: lastRow } = await supabase
+  const service = createSupabaseServiceClient();
+  const { data: lastRow } = await service
     .from('organization_reference_images')
     .select('sort_order')
     .eq('organization_id', orgId)
@@ -206,7 +210,9 @@ export async function POST(request: Request, { params }: { params: { slug: strin
     .maybeSingle();
   const nextOrder = (lastRow?.sort_order ?? -1) + 1;
 
-  const { data, error } = await supabase
+  // Non-owner 도 INSERT 가능하도록 service_role 로 처리. RLS
+  // org_reference_images_insert_owner 는 여전히 owner 만 허용.
+  const { data, error } = await service
     .from('organization_reference_images')
     .insert({
       id,

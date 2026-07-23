@@ -80,10 +80,10 @@ export async function PATCH(request: Request, { params }: { params: { slug: stri
 
   const { org, role } = await loadOrgAndRole(params.slug, user.id);
   if (!org || !role) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
-  // P5-D-B: 명시적으로 owner 만 허용. 036 이후 admin 은 발급되지 않지만
-  // 향후 역할 확장 시에도 조직 설정은 owner 전용으로 유지.
-  if (role !== 'owner') {
-    return apiError('FORBIDDEN', '조직 어드민만 수정할 수 있어요');
+  // P5-D-B (revised): 조직 설정 편집은 active 멤버 누구나 가능. 위험 영역
+  // (조직 삭제) 만 owner 로 제한됨. 조직 관리 흐름을 부담 없게 하기 위함.
+  if (!role) {
+    return apiError('FORBIDDEN', '조직 멤버만 수정할 수 있어요');
   }
 
   let body;
@@ -115,7 +115,11 @@ export async function PATCH(request: Request, { params }: { params: { slug: stri
     });
   }
 
-  const { data: updated, error: updateError } = await supabase
+  // Non-owner 도 편집 가능하도록 service_role 로 UPDATE (RLS orgs_update 는
+  // 여전히 owner_id 만 허용하므로 우회 필요). 권한 판정은 상단에서 이미
+  // active 멤버로 확인 완료.
+  const service = createSupabaseServiceClient();
+  const { data: updated, error: updateError } = await service
     .from('organizations')
     .update(update)
     .eq('id', org.id)
@@ -128,7 +132,6 @@ export async function PATCH(request: Request, { params }: { params: { slug: stri
   }
 
   // 활동 로그
-  const service = createSupabaseServiceClient();
   await service.from('organization_activity_logs').insert({
     organization_id: org.id,
     actor_user_id: user.id,

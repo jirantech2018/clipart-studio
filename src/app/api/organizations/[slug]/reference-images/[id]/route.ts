@@ -5,7 +5,10 @@
 
 import { apiError, apiOk } from '@/lib/api-error';
 import { deleteObject } from '@/services/r2/upload';
-import { createSupabaseServerClient } from '@/services/supabase/server';
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from '@/services/supabase/server';
 
 import type { OrganizationRole } from '@/types/domain';
 
@@ -45,11 +48,12 @@ export async function DELETE(
 
   const { orgId, role } = await loadContext(params.slug, user.id);
   if (!orgId) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
-  if (role !== 'owner') {
-    return apiError('FORBIDDEN', '조직 어드민만 삭제할 수 있어요');
+  if (!role) {
+    return apiError('FORBIDDEN', '조직 멤버만 삭제할 수 있어요');
   }
 
-  const { data: row } = await supabase
+  const service = createSupabaseServiceClient();
+  const { data: row } = await service
     .from('organization_reference_images')
     .select('id, r2_key, organization_id')
     .eq('id', params.id)
@@ -58,7 +62,8 @@ export async function DELETE(
     return apiError('NOT_FOUND', '해당 이미지를 찾을 수 없어요');
   }
 
-  const { error: delError } = await supabase
+  // Non-owner 도 삭제 가능하도록 service_role 로 처리.
+  const { error: delError } = await service
     .from('organization_reference_images')
     .delete()
     .eq('id', params.id);

@@ -60,12 +60,13 @@ export function OrganizationSettings({ slug }: { slug: string }) {
     return <p className="text-sm text-muted-foreground">조직을 찾을 수 없어요.</p>;
   }
 
+  const isMember = !!org.myRole;
   const isOwner = org.myRole === 'owner';
-  if (!isOwner) {
+  if (!isMember) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          조직 어드민만 설정을 볼 수 있어요.
+          이 조직의 멤버만 설정을 볼 수 있어요.
         </CardContent>
       </Card>
     );
@@ -106,8 +107,7 @@ export function OrganizationSettings({ slug }: { slug: string }) {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">조직 설정</h1>
         <p className="text-sm text-muted-foreground">
-          어드민만 이 페이지를 볼 수 있어요. 여기 저장한 값은 이 조직에서
-          이미지를 생성할 때 자동으로 적용돼요.
+          여기 저장한 값은 이 조직에서 이미지를 생성할 때 자동으로 적용돼요.
         </p>
       </div>
 
@@ -209,8 +209,8 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         </CardContent>
       </Card>
 
-      {/* 조직용 참조 이미지 슬롯 */}
-      <OrgReferenceImagesSection slug={slug} canEdit={isOwner} />
+      {/* 조직용 참조 이미지 슬롯 — 모든 조직 멤버가 편집 가능. */}
+      <OrgReferenceImagesSection slug={slug} canEdit={isMember} />
 
       {/* 활동 로그 — P5-D-C 에서 채워짐 */}
       <Card>
@@ -225,17 +225,19 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         </CardContent>
       </Card>
 
-      {/* 위험 영역 — P5-D-C 에서 조직 삭제 UI 통합 */}
-      <Card className="border-destructive/40">
-        <CardHeader>
-          <CardTitle className="text-base text-destructive">위험 영역</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            조직 삭제는 P5-D-C 에서 여기 통합됩니다.
-          </p>
-        </CardContent>
-      </Card>
+      {/* 위험 영역 — owner 만 노출. P5-D-C 에서 조직 삭제 UI 통합. */}
+      {isOwner && (
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-base text-destructive">위험 영역</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              조직 삭제는 P5-D-C 에서 여기 통합됩니다.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
