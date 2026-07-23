@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { SchoolStyleToggle } from '@/features/generation/components/SchoolStyleToggle';
 import { useOrganizationReferenceImages } from '@/features/organization/hooks/useOrganizationReferenceImages';
 import { useMyOrganizations } from '@/features/organization/hooks/useOrganizations';
 import { useOrgReferenceStore } from '@/lib/store/orgReferenceStore';
@@ -23,40 +22,35 @@ import type { OrgGenerationContext } from '@/app/(main)/generate/page';
 
 interface Props {
   orgContext: OrgGenerationContext | null;
-  hasSchoolProfile: boolean;
-  personalSchoolName: string | null;
 }
 
-const PERSONAL_KEY = '__personal__';
+const NONE_KEY = '__none__';
 
-export function SchoolContextCard({
-  orgContext,
-  hasSchoolProfile,
-  personalSchoolName,
-}: Props) {
+export function SchoolContextCard({ orgContext }: Props) {
   const router = useRouter();
   const { data: orgListData, isLoading: orgsLoading } = useMyOrganizations();
   const orgs = orgListData?.organizations ?? [];
 
   const isOrg = !!orgContext;
-  const currentValue = orgContext?.slug ?? PERSONAL_KEY;
+  const currentValue = orgContext?.slug ?? NONE_KEY;
 
   const orgRefs = useOrganizationReferenceImages(orgContext?.slug ?? null);
   const orgReferenceId = useOrgReferenceStore((s) => s.selectedOrgReferenceId);
   const selectOrgReference = useOrgReferenceStore((s) => s.select);
   const clearOrgReference = useOrgReferenceStore((s) => s.clear);
 
-  const applied = useSchoolApplyStore((s) => s.applied);
+  // 조직 선택 자체가 "학교 설정 적용" 을 의미. 별도 토글 없음 — 사용자가
+  // 조직을 선택하면 자동 true, "설정 안 함" 이면 false.
   const setApplied = useSchoolApplyStore((s) => s.set);
 
-  // 컨텍스트 스위칭 시 상반된 참조 이미지 스토어 초기화.
   useEffect(() => {
+    setApplied(isOrg);
     if (!isOrg) clearOrgReference();
-  }, [isOrg, clearOrgReference]);
+  }, [isOrg, setApplied, clearOrgReference]);
 
   function onDropdownChange(next: string) {
     if (next === currentValue) return;
-    if (next === PERSONAL_KEY) {
+    if (next === NONE_KEY) {
       router.replace('/generate');
     } else {
       router.replace(`/generate?org=${next}`);
@@ -64,9 +58,8 @@ export function SchoolContextCard({
     router.refresh();
   }
 
-  // 표시할 소스가 하나도 없으면 (개인 프로필 없음 + 조직 소속 없음) 카드
-  // 자체를 노출하지 않는다.
-  if (!hasSchoolProfile && orgs.length === 0 && !isOrg) return null;
+  // 표시할 소스가 하나도 없으면 (조직 소속 없음) 카드 자체를 노출하지 않는다.
+  if (orgs.length === 0 && !isOrg) return null;
 
   return (
     <Card>
@@ -83,9 +76,7 @@ export function SchoolContextCard({
             className="h-9 max-w-[14rem] rounded-md border border-input bg-background px-2 text-xs"
             aria-label="학교 설정 소스 선택"
           >
-            <option value={PERSONAL_KEY}>
-              개인{personalSchoolName ? ` — ${personalSchoolName}` : ''}
-            </option>
+            <option value={NONE_KEY}>설정 안 함</option>
             {orgs.map((org) => (
               <option key={org.slug} value={org.slug}>
                 {org.name}
@@ -132,13 +123,6 @@ export function SchoolContextCard({
                 </p>
               )}
             </div>
-
-            <SchoolStyleToggle
-              hasSchoolProfile
-              schoolName={orgContext.name}
-              checked={applied}
-              onChange={setApplied}
-            />
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -203,12 +187,10 @@ export function SchoolContextCard({
             </div>
           </>
         ) : (
-          <SchoolStyleToggle
-            hasSchoolProfile={hasSchoolProfile}
-            schoolName={personalSchoolName}
-            checked={applied}
-            onChange={setApplied}
-          />
+          <p className="text-xs text-muted-foreground">
+            학교 설정을 적용하지 않고 생성해요. 조직을 선택하면 그 조직의 기본
+            프롬프트와 참조 이미지가 함께 적용됩니다.
+          </p>
         )}
       </CardContent>
     </Card>

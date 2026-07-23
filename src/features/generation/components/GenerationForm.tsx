@@ -97,15 +97,9 @@ export function GenerationForm({
 
   const [prompt, setPrompt] = useState<string>(parent?.prompt ?? '');
   const [batchSize, setBatchSize] = useState<number>(5);
-  // 학교 스타일 적용은 SchoolContextCard 와 공유. 페이지 진입 시 컨텍스트
-  // 기본값으로 초기화한다.
+  // 학교 스타일 적용 여부는 SchoolContextCard 의 드롭다운이 결정한다.
+  // 조직이 선택돼 있으면 자동 true, "설정 안 함" 이면 false.
   const schoolProfileApplied = useSchoolApplyStore((s) => s.applied);
-  const initSchoolApplied = useSchoolApplyStore((s) => s.initFromContext);
-  useEffect(() => {
-    initSchoolApplied(isOrgContext ? orgContext.styleEnabled : hasSchoolProfile);
-    // 슬러그가 바뀌거나 개인 프로필 유무가 변할 때만 초기화.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgContext?.slug, hasSchoolProfile]);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('square');
 
   // 참조 이미지 스토어 — 개인/조직 별도. 조직 컨텍스트에서는 개인 슬롯 선택
