@@ -4,8 +4,9 @@
 // 학교명 = 조직명, 학교 홈페이지 = 조직 홈페이지 이므로 두 개 카드로 나누지
 // 않고 하나의 폼으로 관리. 참조 이미지 슬롯은 아래에 별도 섹션.
 
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { OrgReferenceImagesSection } from '@/features/organization/components/OrgReferenceImagesSection';
 import {
+  useDeleteOrganization,
   useOrganization,
   useUpdateOrganization,
 } from '@/features/organization/hooks/useOrganizations';
@@ -24,12 +26,16 @@ import { SCHOOL_LEVEL_LABELS, SCHOOL_LEVEL_ORDER } from '@/types/domain';
 import type { SchoolLevel } from '@/types/domain';
 
 export function OrganizationSettings({ slug }: { slug: string }) {
+  const router = useRouter();
   const { data, isLoading } = useOrganization(slug);
   const update = useUpdateOrganization();
+  const del = useDeleteOrganization();
 
   const [name, setName] = useState('');
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel | ''>('');
   const [basePrompt, setBasePrompt] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
   const org = data?.organization;
 
@@ -67,6 +73,18 @@ export function OrganizationSettings({ slug }: { slug: string }) {
         </CardContent>
       </Card>
     );
+  }
+
+  async function handleDelete() {
+    if (!org) return;
+    try {
+      await del.mutateAsync(slug);
+      toast.success('조직을 삭제했어요');
+      router.push('/organizations');
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -195,8 +213,79 @@ export function OrganizationSettings({ slug }: { slug: string }) {
       {/* 조직용 참조 이미지 슬롯 — 모든 조직 멤버가 편집 가능. */}
       <OrgReferenceImagesSection slug={slug} canEdit={isMember} />
 
-      {/* 활동 로그 · 위험 영역은 실제 구현 완료 후 노출됩니다.
-          현재 placeholder 상태로 사용자에게 미완성 기능처럼 보이지 않도록 숨김. */}
+      {/* 활동 로그는 실제 구현 완료 후 노출됩니다. */}
+
+      {/* 위험 영역 — 소유자만 노출. 조직 삭제는 soft delete (deleted_at 세팅) 로
+          진행되며 30일 유예 후 배치가 하드 삭제할 예정. slug 를 정확히 입력해야
+          버튼이 활성화되어 실수로 눌리지 않도록 방지. */}
+      {isOwner && (
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-destructive">
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              위험 영역
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">조직 삭제</p>
+              <p className="text-xs text-muted-foreground">
+                조직을 삭제하면 모든 멤버가 이 조직에 더 이상 접근할 수 없어요.
+                조직의 참조 이미지·기본 프롬프트도 함께 회수됩니다. 조직 컨텍스트로
+                이미 생성한 이미지는 각 멤버의 개인 라이브러리에 그대로 남아요.
+              </p>
+            </div>
+
+            {!confirmOpen ? (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  조직 삭제
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+                <p className="text-xs text-destructive">
+                  정말 삭제하려면 아래에 <span className="font-mono font-semibold">{org.slug}</span>{' '}
+                  를 그대로 입력해주세요.
+                </p>
+                <Input
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder={org.slug}
+                  disabled={del.isPending}
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setConfirmOpen(false);
+                      setConfirmText('');
+                    }}
+                    disabled={del.isPending}
+                  >
+                    취소
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={confirmText !== org.slug || del.isPending}
+                    onClick={handleDelete}
+                  >
+                    {del.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                    삭제 확정
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
