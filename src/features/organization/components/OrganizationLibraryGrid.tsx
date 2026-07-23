@@ -8,7 +8,7 @@
 //   자기 자격에 맞는 이미지만 대상으로 삼고, 대상 개수를 버튼 라벨에
 //   표시한다. 대상 0 이면 비활성화. 완료 후 성공/제외/실패 개수를 toast 로.
 
-import { ArrowLeft, Download, Globe2, GlobeLock, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, Globe2, GlobeLock, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -336,20 +336,11 @@ export function OrganizationLibraryGrid({
         </Link>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">조직 라이브러리</h2>
-          <p className="text-sm text-muted-foreground">
-            멤버들이 이 조직에 공유한 이미지 모음이에요.
-          </p>
-        </div>
-        <Link
-          href={`/generate?org=${slug}`}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
-          title="이 조직 AI 설정(학교 스타일·기본 프롬프트·조직 참조 이미지)으로 이미지 만들기. 생성물은 내 라이브러리에 저장돼요."
-        >
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />이 조직 AI 설정으로 만들기
-        </Link>
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">조직 라이브러리</h2>
+        <p className="text-sm text-muted-foreground">
+          멤버들이 이 조직에 공유한 이미지 모음이에요.
+        </p>
       </div>
 
       {/* 공개 상태 필터 — 세그먼트 컨트롤 형태 */}
