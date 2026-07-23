@@ -30,7 +30,6 @@ export function OrganizationSettings({ slug }: { slug: string }) {
   const [name, setName] = useState('');
   const [schoolLevel, setSchoolLevel] = useState<SchoolLevel | ''>('');
   const [basePrompt, setBasePrompt] = useState('');
-  const [styleEnabled, setStyleEnabled] = useState(true);
 
   const org = data?.organization;
 
@@ -39,12 +38,10 @@ export function OrganizationSettings({ slug }: { slug: string }) {
     setName(org.name);
     setSchoolLevel(org.schoolLevel ?? '');
     setBasePrompt(org.basePrompt ?? '');
-    setStyleEnabled(org.styleEnabled);
   }, [
     org?.name,
     org?.schoolLevel,
     org?.basePrompt,
-    org?.styleEnabled,
   ]);
 
   if (isLoading) {
@@ -86,7 +83,6 @@ export function OrganizationSettings({ slug }: { slug: string }) {
           name: name.trim(),
           schoolLevel: schoolLevel ? schoolLevel : null,
           basePrompt: basePrompt.trim() || null,
-          styleEnabled,
         },
       });
       toast.success('저장했어요');
@@ -185,19 +181,6 @@ export function OrganizationSettings({ slug }: { slug: string }) {
                 className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 placeholder="이 조직에서 생성하는 모든 이미지에 함께 붙일 스타일 설명"
               />
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                id="style-enabled"
-                type="checkbox"
-                checked={styleEnabled}
-                onChange={(e) => setStyleEnabled(e.target.checked)}
-                disabled={update.isPending}
-                className="h-4 w-4 rounded border-input"
-              />
-              <Label htmlFor="style-enabled" className="cursor-pointer text-sm font-normal">
-                학교 스타일 적용
-              </Label>
             </div>
             <div className="flex justify-end pt-2">
               <Button type="submit" disabled={update.isPending}>
