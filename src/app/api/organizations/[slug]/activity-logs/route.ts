@@ -103,7 +103,23 @@ export async function GET(request: Request, { params }: { params: { slug: string
       .in('id', Array.from(userIds));
     for (const p of profiles ?? []) {
       const row = p as { id: string; email: string };
-      emailMap.set(row.id, row.email);
+      if (row.email) emailMap.set(row.id, row.email);
+    }
+
+    // 폴백: profiles 에 없거나 email 이 비어있으면 auth.admin.getUserById 로
+    // 채운다. 회원가입 트리거가 누락되어 profiles 행이 없는 케이스 대응.
+    const missingIds = Array.from(userIds).filter((id) => !emailMap.has(id));
+    if (missingIds.length > 0) {
+      const authLookups = await Promise.all(
+        missingIds.map(async (id) => {
+          const { data, error } = await service.auth.admin.getUserById(id);
+          if (error || !data?.user?.email) return null;
+          return { id, email: data.user.email };
+        }),
+      );
+      for (const row of authLookups) {
+        if (row) emailMap.set(row.id, row.email);
+      }
     }
   }
 
