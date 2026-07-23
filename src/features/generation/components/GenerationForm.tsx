@@ -7,7 +7,7 @@
 //   - PresetChips are rendered
 //   - generationMode = 'img2img', referenceImageId is passed to the job
 
-import { Link as LinkIcon, Sparkles, X } from 'lucide-react';
+import { Building2, Link as LinkIcon, Sparkles, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -21,12 +21,16 @@ import { PresetChips } from '@/features/generation/components/PresetChips';
 import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCreateJob';
 import { usePromptSuggestions } from '@/features/generation/hooks/usePromptSuggestions';
 import { SchoolStyleToggle } from '@/features/generation/components/SchoolStyleToggle';
+import { useOrganizationReferenceImages } from '@/features/organization/hooks/useOrganizationReferenceImages';
 import { useReferenceImages } from '@/features/references/hooks/useReferenceImages';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useGenerationDraftStore } from '@/lib/store/generationDraftStore';
 import { useGenerationStore } from '@/lib/store/generationStore';
+import { useOrgReferenceStore } from '@/lib/store/orgReferenceStore';
 import { useReferenceStore } from '@/lib/store/referenceStore';
 import { cn } from '@/lib/utils';
+
+import type { OrgGenerationContext } from '@/app/(main)/generate/page';
 import {
   ASPECT_RATIOS,
   ASPECT_RATIO_DIMENSIONS,
@@ -52,6 +56,10 @@ interface GenerationFormProps {
   initialCredits: number;
   creditsResetAt?: string | null;
   parent?: ParentInfo | null;
+  /** P5-D-C: /generate?org=<slug> 로 진입한 조직 컨텍스트. 없으면 개인 컨텍스트. */
+  orgContext?: OrgGenerationContext | null;
+  /** 조직 slug 는 존재하지만 접근 권한이 없거나 삭제된 경우 표시할 안내. */
+  orgAccessError?: string | null;
 }
 
 function formatResetDate(iso: string | null | undefined): string | null {
@@ -75,6 +83,8 @@ export function GenerationForm({
   initialCredits,
   creditsResetAt,
   parent,
+  orgContext,
+  orgAccessError,
 }: GenerationFormProps) {
   const router = useRouter();
   const storeCredits = useAuthStore((s) => s.profile?.credits);
@@ -83,18 +93,45 @@ export function GenerationForm({
   const inFlight = streamStatus === 'starting' || streamStatus === 'streaming';
 
   const chaining = !!parent;
+  const isOrgContext = !!orgContext;
 
   const [prompt, setPrompt] = useState<string>(parent?.prompt ?? '');
   const [batchSize, setBatchSize] = useState<number>(5);
-  const [schoolProfileApplied, setSchoolProfileApplied] = useState(hasSchoolProfile);
+  // 조직 컨텍스트일 때는 조직의 style_enabled 기본값을 반영. 개인 컨텍스트는
+  // 기존 hasSchoolProfile 동작 그대로.
+  const [schoolProfileApplied, setSchoolProfileApplied] = useState(
+    isOrgContext ? orgContext.styleEnabled : hasSchoolProfile,
+  );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('square');
+
+  // 참조 이미지 스토어 — 개인/조직 별도. 조직 컨텍스트에서는 개인 슬롯 선택
+  // 상태를 무시하고 조직 스토어만 참조 (사용자 명세: 자동 mix 금지).
   const customReferenceId = useReferenceStore((s) => s.selectedReferenceId);
   const clearCustomReference = useReferenceStore((s) => s.clear);
+  const orgReferenceId = useOrgReferenceStore((s) => s.selectedOrgReferenceId);
+  const clearOrgReference = useOrgReferenceStore((s) => s.clear);
   const { data: referenceData } = useReferenceImages();
-  const selectedReference =
-    !chaining && customReferenceId
-      ? referenceData?.slots.find((s) => s.id === customReferenceId) ?? null
-      : null;
+  const { data: orgReferenceData } = useOrganizationReferenceImages(
+    isOrgContext ? orgContext.slug : null,
+  );
+  const selectedReference = chaining
+    ? null
+    : isOrgContext
+      ? orgReferenceId
+        ? orgReferenceData?.references.find((r) => r.id === orgReferenceId) ?? null
+        : null
+      : customReferenceId
+        ? referenceData?.slots.find((s) => s.id === customReferenceId) ?? null
+        : null;
+
+  // 컨텍스트 스위칭 시 반대 스토어 초기화 — 개인/조직 자동 mix 방지 안전장치.
+  useEffect(() => {
+    if (isOrgContext) {
+      clearCustomReference();
+    } else {
+      clearOrgReference();
+    }
+  }, [isOrgContext, clearCustomReference, clearOrgReference]);
 
   // 우측 BatchProgressPanel 이 idle 상태에서도 빈 슬롯을 미리 그리도록,
   // 배치 크기/이미지 비율이 바뀌면 draft store 로 push.
@@ -120,14 +157,21 @@ export function GenerationForm({
   async function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    // 조직 컨텍스트일 때는 개인 customReferenceId 대신 orgReferenceId 를 사용.
+    // 서버 계약(P5-D-C 다음 슬라이스)에서 orgSlug / orgReferenceId 를 정식으로
+    // 소비하기 전까지는, 우선 기존 customReferenceId 자리로 orgReferenceId 를
+    // 보내지 않고 null 을 넘긴다 (개인 리소스와 충돌 방지). 즉 지금은 프롬프트
+    // + 조직 컨텍스트 배지만 클라이언트에 반영되며, 실제 조직 참조 이미지
+    // 파이프라인은 다음 세션에서 연결.
+    const effectiveCustomRef = chaining || isOrgContext ? null : customReferenceId;
     const parsed = createJobSchema.safeParse({
       prompt,
       batchSize,
       diversityLevel: 0,
       referenceImageId: parent?.id ?? null,
-      customReferenceId: !chaining ? customReferenceId : null,
+      customReferenceId: effectiveCustomRef,
       schoolProfileApplied,
-      generationMode: chaining || customReferenceId ? 'img2img' : 'text2img',
+      generationMode: chaining || effectiveCustomRef ? 'img2img' : 'text2img',
       aspectRatio,
     });
     if (!parsed.success) {
@@ -165,6 +209,27 @@ export function GenerationForm({
           {chaining ? <LinkIcon className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
           {chaining ? '이 이미지로 생성 (i2i)' : 'AI 이미지 만들기'}
         </CardTitle>
+        {isOrgContext && (
+          <div className="mt-2 inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{orgContext.name} 에서 생성</span>
+            <Link
+              href="/generate"
+              className="text-[10px] text-primary/70 underline-offset-4 hover:underline"
+              title="개인 컨텍스트로 전환"
+            >
+              (개인으로 전환)
+            </Link>
+          </div>
+        )}
+        {orgAccessError && (
+          <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+            {orgAccessError} 개인 컨텍스트로 자동 전환하지 않습니다 —{' '}
+            <Link href="/generate" className="underline-offset-4 hover:underline">
+              개인 생성으로 이동
+            </Link>
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <form onSubmit={handleFormSubmit} className="space-y-5">
@@ -210,7 +275,9 @@ export function GenerationForm({
                 className="h-16 w-16 shrink-0 rounded object-cover"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium">참조 이미지</p>
+                <p className="text-xs font-medium">
+                  {isOrgContext ? '조직 참조 이미지' : '참조 이미지'}
+                </p>
                 <p
                   className="line-clamp-2 text-xs text-muted-foreground"
                   title={selectedReference.filename ?? undefined}
@@ -218,7 +285,11 @@ export function GenerationForm({
                   {selectedReference.filename ?? '저장된 슬롯 이미지'}
                 </p>
                 <Link
-                  href="/settings"
+                  href={
+                    isOrgContext && orgContext
+                      ? `/organization/${orgContext.slug}/settings`
+                      : '/profile'
+                  }
                   className="text-[10px] text-primary underline-offset-4 hover:underline"
                 >
                   슬롯 관리
@@ -226,7 +297,7 @@ export function GenerationForm({
               </div>
               <button
                 type="button"
-                onClick={clearCustomReference}
+                onClick={isOrgContext ? clearOrgReference : clearCustomReference}
                 disabled={inFlight}
                 className="rounded p-1 text-muted-foreground hover:bg-accent"
                 aria-label="참조 이미지 해제"
@@ -407,12 +478,24 @@ export function GenerationForm({
             </div>
           </div>
 
-          <SchoolStyleToggle
-            hasSchoolProfile={hasSchoolProfile}
-            schoolName={schoolName}
-            checked={schoolProfileApplied}
-            onChange={setSchoolProfileApplied}
-          />
+          {/* 학교 스타일 적용 토글 — 컨텍스트별로 소스가 다름.
+              조직: 조직 학교 설정 사용 여부 (`orgContext.styleEnabled` 기본값)
+              개인: 기존 school_profiles 존재 여부 기준 */}
+          {isOrgContext ? (
+            <SchoolStyleToggle
+              hasSchoolProfile
+              schoolName={orgContext.name}
+              checked={schoolProfileApplied}
+              onChange={setSchoolProfileApplied}
+            />
+          ) : (
+            <SchoolStyleToggle
+              hasSchoolProfile={hasSchoolProfile}
+              schoolName={schoolName}
+              checked={schoolProfileApplied}
+              onChange={setSchoolProfileApplied}
+            />
+          )}
 
         </form>
       </CardContent>
