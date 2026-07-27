@@ -55,31 +55,35 @@ export default async function HomePage() {
   const recent = (recentRes.data ?? []).map(rowToHomeImage);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-10">
+    <div className="mx-auto max-w-6xl space-y-8">
       <TutorialOverlay />
-      <section className="space-y-6 pt-8 text-center">
-        <h1 className="text-4xl font-bold tracking-tight">
-          학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
-        </h1>
-        <p className="whitespace-pre-line text-lg text-muted-foreground">
-          {`원하는 이미지를 검색하고, 없다면 AI로 새롭게 만들 수 있습니다.
+      <section className="space-y-6 pt-6 text-center">
+        <div className="space-y-3">
+          <h1 className="text-4xl font-bold tracking-tight">
+            학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
+          </h1>
+          <p className="whitespace-pre-line text-lg text-muted-foreground">
+            {`원하는 이미지를 검색하고, 없다면 AI로 새롭게 만들 수 있습니다.
 만든 이미지는 내 라이브러리에 저장되어 언제든 다시 사용할 수 있습니다.`}
-        </p>
-        <div className="mx-auto max-w-xl px-4">
+          </p>
+        </div>
+        {/* 좌: 검색 · 우: CTA. 세로 스택 대신 좌우 배치라 히어로 전체 높이가
+            줄어들어 아래 인기 이미지 섹션이 자연스럽게 위로 붙는다. */}
+        <div className="grid items-center gap-4 md:grid-cols-2">
           <Suspense fallback={null}>
             <SearchBar className="w-full" />
           </Suspense>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-          <Link href="/generate" className={buttonVariants({ size: 'lg' })}>
-            AI로 이미지 만들기
-          </Link>
-          <Link
-            href="/library"
-            className={buttonVariants({ variant: 'outline', size: 'lg' })}
-          >
-            내 라이브러리 열기
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
+            <Link href="/generate" className={buttonVariants({ size: 'lg' })}>
+              AI로 이미지 만들기
+            </Link>
+            <Link
+              href="/library"
+              className={buttonVariants({ variant: 'outline', size: 'lg' })}
+            >
+              내 라이브러리 열기
+            </Link>
+          </div>
         </div>
       </section>
 
