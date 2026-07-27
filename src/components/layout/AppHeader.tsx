@@ -4,10 +4,9 @@ import { User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
 import { CreditBadge } from '@/features/auth/components/CreditBadge';
 import { useAuthStore } from '@/lib/store/authStore';
 import { cn } from '@/lib/utils';
@@ -86,6 +85,34 @@ export function AppHeader({
   // 로고 이미지·nav 텍스트·CreditBadge 예외 스타일이 적용된다.
   const overBanner = isHome && !pastHero;
 
+  // 우측 사람 아이콘 = 계정 메뉴 트리거. 외부 클릭 / Escape / 라우트 변경 시
+  // 자동으로 닫는다.
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (
+        accountMenuRef.current &&
+        !accountMenuRef.current.contains(e.target as Node)
+      ) {
+        setAccountMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setAccountMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [accountMenuOpen]);
+
   return (
     <header
       className={cn(
@@ -161,27 +188,52 @@ export function AppHeader({
           <div className={cn(overBanner && 'text-foreground [text-shadow:none]')}>
             <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
           </div>
-          <Link
-            href="/profile"
-            className={cn(
-              'inline-flex h-9 w-9 items-center justify-center rounded-full',
-              overBanner
-                ? 'text-white hover:bg-white/20'
-                : 'hover:bg-accent',
+          <div className="relative" ref={accountMenuRef}>
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+              aria-label="계정 메뉴"
+              title="계정 메뉴"
+              className={cn(
+                'inline-flex h-9 w-9 items-center justify-center rounded-full',
+                overBanner
+                  ? 'text-white hover:bg-white/20'
+                  : 'hover:bg-accent',
+              )}
+            >
+              <User className="h-4 w-4" aria-hidden="true" />
+            </button>
+            {accountMenuOpen && (
+              // 드롭다운 자체는 overBanner 여부와 무관하게 흰 배경/어두운 글자로.
+              // (헤더 컨테이너의 text-white 를 상속하지 않도록 text-foreground 강제)
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-50 mt-2 min-w-[10rem] overflow-hidden rounded-md border bg-background text-foreground shadow-md [text-shadow:none]"
+              >
+                <Link
+                  href="/profile"
+                  role="menuitem"
+                  onClick={() => setAccountMenuOpen(false)}
+                  className="block px-3 py-2 text-sm hover:bg-accent"
+                >
+                  개인 설정
+                </Link>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                >
+                  로그아웃
+                </button>
+              </div>
             )}
-            aria-label="계정정보"
-            title="계정정보"
-          >
-            <User className="h-4 w-4" aria-hidden="true" />
-          </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-            className={cn(overBanner && 'text-white hover:bg-white/20 hover:text-white')}
-          >
-            로그아웃
-          </Button>
+          </div>
         </div>
       </div>
     </header>

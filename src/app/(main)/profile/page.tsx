@@ -49,7 +49,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="text-3xl font-bold">계정정보</h1>
+      <h1 className="text-3xl font-bold">개인계정 설정</h1>
 
       <Card>
         <CardHeader>
