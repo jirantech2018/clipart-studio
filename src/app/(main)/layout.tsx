@@ -2,7 +2,6 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { AppHeader } from '@/components/layout/AppHeader';
-import { AppSidebar } from '@/components/layout/AppSidebar';
 import { isAdmin } from '@/lib/admin';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -40,11 +39,9 @@ export default async function MainLayout({ children }: PropsWithChildren) {
       <AppHeader
         credits={profile?.credits ?? 0}
         creditsResetAt={profile?.credits_reset_at ?? null}
+        isAdmin={isAdmin(user.email)}
       />
-      <div className="flex flex-1">
-        <AppSidebar isAdmin={isAdmin(user.email)} />
-        <main className="flex-1 p-6">{children}</main>
-      </div>
+      <main className="flex-1 p-6">{children}</main>
     </div>
   );
 }

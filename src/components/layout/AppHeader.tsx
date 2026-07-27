@@ -2,22 +2,37 @@
 
 import { User } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { CreditBadge } from '@/features/auth/components/CreditBadge';
 import { useAuthStore } from '@/lib/store/authStore';
+import { cn } from '@/lib/utils';
 import { createSupabaseBrowserClient } from '@/services/supabase/client';
+
+// 상단 메뉴. 홈은 로고 클릭으로 이동하므로 nav 에 포함하지 않는다.
+// 관리 는 isAdmin 일 때만 렌더 (계산은 서버 layout 에서 isAdmin(user.email)).
+const NAV_ITEMS = [
+  { href: '/generate', label: '만들기' },
+  { href: '/library', label: 'MY' },
+  { href: '/organizations', label: '우리학교' },
+  { href: '/community', label: '공유라이브러리' },
+] as const;
+
+const ADMIN_ITEM = { href: '/admin', label: '관리' } as const;
 
 export function AppHeader({
   credits,
   creditsResetAt,
+  isAdmin,
 }: {
   credits: number;
   creditsResetAt: string | null;
+  isAdmin: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createSupabaseBrowserClient();
   // Live credits from Zustand — updated by useCreateJob / useJobStream after batch generation.
   // Falls back to server-rendered `credits` until the first client mutation lands.
@@ -34,12 +49,37 @@ export function AppHeader({
     router.refresh();
   }
 
+  const items = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
+
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
       <div className="flex h-14 items-center justify-between gap-4 px-6">
-        <Link href="/" className="shrink-0 font-semibold">
-          ClipArt Studio
-        </Link>
+        <div className="flex min-w-0 items-center gap-6">
+          <Link href="/" className="shrink-0 font-semibold">
+            ClipArt Studio
+          </Link>
+          <nav className="hidden items-center gap-1 md:flex">
+            {items.map((item) => {
+              const active =
+                pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    item.href === ADMIN_ITEM.href && !active && 'text-primary',
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
         <div className="flex shrink-0 items-center gap-3">
           <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
           <Link
