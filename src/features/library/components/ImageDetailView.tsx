@@ -3,7 +3,7 @@
 // Design Ref: §5.4 Image Detail Page — full image + metadata + actions
 // Non-Negotiable Rule 3: AIGeneratedBadge required.
 
-import { ArrowLeft, Download, Link2, Loader2, Sparkles, Users, X } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Loader2, Maximize2, Sparkles, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -23,7 +23,21 @@ import {
   useImageSharedOrgs,
   useUnshareImage,
 } from '@/features/organization/hooks/useOrganizationShares';
+import { useAuthStore } from '@/lib/store/authStore';
 import { cn } from '@/lib/utils';
+
+type UpscaleScale = 2 | 4;
+
+interface UpscaleResponse {
+  data: {
+    imageId: string;
+    scale: UpscaleScale;
+    width: number;
+    height: number;
+    downloadUrl: string;
+    remainingCredits: number;
+  };
+}
 
 export function ImageDetailView({ id }: { id: string }) {
   const router = useRouter();
@@ -31,6 +45,8 @@ export function ImageDetailView({ id }: { id: string }) {
   const updateVisibility = useUpdateImageVisibility();
   const [downloading, setDownloading] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [upscalingScale, setUpscalingScale] = useState<UpscaleScale | null>(null);
+  const updateCredits = useAuthStore((s) => s.updateCredits);
   // 공유 조직 목록은 소유자에게만 의미가 있으므로 isOwner 인 경우만 fetch.
   const sharedOrgs = useImageSharedOrgs(data?.isOwner ? id : null);
   const unshare = useUnshareImage();
@@ -72,6 +88,34 @@ export function ImageDetailView({ id }: { id: string }) {
       toast.error(err instanceof Error ? err.message : '다운로드 실패');
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleUpscale(scale: UpscaleScale) {
+    if (upscalingScale !== null) return;
+    setUpscalingScale(scale);
+    try {
+      const res = await fetch(`/api/images/${image.id}/upscale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scale }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '업스케일 실패');
+      }
+      const json = (await res.json()) as UpscaleResponse;
+      updateCredits(json.data.remainingCredits);
+      // 새 이미지 id 로 다운로드 트리거 — 라이브러리에는 이미 저장됨.
+      await downloadImageFile(json.data.imageId);
+      toast.success(`${scale}x 업스케일 완료 — 라이브러리에도 저장됐어요`);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '업스케일 실패');
+    } finally {
+      setUpscalingScale(null);
     }
   }
 
@@ -281,6 +325,49 @@ export function ImageDetailView({ id }: { id: string }) {
                 )}
               </Button>
             </div>
+
+            {/* 고화질 다운로드 — 소유자만. 2x 는 1 크레딧, 4x 는 2 크레딧.
+                업스케일 결과는 라이브러리에 새 이미지로 자동 저장되면서
+                즉시 다운로드도 시작된다. */}
+            {image.isOwner && (
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center gap-2">
+                  <Maximize2 className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">고화질 다운로드</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  원본을 확대해 새 이미지로 저장하고 바로 내려받아요. 인쇄용
+                  자료라면 4x 권장 (약 4096px, A4 이상 인쇄에도 선명).
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleUpscale(2)}
+                    disabled={upscalingScale !== null}
+                    className="flex-1"
+                  >
+                    {upscalingScale === 2 ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : null}
+                    2x <span className="ml-1 text-xs text-muted-foreground">(1 크레딧)</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleUpscale(4)}
+                    disabled={upscalingScale !== null}
+                    className="flex-1"
+                  >
+                    {upscalingScale === 4 ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : null}
+                    4x (인쇄 표준){' '}
+                    <span className="ml-1 text-xs text-muted-foreground">(2)</span>
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </aside>
       </div>
