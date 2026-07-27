@@ -51,8 +51,19 @@ export function AppHeader({
 
   const items = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
 
+  // 홈 ("/") 에서만 반투명 흰 헤더로 히어로 배경 이미지가 헤더 뒤로 비쳐
+  // 보이게 한다. 그 외 페이지는 기존과 동일한 불투명 배경 유지.
+  const isHome = pathname === '/';
+
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+    <header
+      className={cn(
+        'sticky top-0 z-40 backdrop-blur',
+        isHome
+          ? 'border-b border-white/20 bg-white/25 dark:bg-white/10'
+          : 'border-b bg-background/95',
+      )}
+    >
       {/* 3분할: 좌(로고) / 중앙(nav) / 우(액션). flex-1 로 세 영역을 균등하게
           잡아, nav 는 justify-center 로 정확히 헤더 중앙에 위치. */}
       <div className="flex h-14 items-center gap-4 px-6">

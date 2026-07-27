@@ -75,10 +75,13 @@ export default async function HomePage() {
   return (
     <div>
       <TutorialOverlay />
-      {/* 히어로 배너 — 화면 전체 폭으로 확장. main 이 p-6 이라 -mx-6 -mt-6
-          로 그 padding 을 상쇄해서 좌우/상단 여백을 완전히 제거한다. rounded
-          도 없앰. 내부 텍스트는 다시 max-w-6xl 로 가운데 정렬. */}
-      <section className="relative isolate -mx-6 -mt-6 overflow-hidden bg-muted">
+      {/* 히어로 배너 — 화면 전체 폭 + 헤더 뒤까지 확장. main 이 p-6 이고
+          AppHeader 가 sticky h-14 라서, -mx-6 로 좌우 padding 을 없애고
+          -mt-20 (헤더 3.5rem + main 상단 1.5rem = 5rem) 만큼 위로 밀어
+          배너 상단이 반투명 헤더 뒤로 흘러들어간다.
+          오버레이(흰레이어) 는 완전히 없앴고, 텍스트 가독성은 강한
+          drop-shadow 로 보완. */}
+      <section className="relative isolate -mx-6 -mt-20 overflow-hidden bg-muted">
         {heroBackground && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -88,19 +91,11 @@ export default async function HomePage() {
             className="absolute inset-0 h-full w-full object-cover"
           />
         )}
-        <div
-          aria-hidden="true"
-          className={
-            heroBackground
-              ? 'absolute inset-0 bg-gradient-to-b from-background/70 via-background/60 to-background/90'
-              : 'absolute inset-0 bg-gradient-to-b from-background/40 to-background/80'
-          }
-        />
-        <div className="relative mx-auto max-w-6xl space-y-3 px-6 py-14 text-center md:py-24">
-          <h1 className="text-4xl font-bold tracking-tight drop-shadow-sm">
+        <div className="relative mx-auto max-w-6xl space-y-3 px-6 pb-14 pt-28 text-center md:pb-24 md:pt-36">
+          <h1 className="text-4xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
             학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
           </h1>
-          <p className="whitespace-pre-line text-lg text-foreground/80">
+          <p className="whitespace-pre-line text-lg text-white/95 [text-shadow:0_2px_10px_rgba(0,0,0,0.5)]">
             {`원하는 이미지를 검색하고, 없다면 AI로 새롭게 만들 수 있습니다.
 만든 이미지는 내 라이브러리에 저장되어 언제든 다시 사용할 수 있습니다.`}
           </p>
