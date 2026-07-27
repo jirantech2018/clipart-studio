@@ -106,7 +106,15 @@ export function AppHeader({
         )}
       >
         <div className="flex flex-1 items-center">
-          <Link href="/" className="inline-flex shrink-0 items-center gap-2 font-semibold">
+          <Link
+            href="/"
+            className={cn(
+              'inline-flex shrink-0 items-center gap-2 font-semibold',
+              // overBanner 이면 헤더 컨테이너의 text-white 를 그대로 상속.
+              // 그 외 페이지에서는 검정 대신 브랜드 톤 (#373d8e) 로.
+              !overBanner && 'text-[#373d8e]',
+            )}
+          >
             <Image
               src={overBanner ? '/logo_white.png' : '/logo_blue.png'}
               alt=""
