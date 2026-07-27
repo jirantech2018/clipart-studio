@@ -1,6 +1,7 @@
 'use client';
 
 import { User } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -75,8 +76,16 @@ export function AppHeader({
         )}
       >
         <div className="flex flex-1 items-center">
-          <Link href="/" className="shrink-0 font-semibold">
-            ClipArt Studio
+          <Link href="/" className="inline-flex shrink-0 items-center gap-2 font-semibold">
+            <Image
+              src={isHome ? '/logo_white.png' : '/logo_blue.png'}
+              alt=""
+              width={28}
+              height={28}
+              priority
+              className="h-7 w-7 object-contain"
+            />
+            <span>우리학교 클립아트스튜디오</span>
           </Link>
         </div>
         <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
