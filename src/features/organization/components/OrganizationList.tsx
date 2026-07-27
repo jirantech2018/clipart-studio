@@ -25,7 +25,7 @@ export function OrganizationList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">내 조직</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">우리학교 워크스페이스</h1>
           <p className="text-sm text-muted-foreground">
             여러 사람이 같은 이미지 자산을 함께 쓰는 공간이에요.
           </p>
