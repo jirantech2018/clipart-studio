@@ -73,7 +73,7 @@ export default async function HomePage() {
           <Suspense fallback={null}>
             <SearchBar className="w-full" />
           </Suspense>
-          <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
+          <div className="flex flex-wrap items-center justify-center gap-2 md:justify-end">
             <Link href="/generate" className={buttonVariants({ size: 'lg' })}>
               AI로 이미지 만들기
             </Link>
