@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
+import { HomeHeroImagesManager } from '@/features/knowledge/components/HomeHeroImagesManager';
 import { KnowledgeListManager } from '@/features/knowledge/components/KnowledgeListManager';
 import { KnowledgePreview } from '@/features/knowledge/components/KnowledgePreview';
 import { isAdmin } from '@/lib/admin';
@@ -34,6 +35,8 @@ export default async function AdminKnowledgePage() {
           Positive 이미지는 실제 이미지 생성 요청에 참고 자료로 전달되고, Negative 이미지는 관리자 비교와 금지 조건 작성 참고용으로만 사용됩니다.
         </p>
       </div>
+
+      <HomeHeroImagesManager />
 
       <KnowledgePreview />
 

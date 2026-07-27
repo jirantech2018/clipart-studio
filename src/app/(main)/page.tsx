@@ -57,29 +57,20 @@ export default async function HomePage() {
   const popular = (popularRes.data ?? []).map(rowToHomeImage);
   const recent = (recentRes.data ?? []).map(rowToHomeImage);
 
-  // 히어로 상단 배경 — 관리자가 /admin/knowledge 에 등록한 positive 대표
-  // 이미지 중 랜덤 하나. Knowledge 테이블은 관리자 전용이라 RLS 상 anon /
-  // authenticated 로 조회 불가하므로 service_role 로 우회. force-dynamic 이라
-  // 새로고침마다 다른 이미지가 뽑힌다.
+  // 히어로 상단 배경 — 관리자가 /admin/knowledge 화면의 "홈 배너 배경 이미지"
+  // 섹션에 등록한 전용 카탈로그(home_hero_images) 에서 랜덤 하나. RLS 로 anon /
+  // authenticated 모두 차단되어 있으므로 service_role 로 조회.
+  // force-dynamic 이라 새로고침마다 다른 이미지가 뽑힌다.
   const service = createSupabaseServiceClient();
-  const { data: enabledKnowledge } = await service
-    .from('knowledge')
-    .select('id')
-    .eq('enabled', true);
-  const enabledIds = ((enabledKnowledge ?? []) as { id: string }[]).map((r) => r.id);
   let heroBackground: string | null = null;
-  if (enabledIds.length > 0) {
-    const { data: bgCandidates } = await service
-      .from('knowledge_images')
-      .select('r2_key')
-      .eq('reference_type', 'positive')
-      .eq('is_primary', true)
-      .in('knowledge_id', enabledIds)
-      .limit(30);
-    const rows = (bgCandidates ?? []) as { r2_key: string }[];
-    const pick = rows[Math.floor(Math.random() * rows.length)];
-    if (pick) heroBackground = publicUrl(pick.r2_key);
-  }
+  const { data: bgCandidates } = await service
+    .from('home_hero_images')
+    .select('r2_key')
+    .eq('enabled', true)
+    .limit(30);
+  const rows = (bgCandidates ?? []) as { r2_key: string }[];
+  const pick = rows[Math.floor(Math.random() * rows.length)];
+  if (pick) heroBackground = publicUrl(pick.r2_key);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
