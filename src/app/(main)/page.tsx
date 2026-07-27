@@ -101,6 +101,10 @@ export default async function HomePage() {
           </p>
         </div>
       </section>
+      {/* AppHeader 가 관측할 sentinel — 이 지점이 뷰포트 위로 스크롤되면
+          "히어로를 지나갔다" 로 판정하고 헤더가 흰색 불투명 모드로 전환된다.
+          시각적으로는 아무것도 렌더하지 않는다. */}
+      <div id="home-hero-sentinel" aria-hidden="true" className="h-0" />
 
       <div className="mx-auto max-w-6xl space-y-8 pt-8">
         {/* 좌: 검색 · 우: CTA. 배경 배너 아래에 별도 행. */}
