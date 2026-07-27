@@ -1,19 +1,27 @@
 'use client';
 
 // 조직 활동 로그 섹션 (P5-D-C).
-// 최근 활동 상위 50개만 시간 역순으로 나열. owner/admin 만 API 및 RLS 를
-// 통과할 수 있으며, 그 외 role 에서는 이 섹션을 렌더링하지 않는다.
+// 최근 활동 상위 5개만 시간 역순으로 표시. 기본 닫힘 — 헤더 클릭 시 펼침.
+// 접힌 동안에는 fetch 도 하지 않아 owner/admin 이더라도 열기 전에는 서버
+// 부하를 주지 않는다. RLS (activity_logs_select_admin) 도 동일 조건이라
+// editor/viewer 에게는 섹션 자체가 렌더되지 않는다.
+
+import { ChevronDown } from 'lucide-react';
+import { useState } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   useOrganizationActivityLogs,
   type ActivityLogEntry,
 } from '@/features/organization/hooks/useOrganizations';
+import { cn } from '@/lib/utils';
 
 interface Props {
   slug: string;
   canView: boolean;
 }
+
+const DISPLAY_LIMIT = 5;
 
 const ACTIVITY_LABELS: Record<string, string> = {
   organization_created: '조직 생성',
@@ -100,48 +108,69 @@ function formatTime(iso: string): string {
 }
 
 export function OrganizationActivityLogSection({ slug, canView }: Props) {
-  const { data, isLoading, error } = useOrganizationActivityLogs(slug, canView);
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, error } = useOrganizationActivityLogs(
+    slug,
+    canView && open,
+    DISPLAY_LIMIT,
+  );
 
   if (!canView) return null;
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">활동 로그</CardTitle>
+      <CardHeader className="p-0">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center justify-between gap-2 px-6 py-4 text-left hover:bg-accent/40"
+        >
+          <CardTitle className="text-base">활동 로그</CardTitle>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 text-muted-foreground transition-transform',
+              open && 'rotate-180',
+            )}
+            aria-hidden="true"
+          />
+        </button>
       </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-          </div>
-        ) : error ? (
-          <p className="text-sm text-muted-foreground">
-            {error instanceof Error ? error.message : '활동 로그를 불러오지 못했어요'}
-          </p>
-        ) : !data || data.entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">아직 기록된 활동이 없어요.</p>
-        ) : (
-          <ul className="divide-y">
-            {data.entries.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex items-start justify-between gap-3 py-2.5 text-sm"
-              >
-                <span className="leading-relaxed">{describe(entry)}</span>
-                <time
-                  className="shrink-0 text-xs text-muted-foreground"
-                  dateTime={entry.createdAt}
-                  title={new Date(entry.createdAt).toLocaleString('ko-KR')}
+      {open && (
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-2">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+              <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+              <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+            </div>
+          ) : error ? (
+            <p className="text-sm text-muted-foreground">
+              {error instanceof Error ? error.message : '활동 로그를 불러오지 못했어요'}
+            </p>
+          ) : !data || data.entries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">아직 기록된 활동이 없어요.</p>
+          ) : (
+            <ul className="divide-y">
+              {data.entries.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-start justify-between gap-3 py-2.5 text-sm"
                 >
-                  {formatTime(entry.createdAt)}
-                </time>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
+                  <span className="leading-relaxed">{describe(entry)}</span>
+                  <time
+                    className="shrink-0 text-xs text-muted-foreground"
+                    dateTime={entry.createdAt}
+                    title={new Date(entry.createdAt).toLocaleString('ko-KR')}
+                  >
+                    {formatTime(entry.createdAt)}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }

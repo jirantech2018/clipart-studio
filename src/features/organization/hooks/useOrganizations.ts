@@ -129,14 +129,21 @@ export interface ActivityLogEntry {
   createdAt: string;
 }
 
-export function useOrganizationActivityLogs(slug: string | null, enabled = true) {
+export function useOrganizationActivityLogs(
+  slug: string | null,
+  enabled = true,
+  limit = 50,
+) {
   return useQuery({
-    queryKey: slug ? ['organizations', slug, 'activity-logs'] : ['organizations', 'none', 'activity-logs'],
+    queryKey: slug
+      ? ['organizations', slug, 'activity-logs', limit]
+      : ['organizations', 'none', 'activity-logs', limit],
     queryFn: async (): Promise<{ entries: ActivityLogEntry[] }> => {
       if (!slug) throw new Error('no slug');
-      const res = await fetch(`/api/organizations/${slug}/activity-logs`, {
-        cache: 'no-store',
-      });
+      const res = await fetch(
+        `/api/organizations/${slug}/activity-logs?limit=${limit}`,
+        { cache: 'no-store' },
+      );
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as {
           error?: { message?: string };
