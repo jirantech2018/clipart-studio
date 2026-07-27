@@ -123,4 +123,18 @@
   .card-fade-in {
     animation: card-fade-in 400ms ease-out both;
   }
+
+  /* 상단 프로그레스 바 — 얇은 indeterminate 애니메이션.
+     왼쪽 밖에서 시작해서 오른쪽으로 흘러가며 반복. */
+  @keyframes loading-bar {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(400%);
+    }
+  }
+  .animate-loading-bar {
+    animation: loading-bar 1.1s ease-in-out infinite;
+  }
 }

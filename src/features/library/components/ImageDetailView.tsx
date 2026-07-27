@@ -24,6 +24,7 @@ import {
   useUnshareImage,
 } from '@/features/organization/hooks/useOrganizationShares';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useLoadingStore } from '@/lib/store/loadingStore';
 import { cn } from '@/lib/utils';
 
 type UpscaleScale = 2 | 4;
@@ -94,6 +95,10 @@ export function ImageDetailView({ id }: { id: string }) {
   async function handleUpscale(scale: UpscaleScale) {
     if (upscalingScale !== null) return;
     setUpscalingScale(scale);
+    // 상단 프로그레스 바 카운트 증가 — Real-ESRGAN 은 20-40초 걸리므로
+    // 사용자가 진행 중임을 시각적으로 알 수 있어야 한다.
+    const loading = useLoadingStore.getState();
+    loading.start();
     try {
       const res = await fetch(`/api/images/${image.id}/upscale`, {
         method: 'POST',
@@ -115,6 +120,7 @@ export function ImageDetailView({ id }: { id: string }) {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '업스케일 실패');
     } finally {
+      loading.stop();
       setUpscalingScale(null);
     }
   }

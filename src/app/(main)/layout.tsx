@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { AppHeader } from '@/components/layout/AppHeader';
+import { TopProgressBar } from '@/components/layout/TopProgressBar';
 import { isAdmin } from '@/lib/admin';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -41,6 +42,7 @@ export default async function MainLayout({ children }: PropsWithChildren) {
         creditsResetAt={profile?.credits_reset_at ?? null}
         isAdmin={isAdmin(user.email)}
       />
+      <TopProgressBar />
       <main className="flex-1 p-6">{children}</main>
     </div>
   );

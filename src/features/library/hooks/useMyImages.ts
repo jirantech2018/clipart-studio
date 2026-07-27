@@ -9,6 +9,8 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
+import { useLoadingStore } from '@/lib/store/loadingStore';
+
 import type { Image, ImageVisibility } from '@/types/domain';
 
 export type LibraryFilter = 'all' | 'public';
@@ -104,30 +106,36 @@ export function useUpdateImageVisibility() {
  * and it logs the download_events row for the reuse-rate KPI.
  */
 export async function downloadImageFile(id: string): Promise<void> {
-  const res = await fetch(`/api/images/${id}/download`, { method: 'POST' });
-  if (!res.ok) {
-    const json = (await res.json().catch(() => null)) as {
-      error?: { message?: string };
-    } | null;
-    throw new Error(json?.error?.message ?? '다운로드 실패');
-  }
-
-  const blob = await res.blob();
-  const filename =
-    parseFilenameFromContentDisposition(res.headers.get('content-disposition')) ??
-    `clipart-${id}.${blob.type === 'image/webp' ? 'webp' : 'png'}`;
-
-  const objectUrl = URL.createObjectURL(blob);
+  // 상단 프로그레스 바 활성화 — try/finally 로 실패해도 반드시 stop.
+  useLoadingStore.getState().start();
   try {
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const res = await fetch(`/api/images/${id}/download`, { method: 'POST' });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      throw new Error(json?.error?.message ?? '다운로드 실패');
+    }
+
+    const blob = await res.blob();
+    const filename =
+      parseFilenameFromContentDisposition(res.headers.get('content-disposition')) ??
+      `clipart-${id}.${blob.type === 'image/webp' ? 'webp' : 'png'}`;
+
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 500);
+    }
   } finally {
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 500);
+    useLoadingStore.getState().stop();
   }
 }
 
