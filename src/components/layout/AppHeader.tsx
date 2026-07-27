@@ -108,7 +108,12 @@ export function AppHeader({
           })}
         </nav>
         <div className="flex flex-1 items-center justify-end gap-3">
-          <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
+          {/* 홈에서는 헤더 컨테이너가 text-white 라서 CreditBadge 의 secondary
+              배경 위에 흰 글자가 얹혀 안 보인다. 이 pill 만 어두운 글자로
+              되돌리고 shadow 는 제거 (자체 배경으로 이미 대비 확보). */}
+          <div className={cn(isHome && 'text-foreground [text-shadow:none]')}>
+            <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
+          </div>
           <Link
             href="/profile"
             className={cn(
