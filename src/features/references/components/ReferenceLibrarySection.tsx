@@ -97,7 +97,7 @@ export function ReferenceLibrarySection() {
 
         <p className="text-sm text-muted-foreground">
           이미지를 클릭하면 위의 AI 이미지 만들기 폼에 참조 이미지로 지정돼요.{' '}
-          <Link href="/settings" className="underline-offset-4 hover:underline">
+          <Link href="/profile" className="underline-offset-4 hover:underline">
             슬롯 관리
           </Link>
         </p>
