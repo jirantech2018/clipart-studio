@@ -124,7 +124,7 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
     <div className="mx-auto max-w-7xl space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">AI 이미지 만들기</h1>
       {/* 좌 2/3: 폼 (내부에서 다시 배치옵션↔프롬프트 2단)
-          우 1/3: 개인 참조 · 학교 설정 · 배치 진행/미리보기 */}
+          우 1/3: 개인 참조 · 학교 설정 */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           <GenerationForm
@@ -140,9 +140,11 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
         <div className="min-w-0 space-y-6">
           {!parent && <ReferenceLibrarySection />}
           {!parent && <SchoolContextCard orgContext={orgContext} />}
-          <BatchProgressPanel />
         </div>
       </div>
+      {/* 배치 진행/미리보기 — 하단 전체 폭. 슬롯이 배치 크기에 따라 늘어나는
+          형태라 좁은 사이드바보다 전체 폭이 훨씬 잘 채워진다. */}
+      <BatchProgressPanel />
     </div>
   );
 }
