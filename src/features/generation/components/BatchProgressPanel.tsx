@@ -35,7 +35,6 @@ export function BatchProgressPanel() {
   const streamStatus = useGenerationStore((s) => s.streamStatus);
   const summary = useGenerationStore((s) => s.summary);
   const errorMessage = useGenerationStore((s) => s.errorMessage);
-  const reset = useGenerationStore((s) => s.reset);
 
   const draftBatchSize = useGenerationDraftStore((s) => s.batchSize);
   const draftAspectRatio = useGenerationDraftStore((s) => s.aspectRatio);
@@ -103,15 +102,8 @@ export function BatchProgressPanel() {
               {!isIdle && failures.length > 0 && ` · 실패 ${failures.length}`}
             </span>
           </CardTitle>
-          {!isIdle && streamStatus !== 'starting' && streamStatus !== 'streaming' && (
-            <button
-              type="button"
-              onClick={reset}
-              className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            >
-              새 생성 시작
-            </button>
-          )}
+          {/* '새 생성 시작' 버튼은 페이지 상단 GenerateHeader 로 이동
+              (같은 store.reset 을 호출하고 '새로고침' 으로 리네이밍). */}
         </div>
         {!isIdle && (
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">

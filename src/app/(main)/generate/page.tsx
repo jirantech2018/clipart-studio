@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation';
 
 import { GenerationForm } from '@/features/generation/components/GenerationForm';
 import { BatchProgressPanel } from '@/features/generation/components/BatchProgressPanel';
+import { GenerateHeader } from '@/features/generation/components/GenerateHeader';
 import { SchoolContextCard } from '@/features/generation/components/SchoolContextCard';
 import { ReferenceLibrarySection } from '@/features/references/components/ReferenceLibrarySection';
 import { publicUrl } from '@/services/r2/upload';
@@ -122,7 +123,7 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">+클립아트 만들기</h1>
+      <GenerateHeader />
       {/* 좌 2/3: 폼 (내부에서 다시 배치옵션↔프롬프트 2단)
           우 1/3: 개인 참조 · 학교 설정 */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
