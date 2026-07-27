@@ -16,7 +16,7 @@ import { createSupabaseBrowserClient } from '@/services/supabase/client';
 // 상단 메뉴. 홈은 로고 클릭으로 이동하므로 nav 에 포함하지 않는다.
 // 관리 는 isAdmin 일 때만 렌더 (계산은 서버 layout 에서 isAdmin(user.email)).
 const NAV_ITEMS = [
-  { href: '/generate', label: '만들기' },
+  { href: '/generate', label: '+클립아트 만들기' },
   { href: '/library', label: 'MY' },
   { href: '/organizations', label: '우리학교' },
   { href: '/community', label: '공유라이브러리' },
