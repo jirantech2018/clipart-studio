@@ -60,7 +60,7 @@ export function OrganizationHome({
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        내 조직
+        우리학교 워크스페이스
       </Link>
 
       {/* 상단: 조직 정보 (좌) + 관리 배너 (우) */}

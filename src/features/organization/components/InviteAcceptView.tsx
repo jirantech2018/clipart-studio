@@ -58,7 +58,7 @@ export function InviteAcceptView({
           <XCircle className="h-8 w-8 text-destructive" />
           <p>{error instanceof Error ? error.message : '초대를 불러오지 못했어요'}</p>
           <Link href="/organizations" className="text-primary underline">
-            내 조직으로 이동
+            우리학교 워크스페이스로 이동
           </Link>
         </CardContent>
       </Card>
