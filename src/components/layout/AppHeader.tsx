@@ -53,34 +53,36 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-      <div className="flex h-14 items-center justify-between gap-4 px-6">
-        <div className="flex min-w-0 items-center gap-6">
+      {/* 3분할: 좌(로고) / 중앙(nav) / 우(액션). flex-1 로 세 영역을 균등하게
+          잡아, nav 는 justify-center 로 정확히 헤더 중앙에 위치. */}
+      <div className="flex h-14 items-center gap-4 px-6">
+        <div className="flex flex-1 items-center">
           <Link href="/" className="shrink-0 font-semibold">
             ClipArt Studio
           </Link>
-          <nav className="hidden items-center gap-1 md:flex">
-            {items.map((item) => {
-              const active =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors',
-                    active
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                    item.href === ADMIN_ITEM.href && !active && 'text-primary',
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
+          {items.map((item) => {
+            const active =
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                  active
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  item.href === ADMIN_ITEM.href && !active && 'text-primary',
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="flex flex-1 items-center justify-end gap-3">
           <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
           <Link
             href="/profile"
