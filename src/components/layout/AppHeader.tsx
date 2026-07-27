@@ -65,8 +65,15 @@ export function AppHeader({
       )}
     >
       {/* 3분할: 좌(로고) / 중앙(nav) / 우(액션). flex-1 로 세 영역을 균등하게
-          잡아, nav 는 justify-center 로 정확히 헤더 중앙에 위치. */}
-      <div className="flex h-14 items-center gap-4 px-6">
+          잡아, nav 는 justify-center 로 정확히 헤더 중앙에 위치.
+          홈에서는 모든 텍스트/아이콘을 흰색으로 (배경 이미지 위에 얹혀 있음),
+          그 외 페이지는 기본 색상 유지. */}
+      <div
+        className={cn(
+          'flex h-14 items-center gap-4 px-6',
+          isHome && 'text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.5)]',
+        )}
+      >
         <div className="flex flex-1 items-center">
           <Link href="/" className="shrink-0 font-semibold">
             ClipArt Studio
@@ -82,10 +89,17 @@ export function AppHeader({
                 href={item.href}
                 className={cn(
                   'inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                  item.href === ADMIN_ITEM.href && !active && 'text-primary',
+                  isHome
+                    ? cn(
+                        'text-white hover:bg-white/20',
+                        active && 'bg-white/25',
+                      )
+                    : cn(
+                        active
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                        item.href === ADMIN_ITEM.href && !active && 'text-primary',
+                      ),
                 )}
               >
                 {item.label}
@@ -97,13 +111,23 @@ export function AppHeader({
           <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
           <Link
             href="/profile"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent"
+            className={cn(
+              'inline-flex h-9 w-9 items-center justify-center rounded-full',
+              isHome
+                ? 'text-white hover:bg-white/20'
+                : 'hover:bg-accent',
+            )}
             aria-label="계정정보"
             title="계정정보"
           >
             <User className="h-4 w-4" aria-hidden="true" />
           </Link>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className={cn(isHome && 'text-white hover:bg-white/20 hover:text-white')}
+          >
             로그아웃
           </Button>
         </div>
