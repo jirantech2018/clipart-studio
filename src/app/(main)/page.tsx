@@ -73,43 +73,41 @@ export default async function HomePage() {
   if (pick) heroBackground = publicUrl(pick.r2_key);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div>
       <TutorialOverlay />
-      <section className="space-y-6">
-        {/* 상단 배너: 관리자 knowledge 이미지 배경 + 카피 overlay.
-            배경 이미지가 없으면 (초기 knowledge 미등록 상태) muted 배경으로
-            자연스럽게 폴백. */}
-        <div className="relative isolate overflow-hidden rounded-xl bg-muted">
-          {heroBackground && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={heroBackground}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          )}
-          {/* 텍스트 가독성 확보용 오버레이 — 배경 있을 때는 살짝 어둡게,
-              배경 없을 때는 그라디언트만. */}
-          <div
+      {/* 히어로 배너 — 화면 전체 폭으로 확장. main 이 p-6 이라 -mx-6 -mt-6
+          로 그 padding 을 상쇄해서 좌우/상단 여백을 완전히 제거한다. rounded
+          도 없앰. 내부 텍스트는 다시 max-w-6xl 로 가운데 정렬. */}
+      <section className="relative isolate -mx-6 -mt-6 overflow-hidden bg-muted">
+        {heroBackground && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={heroBackground}
+            alt=""
             aria-hidden="true"
-            className={
-              heroBackground
-                ? 'absolute inset-0 bg-gradient-to-b from-background/70 via-background/60 to-background/90'
-                : 'absolute inset-0 bg-gradient-to-b from-background/40 to-background/80'
-            }
+            className="absolute inset-0 h-full w-full object-cover"
           />
-          <div className="relative space-y-3 px-6 py-14 text-center md:py-20">
-            <h1 className="text-4xl font-bold tracking-tight drop-shadow-sm">
-              학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
-            </h1>
-            <p className="whitespace-pre-line text-lg text-foreground/80">
-              {`원하는 이미지를 검색하고, 없다면 AI로 새롭게 만들 수 있습니다.
+        )}
+        <div
+          aria-hidden="true"
+          className={
+            heroBackground
+              ? 'absolute inset-0 bg-gradient-to-b from-background/70 via-background/60 to-background/90'
+              : 'absolute inset-0 bg-gradient-to-b from-background/40 to-background/80'
+          }
+        />
+        <div className="relative mx-auto max-w-6xl space-y-3 px-6 py-14 text-center md:py-24">
+          <h1 className="text-4xl font-bold tracking-tight drop-shadow-sm">
+            학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
+          </h1>
+          <p className="whitespace-pre-line text-lg text-foreground/80">
+            {`원하는 이미지를 검색하고, 없다면 AI로 새롭게 만들 수 있습니다.
 만든 이미지는 내 라이브러리에 저장되어 언제든 다시 사용할 수 있습니다.`}
-            </p>
-          </div>
+          </p>
         </div>
+      </section>
 
+      <div className="mx-auto max-w-6xl space-y-8 pt-8">
         {/* 좌: 검색 · 우: CTA. 배경 배너 아래에 별도 행. */}
         <div className="grid items-center gap-4 md:grid-cols-2">
           <Suspense fallback={null}>
@@ -127,23 +125,23 @@ export default async function HomePage() {
             </Link>
           </div>
         </div>
-      </section>
 
-      <HomeSection
-        title="인기 이미지"
-        subtitle="공유 라이브러리에서 많이 다운로드된 이미지"
-        moreHref="/community?sort=popular"
-        images={popular}
-        emptyLabel="아직 공개된 이미지가 없어요. 공유 라이브러리 공개를 켜면 여기 노출됩니다."
-      />
+        <HomeSection
+          title="인기 이미지"
+          subtitle="공유 라이브러리에서 많이 다운로드된 이미지"
+          moreHref="/community?sort=popular"
+          images={popular}
+          emptyLabel="아직 공개된 이미지가 없어요. 공유 라이브러리 공개를 켜면 여기 노출됩니다."
+        />
 
-      <HomeSection
-        title="최근 공개된 이미지"
-        subtitle="다른 사용자들이 방금 공개한 이미지"
-        moreHref="/community"
-        images={recent}
-        emptyLabel="최근 공개된 이미지가 아직 없어요."
-      />
+        <HomeSection
+          title="최근 공개된 이미지"
+          subtitle="다른 사용자들이 방금 공개한 이미지"
+          moreHref="/community"
+          images={recent}
+          emptyLabel="최근 공개된 이미지가 아직 없어요."
+        />
+      </div>
     </div>
   );
 }
