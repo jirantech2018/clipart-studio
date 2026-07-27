@@ -13,7 +13,8 @@
 // 생성이 진행되면 각자의 자리에 그대로 채워지므로 순서가 튀지 않는다.
 
 import { AlertTriangle, CheckCircle2, ImageIcon, Loader2 } from 'lucide-react';
-import { CSSProperties } from 'react';
+import { CSSProperties, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResultCard } from '@/features/generation/components/ResultCard';
@@ -43,6 +44,24 @@ export function BatchProgressPanel() {
 
   const isIdle = streamStatus === 'idle';
   const isStreaming = streamStatus === 'starting' || streamStatus === 'streaming';
+
+  // 첫 이미지 완성 알림 — cards.length 가 0 → 1 로 바뀌는 순간에 한 번만.
+  // 배치 크기가 2 이상일 때만 의미가 있음 (1장이면 완료 = 첫 = 마지막).
+  const firstToastFired = useRef(false);
+  useEffect(() => {
+    if (!isStreaming) {
+      firstToastFired.current = false;
+      return;
+    }
+    if (
+      !firstToastFired.current &&
+      cards.length === 1 &&
+      runningBatchSize > 1
+    ) {
+      firstToastFired.current = true;
+      toast.success('첫 번째 이미지가 완성됐어요. 나머지 이미지를 생성 중입니다.');
+    }
+  }, [cards.length, isStreaming, runningBatchSize]);
 
   const total = isIdle ? draftBatchSize : runningBatchSize;
   const aspectRatio = isIdle ? draftAspectRatio : runningAspectRatio;
@@ -80,7 +99,7 @@ export function BatchProgressPanel() {
                   ? '오류'
                   : '완료'}
             <span className="text-sm font-normal text-muted-foreground tabular-nums">
-              {isIdle ? `총 ${total}장` : `${cards.length}/${total}`}
+              {isIdle ? `총 ${total}장` : `${cards.length}/${total} 완료`}
               {!isIdle && failures.length > 0 && ` · 실패 ${failures.length}`}
             </span>
           </CardTitle>
@@ -202,21 +221,26 @@ function SlotFrame({
     );
   }
 
-  // idle: 얇은 프레임, streaming: pulse 스켈레톤
+  // 상태 구분:
+  //   idle       — 아직 생성 시작 전. 얇은 dashed 프레임 + "#N 대기 중"
+  //   streaming  — 스트리밍 중이지만 이 슬롯 이미지 미도착. pulse + "생성 중"
+  //   done       — ResultCard 로 렌더 (여기 도달 안 함)
+  //   failed     — 위 분기에서 처리
+  const label = isIdle ? `#${order + 1} 대기 중` : isStreaming ? '생성 중' : `#${order + 1}`;
   return (
     <div
       className={cn(
-        'flex items-center justify-center rounded-lg border text-xs tabular-nums text-muted-foreground/60',
+        'flex flex-col items-center justify-center gap-1 rounded-lg border text-xs tabular-nums text-muted-foreground/70',
         isStreaming
-          ? 'animate-pulse border-transparent bg-muted'
+          ? 'animate-pulse border-transparent bg-muted text-muted-foreground/80'
           : isIdle
             ? 'border-dashed bg-muted/30'
             : 'border-dashed bg-muted/40',
       )}
       style={aspectStyle}
-      aria-hidden={isStreaming ? undefined : true}
     >
-      {isStreaming ? '' : `#${order + 1}`}
+      {isStreaming && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+      <span>{label}</span>
     </div>
   );
 }

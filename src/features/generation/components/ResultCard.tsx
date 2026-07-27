@@ -20,7 +20,7 @@ export function ResultCard({ card, aspectStyle }: ResultCardProps) {
   return (
     <Link
       href={`/image/${card.imageId}`}
-      className="group relative block overflow-hidden rounded-lg border bg-card shadow-sm card-fade-in transition-shadow hover:border-primary/60 hover:shadow-md focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40"
+      className="group relative block overflow-hidden rounded-lg border bg-card shadow-sm card-fade-in card-highlight transition-shadow hover:border-primary/60 hover:shadow-md focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       <div
         className="relative w-full bg-muted"
