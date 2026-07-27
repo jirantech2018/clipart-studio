@@ -240,7 +240,7 @@ export function GenerationForm({
                 </p>
                 <Link
                   href={`/image/${parent.id}`}
-                  className="text-[10px] text-primary underline-offset-4 hover:underline"
+                  className="text-sm text-primary underline-offset-4 hover:underline"
                 >
                   원본 상세 보기
                 </Link>
@@ -282,7 +282,7 @@ export function GenerationForm({
                       ? `/organization/${orgContext.slug}/settings`
                       : '/profile'
                   }
-                  className="text-[10px] text-primary underline-offset-4 hover:underline"
+                  className="text-sm text-primary underline-offset-4 hover:underline"
                 >
                   슬롯 관리
                 </Link>
@@ -324,7 +324,7 @@ export function GenerationForm({
             <div className="space-y-5">
               <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <div className="text-sm uppercase tracking-wide text-muted-foreground">
                     생성 후
                   </div>
                   <div className="text-sm font-semibold tabular-nums">
@@ -399,7 +399,7 @@ export function GenerationForm({
                       )}
                     />
                     <span
-                      className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-muted-foreground/60"
+                      className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm text-muted-foreground/60"
                       aria-hidden="true"
                     >
                       ~{MAX_BATCH_SIZE}장

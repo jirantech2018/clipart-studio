@@ -155,7 +155,7 @@ function ImageGroup({
             {items.length} / {limit}
           </span>
         </div>
-        <p className="text-[11px] text-muted-foreground">{description}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
       <CardContent className="space-y-3">
         <div
@@ -312,7 +312,7 @@ function ImageRow({ knowledgeId, image }: RowProps) {
           loading="lazy"
         />
         {image.isPrimary && (
-          <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+          <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-sm font-medium text-primary-foreground">
             <Star className="h-2.5 w-2.5 fill-current" />
             대표
           </span>
@@ -321,7 +321,7 @@ function ImageRow({ knowledgeId, image }: RowProps) {
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div>
-          <Label htmlFor={`cap-${image.id}`} className="text-[11px]">
+          <Label htmlFor={`cap-${image.id}`} className="text-sm">
             설명 (caption)
           </Label>
           <Input
@@ -335,7 +335,7 @@ function ImageRow({ knowledgeId, image }: RowProps) {
           />
         </div>
         <div>
-          <Label htmlFor={`vw-${image.id}`} className="text-[11px]">
+          <Label htmlFor={`vw-${image.id}`} className="text-sm">
             뷰포인트
           </Label>
           <Input
@@ -357,7 +357,7 @@ function ImageRow({ knowledgeId, image }: RowProps) {
           disabled={busy || image.isPrimary}
           title={image.isPrimary ? '이미 대표 이미지' : '대표 이미지로 지정'}
           className={cn(
-            'inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors',
+            'inline-flex h-7 items-center gap-1 rounded-md border px-2 text-sm transition-colors',
             image.isPrimary
               ? 'border-primary bg-primary/10 text-primary'
               : 'border-input bg-background text-muted-foreground hover:bg-accent',
@@ -373,7 +373,7 @@ function ImageRow({ knowledgeId, image }: RowProps) {
           disabled={busy}
           title="이미지 삭제"
           className={cn(
-            'inline-flex h-7 items-center gap-1 rounded-md border border-destructive/30 bg-background px-2 text-[11px] text-destructive transition-colors',
+            'inline-flex h-7 items-center gap-1 rounded-md border border-destructive/30 bg-background px-2 text-sm text-destructive transition-colors',
             'hover:bg-destructive/10',
             busy && 'cursor-not-allowed opacity-50',
           )}

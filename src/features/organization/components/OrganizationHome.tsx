@@ -68,7 +68,7 @@ export function OrganizationHome({
         <header className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="truncate text-2xl font-semibold tracking-tight">{org.name}</h1>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
               /{org.slug}
             </span>
           </div>
@@ -81,7 +81,7 @@ export function OrganizationHome({
             </span>
             <span
               className={cn(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                'rounded-full px-2 py-0.5 text-sm font-medium',
                 org.myRole === 'owner'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground',

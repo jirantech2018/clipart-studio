@@ -27,7 +27,7 @@ export function SearchResultCard({ image }: { image: SearchImage }) {
         <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
           <AIGeneratedBadge />
           {image.isMine && (
-            <span className="rounded-full bg-primary/80 px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
+            <span className="rounded-full bg-primary/80 px-2 py-0.5 text-sm font-medium text-primary-foreground">
               내 이미지
             </span>
           )}
@@ -42,7 +42,7 @@ export function SearchResultCard({ image }: { image: SearchImage }) {
             {image.categories.map((cat) => (
               <span
                 key={cat}
-                className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+                className="rounded-full bg-primary/10 px-2 py-0.5 text-sm font-medium text-primary"
               >
                 {cat}
               </span>
@@ -54,7 +54,7 @@ export function SearchResultCard({ image }: { image: SearchImage }) {
             {image.tags.slice(0, 5).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground"
               >
                 #{tag}
               </span>

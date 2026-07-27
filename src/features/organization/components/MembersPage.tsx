@@ -108,12 +108,12 @@ function MembersSection({ slug, canManage }: { slug: string; canManage: boolean 
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{m.email}</span>
                   {m.isMe && (
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
                       나
                     </span>
                   )}
                   {m.status === 'suspended' && (
-                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
+                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-sm text-destructive">
                       정지됨
                     </span>
                   )}
@@ -232,7 +232,7 @@ function InvitesSection({ slug }: { slug: string }) {
                 <Copy className="mr-1 h-3 w-3" /> 복사
               </Button>
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               받는 사람은 이 링크를 열고 초대에 명시된 이메일로 로그인해야 수락할 수 있어요.
             </p>
           </div>
@@ -272,16 +272,16 @@ function PendingInvitesList({ slug }: { slug: string }) {
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium">{inv.email}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
                       {roleLabel(inv.role)}
                     </span>
                     {expired && (
-                      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
+                      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-sm text-destructive">
                         만료
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     만료: {new Date(inv.expiresAt).toLocaleString('ko-KR')}
                   </div>
                 </div>
@@ -330,7 +330,7 @@ function PendingInvitesList({ slug }: { slug: string }) {
             </div>
           );
         })}
-        <p className="pt-1 text-[10px] text-muted-foreground">
+        <p className="pt-1 text-sm text-muted-foreground">
           <Check className="mr-1 inline h-3 w-3" />
           같은 이메일로 다시 초대하면 링크가 갱신됩니다.
         </p>

@@ -40,6 +40,12 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      // text-sm (0.875rem / 14px) 을 앱 전역 최소 크기로 강제.
+      // text-xs 는 기본이 0.75rem 인데 sm 과 동일 값으로 올림 — 이미
+      // 프로젝트 전반에 text-xs 가 많아 개별 교체 대신 스케일 자체를 조정.
+      fontSize: {
+        xs: ['0.875rem', { lineHeight: '1.25rem' }],
+      },
       // 전역 기본 폰트를 Pretendard 로. @font-face 정의는 globals.css 최상단.
       // font-sans 유틸리티가 곧 Pretendard → 시스템 sans 순서를 갖는다.
       fontFamily: {

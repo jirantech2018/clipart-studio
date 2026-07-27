@@ -70,7 +70,7 @@ export function OrgLogoUploader({
           )}
           로고 이미지 업로드
         </Button>
-        <p className="text-[11px] text-muted-foreground">PNG · JPG · WebP, 5MB 이하</p>
+        <p className="text-sm text-muted-foreground">PNG · JPG · WebP, 5MB 이하</p>
       </div>
     </div>
   );

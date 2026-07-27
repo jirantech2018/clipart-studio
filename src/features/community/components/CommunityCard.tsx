@@ -80,7 +80,7 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
         <AIGeneratedBadge />
         {image.sourceOrgSlug && image.sourceOrgName && (
           <span
-            className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm"
+            className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-sm font-medium text-primary-foreground shadow-sm"
             title={`${image.sourceOrgName} 에서 큐레이션됨`}
           >
             <Building2 className="h-3 w-3" aria-hidden="true" />
@@ -92,7 +92,7 @@ export function CommunityCard({ image }: { image: CommunityImage }) {
       <div className="absolute bottom-2 right-2 flex items-center gap-1.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         {image.downloadCount > 0 && (
           <span
-            className="inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-1 text-[11px] tabular-nums text-muted-foreground shadow-md"
+            className="inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-1 text-sm tabular-nums text-muted-foreground shadow-md"
             title="다운로드 횟수"
           >
             <Download className="h-3 w-3" aria-hidden="true" />

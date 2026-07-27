@@ -113,25 +113,25 @@ export function SchoolContextCard({ orgContext }: Props) {
                 )}
                 <Link
                   href={`/organization/${orgContext.slug}/settings`}
-                  className="ml-auto text-[10px] text-primary underline-offset-4 hover:underline"
+                  className="ml-auto text-sm text-primary underline-offset-4 hover:underline"
                 >
                   조직 설정 열기 →
                 </Link>
               </div>
               {orgContext.basePrompt ? (
                 <div className="mt-2 space-y-1">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <div className="text-sm uppercase tracking-wide text-muted-foreground">
                     기본 프롬프트
                   </div>
                   <p
-                    className="line-clamp-3 rounded bg-background p-2 text-[11px] font-mono leading-snug text-foreground"
+                    className="line-clamp-3 rounded bg-background p-2 text-sm font-mono leading-snug text-foreground"
                     title={orgContext.basePrompt}
                   >
                     {orgContext.basePrompt}
                   </p>
                 </div>
               ) : (
-                <p className="mt-2 text-[11px] text-muted-foreground">
+                <p className="mt-2 text-sm text-muted-foreground">
                   이 조직에 기본 프롬프트가 설정돼 있지 않아요.
                 </p>
               )}
@@ -142,7 +142,7 @@ export function SchoolContextCard({ orgContext }: Props) {
                 <span className="text-xs font-medium">조직 참조 이미지 (선택)</span>
                 <Link
                   href={`/organization/${orgContext.slug}/settings`}
-                  className="text-[10px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   슬롯 관리
                 </Link>
@@ -158,7 +158,7 @@ export function SchoolContextCard({ orgContext }: Props) {
                   ))}
                 </div>
               ) : (orgRefs.data?.references.length ?? 0) === 0 ? (
-                <div className="rounded border border-dashed p-3 text-center text-[11px] text-muted-foreground">
+                <div className="rounded border border-dashed p-3 text-center text-sm text-muted-foreground">
                   조직 참조 이미지가 없어요.{' '}
                   <Link
                     href={`/organization/${orgContext.slug}/settings`}

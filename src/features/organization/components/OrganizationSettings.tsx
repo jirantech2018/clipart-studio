@@ -157,7 +157,7 @@ export function OrganizationSettings({ slug }: { slug: string }) {
                   disabled
                   className="text-muted-foreground"
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   슬러그 변경은 이번 단계에서 지원하지 않아요.
                 </p>
               </div>

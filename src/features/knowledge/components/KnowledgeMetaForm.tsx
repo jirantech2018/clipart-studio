@@ -140,7 +140,7 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
                   <option key={c} value={c} />
                 ))}
               </datalist>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 비워두면 &ldquo;미분류&rdquo; 로 표시됩니다.
               </p>
             </div>
@@ -156,7 +156,7 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
               rows={8}
               disabled={busy}
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               이미지 생성 요청 시 최종 프롬프트에 그대로 삽입됩니다. 최대 20000자.
             </p>
           </div>
@@ -205,7 +205,7 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
                 className="flex-1 min-w-[10rem] bg-transparent text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               사용자 프롬프트에 이 단어들 중 하나라도 나오면 이 Knowledge 가 자동 선택됩니다. (Phase C 예정) 최대 50개.
             </p>
           </div>
@@ -220,7 +220,7 @@ export function KnowledgeMetaForm({ initial, onSaved, onCancel }: Props) {
               rows={3}
               disabled={busy}
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               최대 5000자. 최종 프롬프트의 금지 조건 섹션에 추가됩니다.
             </p>
           </div>

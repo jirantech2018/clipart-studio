@@ -125,7 +125,7 @@ export function KnowledgePreview() {
                           />
                         </div>
                       ) : (
-                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-dashed bg-muted text-[10px] text-muted-foreground">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-dashed bg-muted text-sm text-muted-foreground">
                           이미지<br />없음
                         </div>
                       )}
@@ -137,7 +137,7 @@ export function KnowledgePreview() {
                           >
                             {m.knowledgeName}
                           </Link>
-                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                          <span className="text-sm text-muted-foreground tabular-nums">
                             우선순위 {m.priority}
                           </span>
                         </div>
@@ -145,13 +145,13 @@ export function KnowledgePreview() {
                           {m.matchedTriggers.map((t) => (
                             <span
                               key={t}
-                              className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                              className="rounded bg-primary/10 px-1.5 py-0.5 text-sm text-primary"
                             >
                               {t}
                             </span>
                           ))}
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>트리거 {m.triggerScore}개 매칭</span>
                           {m.llmScore !== null && (
                             <>
@@ -169,7 +169,7 @@ export function KnowledgePreview() {
                           )}
                         </div>
                         {m.reason && (
-                          <div className="text-[11px] text-muted-foreground">
+                          <div className="text-sm text-muted-foreground">
                             사유: {m.reason}
                           </div>
                         )}
@@ -198,13 +198,13 @@ export function KnowledgePreview() {
                         className="h-full w-full object-cover"
                         loading="lazy"
                       />
-                      <span className="absolute left-1 top-1 rounded bg-background/80 px-1 text-[10px] tabular-nums">
+                      <span className="absolute left-1 top-1 rounded bg-background/80 px-1 text-sm tabular-nums">
                         #{i + 1}
                       </span>
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   첫 번째 이미지가 mask 대상입니다. 최대 5장까지 전달돼요.
                 </p>
               </div>
@@ -212,7 +212,7 @@ export function KnowledgePreview() {
 
             <div className="space-y-1">
               <p className="text-xs font-medium">최종 프롬프트</p>
-              <pre className="max-h-72 overflow-auto rounded border bg-background p-3 text-[11px] leading-relaxed whitespace-pre-wrap">
+              <pre className="max-h-72 overflow-auto rounded border bg-background p-3 text-sm leading-relaxed whitespace-pre-wrap">
                 {result.finalPrompt}
               </pre>
             </div>

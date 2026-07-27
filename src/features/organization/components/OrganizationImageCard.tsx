@@ -170,7 +170,7 @@ export function OrganizationImageCard({
         <AIGeneratedBadge />
         <span
           className={cn(
-            'rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm',
+            'rounded-full px-2 py-0.5 text-sm font-medium shadow-sm',
             STATUS_TONE[status],
           )}
         >

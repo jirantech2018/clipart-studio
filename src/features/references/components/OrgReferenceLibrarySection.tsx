@@ -91,7 +91,7 @@ export function OrgReferenceLibrarySection({
           </div>
         )}
 
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           이미지를 클릭하면 위의 AI 이미지 만들기 폼에 참조 이미지로 지정돼요.{' '}
           <Link
             href={`/organization/${slug}/settings`}

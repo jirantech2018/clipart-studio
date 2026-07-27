@@ -214,7 +214,7 @@ export function ReferenceImagesSection() {
                     ) : (
                       <>
                         <Plus className="h-5 w-5" />
-                        <span className="text-[11px]">이미지 추가</span>
+                        <span className="text-sm">이미지 추가</span>
                       </>
                     )}
                   </button>

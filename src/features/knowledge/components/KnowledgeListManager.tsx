@@ -251,7 +251,7 @@ export function KnowledgeListManager() {
                         <ChevronDown className="h-4 w-4" aria-hidden="true" />
                       )}
                       <span className="font-medium">{bucket.label}</span>
-                      <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+                      <span className="ml-auto text-sm text-muted-foreground tabular-nums">
                         {bucket.items.length}개
                       </span>
                     </button>
@@ -318,7 +318,7 @@ export function KnowledgeListManager() {
                                 >
                                   {k.name}
                                 </Link>
-                                <div className="line-clamp-1 text-[11px] text-muted-foreground">
+                                <div className="line-clamp-1 text-sm text-muted-foreground">
                                   {k.description.slice(0, 80)}
                                   {k.description.length > 80 ? '…' : ''}
                                 </div>
@@ -327,13 +327,13 @@ export function KnowledgeListManager() {
                                     {k.triggers.slice(0, 5).map((t) => (
                                       <span
                                         key={t}
-                                        className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                                        className="rounded bg-primary/10 px-1.5 py-0.5 text-sm text-primary"
                                       >
                                         {t}
                                       </span>
                                     ))}
                                     {k.triggers.length > 5 && (
-                                      <span className="text-[10px] text-muted-foreground">
+                                      <span className="text-sm text-muted-foreground">
                                         +{k.triggers.length - 5}
                                       </span>
                                     )}
@@ -355,7 +355,7 @@ export function KnowledgeListManager() {
                                   onClick={() => handleToggle(k)}
                                   disabled={isToggling}
                                   className={cn(
-                                    'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                                    'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-sm transition-colors',
                                     k.enabled
                                       ? 'border-primary bg-primary/10 text-primary'
                                       : 'border-input bg-background text-muted-foreground',

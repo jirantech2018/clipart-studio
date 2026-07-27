@@ -191,7 +191,7 @@ function SlotFrame({
   if (failure) {
     return (
       <div
-        className="flex flex-col items-center justify-center gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-center text-[11px] text-destructive"
+        className="flex flex-col items-center justify-center gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-center text-sm text-destructive"
         style={aspectStyle}
         title={failure.error}
       >

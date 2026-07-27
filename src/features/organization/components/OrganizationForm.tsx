@@ -113,7 +113,7 @@ export function OrganizationForm() {
                   required
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 조직 페이지 주소에 쓰여요. 3~64자, 소문자·숫자·하이픈만. 나중에 바꿀 수 없어요.
               </p>
             </div>

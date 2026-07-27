@@ -98,7 +98,7 @@ export function ReferencePicker({ value, onChange, disabled }: ReferencePickerPr
           );
         })}
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         선택하면 프롬프트와 함께 이미지를 참조해 생성해요.{' '}
         <Link href="/settings" className="underline-offset-4 hover:underline">
           슬롯 관리

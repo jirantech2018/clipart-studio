@@ -121,7 +121,7 @@ export function HomeHeroImagesManager() {
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
                 {img.filename && (
-                  <div className="absolute inset-x-0 bottom-0 truncate bg-background/80 px-2 py-1 text-[10px] text-muted-foreground backdrop-blur">
+                  <div className="absolute inset-x-0 bottom-0 truncate bg-background/80 px-2 py-1 text-sm text-muted-foreground backdrop-blur">
                     {img.filename}
                   </div>
                 )}

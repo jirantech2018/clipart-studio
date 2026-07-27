@@ -90,7 +90,7 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
         <AIGeneratedBadge />
         {image.sharedOrgs && image.sharedOrgs.length > 0 && (
           <span
-            className="inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground shadow-sm"
+            className="inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-sm font-medium text-primary-foreground shadow-sm"
             title={image.sharedOrgs.map((o) => o.name).join(', ')}
           >
             <Users className="h-3 w-3" aria-hidden="true" />

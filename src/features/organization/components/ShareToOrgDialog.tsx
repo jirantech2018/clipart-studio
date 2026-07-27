@@ -184,9 +184,9 @@ export function ShareToOrgDialog({
                       <div className="text-xs text-muted-foreground">/{org.slug}</div>
                     </div>
                     {preview.isLoading ? (
-                      <span className="text-[11px] text-muted-foreground">…</span>
+                      <span className="text-sm text-muted-foreground">…</span>
                     ) : (
-                      <div className="flex flex-col items-end text-[11px]">
+                      <div className="flex flex-col items-end text-sm">
                         {newlyShared > 0 ? (
                           <span className="font-medium text-primary">
                             새로 공유 {newlyShared}개

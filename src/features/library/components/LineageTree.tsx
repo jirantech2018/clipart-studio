@@ -88,7 +88,7 @@ export function LineageTree({ imageId }: { imageId: string }) {
             <div className="space-y-3">
               {descendants.map((level, idx) => (
                 <div key={idx} className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <p className="text-sm uppercase tracking-wide text-muted-foreground">
                     {idx === 0 ? '직계 자식' : idx === 1 ? '2단계' : '3단계'}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -99,7 +99,7 @@ export function LineageTree({ imageId }: { imageId: string }) {
                 </div>
               ))}
               {descendantTruncated && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   일부 단계에서 자식 이미지가 많아 12개까지만 표시했습니다.
                 </p>
               )}

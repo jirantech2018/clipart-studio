@@ -180,7 +180,7 @@ export function ImageDetailView({ id }: { id: string }) {
               <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                 세부정보
               </summary>
-              <div className="mt-1 space-y-0.5 pl-1 text-[11px]">
+              <div className="mt-1 space-y-0.5 pl-1 text-sm">
                 <div>모델: {image.model}</div>
                 {image.seed !== null && <div>Seed: {image.seed}</div>}
               </div>
@@ -207,7 +207,7 @@ export function ImageDetailView({ id }: { id: string }) {
                   {sharedOrgs.data.orgs.map((o) => (
                     <span
                       key={o.slug}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]"
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-sm"
                     >
                       <Link
                         href={`/organization/${o.slug}/library`}
