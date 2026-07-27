@@ -121,24 +121,27 @@ export default async function GeneratePage({ searchParams }: GeneratePageProps) 
   }
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
-      <div className="min-w-0 space-y-6">
-        <GenerationForm
-          hasSchoolProfile={!!schoolProfile}
-          schoolName={(schoolProfile?.school_name as string) ?? null}
-          initialCredits={profile?.credits ?? 0}
-          creditsResetAt={(profile?.credits_reset_at as string) ?? null}
-          parent={parent}
-          orgContext={orgContext}
-          orgAccessError={orgAccessError}
-        />
-        {/* 폼 아래에 개인 참조 이미지 카드 (개인/조직 무관하게 항상 표시).
-            그 아래에 학교 설정 적용 카드 — 우측 드롭다운으로 개인/조직 선택. */}
-        {!parent && <ReferenceLibrarySection />}
-        {!parent && <SchoolContextCard orgContext={orgContext} />}
-      </div>
-      <div className="min-w-0">
-        <BatchProgressPanel />
+    <div className="mx-auto max-w-7xl space-y-6">
+      <h1 className="text-2xl font-semibold tracking-tight">AI 이미지 만들기</h1>
+      {/* 좌 2/3: 폼 (내부에서 다시 배치옵션↔프롬프트 2단)
+          우 1/3: 개인 참조 · 학교 설정 · 배치 진행/미리보기 */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="min-w-0">
+          <GenerationForm
+            hasSchoolProfile={!!schoolProfile}
+            schoolName={(schoolProfile?.school_name as string) ?? null}
+            initialCredits={profile?.credits ?? 0}
+            creditsResetAt={(profile?.credits_reset_at as string) ?? null}
+            parent={parent}
+            orgContext={orgContext}
+            orgAccessError={orgAccessError}
+          />
+        </div>
+        <div className="min-w-0 space-y-6">
+          {!parent && <ReferenceLibrarySection />}
+          {!parent && <SchoolContextCard orgContext={orgContext} />}
+          <BatchProgressPanel />
+        </div>
       </div>
     </div>
   );

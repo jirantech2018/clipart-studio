@@ -7,7 +7,7 @@
 //   - PresetChips are rendered
 //   - generationMode = 'img2img', referenceImageId is passed to the job
 
-import { Link as LinkIcon, Sparkles, X } from 'lucide-react';
+import { Link as LinkIcon, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -199,23 +199,31 @@ export function GenerationForm({
     router.replace('/generate');
   }
 
+  // chaining 모드에서만 카드 헤더에 별도 제목을 표시. 일반 생성의 "AI 이미지
+  // 만들기" 제목은 페이지 상단으로 이동함 (generate/page.tsx).
+  const showCardHeader = chaining || !!orgAccessError;
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {chaining ? <LinkIcon className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
-          {chaining ? '이 이미지로 생성 (i2i)' : 'AI 이미지 만들기'}
-        </CardTitle>
-        {orgAccessError && (
-          <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
-            {orgAccessError} 개인 컨텍스트로 자동 전환하지 않습니다 —{' '}
-            <Link href="/generate" className="underline-offset-4 hover:underline">
-              개인 생성으로 이동
-            </Link>
-          </p>
-        )}
-      </CardHeader>
-      <CardContent>
+      {showCardHeader && (
+        <CardHeader>
+          {chaining && (
+            <CardTitle className="flex items-center gap-2">
+              <LinkIcon className="h-5 w-5" />
+              이 이미지로 생성 (i2i)
+            </CardTitle>
+          )}
+          {orgAccessError && (
+            <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+              {orgAccessError} 개인 컨텍스트로 자동 전환하지 않습니다 —{' '}
+              <Link href="/generate" className="underline-offset-4 hover:underline">
+                개인 생성으로 이동
+              </Link>
+            </p>
+          )}
+        </CardHeader>
+      )}
+      <CardContent className={cn(!showCardHeader && 'pt-6')}>
         <form onSubmit={handleFormSubmit} className="space-y-5">
           {chaining && parent && (
             <div className="flex items-start gap-3 rounded-md border bg-muted/30 p-2">
@@ -309,160 +317,167 @@ export function GenerationForm({
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                생성 후
+          {/* 좌: 배치 옵션 · 이미지 비율 · 크레딧+submit
+              우: 프롬프트 · AI 추천
+              md 이하에서는 세로 스택 (사용자 시선 이동 최소화). */}
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-5">
+              <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    생성 후
+                  </div>
+                  <div className="text-sm font-semibold tabular-nums">
+                    {Math.max(0, credits - batchSize)} 크레딧 남음
+                  </div>
+                </div>
+                <Button type="submit" disabled={disabled} className="min-w-[8rem]">
+                  {inFlight
+                    ? '생성 중…'
+                    : insufficient
+                      ? '크레딧 부족'
+                      : '이미지 만들기'}
+                </Button>
               </div>
-              <div className="text-sm font-semibold tabular-nums">
-                {Math.max(0, credits - batchSize)} 크레딧 남음
-              </div>
-            </div>
-            <Button type="submit" disabled={disabled} className="min-w-[10rem]">
-              {inFlight
-                ? '생성 중…'
-                : insufficient
-                  ? '크레딧 부족'
-                  : '이미지 만들기'}
-            </Button>
-          </div>
 
-          <div className="space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
-              <span className="text-xs tabular-nums text-muted-foreground">
-                <span className="font-semibold text-foreground">{batchSize}</span> 크레딧
-                사용
-              </span>
-            </div>
-            <div className="grid grid-cols-[repeat(4,1fr)_1.6fr] gap-1.5">
-              {BATCH_SIZE_PRESETS.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  disabled={inFlight}
-                  onClick={() => setBatchSize(size)}
-                  className={cn(
-                    'h-9 rounded-md border text-sm font-medium transition-colors',
-                    batchSize === size
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-input bg-background hover:bg-accent',
-                    inFlight && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  {size}장
-                </button>
-              ))}
-              <div className="relative">
-                <input
-                  id="batchSize"
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_BATCH_SIZE}
-                  max={MAX_BATCH_SIZE}
-                  step={1}
-                  disabled={inFlight}
-                  value={batchSize}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    const raw = e.target.value;
-                    if (raw === '') {
-                      setBatchSize(MIN_BATCH_SIZE);
-                      return;
-                    }
-                    const parsed = Number.parseInt(raw, 10);
-                    if (Number.isNaN(parsed)) return;
-                    setBatchSize(
-                      Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, parsed)),
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <Label htmlFor="batchSize">몇 장 만들어 볼까요?</Label>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    <span className="font-semibold text-foreground">{batchSize}</span> 크레딧
+                    사용
+                  </span>
+                </div>
+                <div className="grid grid-cols-[repeat(4,1fr)_1.6fr] gap-1.5">
+                  {BATCH_SIZE_PRESETS.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      disabled={inFlight}
+                      onClick={() => setBatchSize(size)}
+                      className={cn(
+                        'h-9 rounded-md border text-sm font-medium transition-colors',
+                        batchSize === size
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input bg-background hover:bg-accent',
+                        inFlight && 'cursor-not-allowed opacity-50',
+                      )}
+                    >
+                      {size}장
+                    </button>
+                  ))}
+                  <div className="relative">
+                    <input
+                      id="batchSize"
+                      type="number"
+                      inputMode="numeric"
+                      min={MIN_BATCH_SIZE}
+                      max={MAX_BATCH_SIZE}
+                      step={1}
+                      disabled={inFlight}
+                      value={batchSize}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          setBatchSize(MIN_BATCH_SIZE);
+                          return;
+                        }
+                        const parsed = Number.parseInt(raw, 10);
+                        if (Number.isNaN(parsed)) return;
+                        setBatchSize(
+                          Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, parsed)),
+                        );
+                      }}
+                      className={cn(
+                        'h-9 w-full rounded-md border border-input bg-background px-3 pr-12 text-center text-sm font-medium',
+                        // 브라우저 기본 number spinner 제거
+                        '[appearance:textfield]',
+                        '[&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none',
+                        '[&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none',
+                        'focus:outline-none focus:ring-2 focus:ring-primary/40',
+                        inFlight && 'cursor-not-allowed opacity-50',
+                      )}
+                    />
+                    <span
+                      className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-muted-foreground/60"
+                      aria-hidden="true"
+                    >
+                      ~{MAX_BATCH_SIZE}장
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  여러 장을 만들수록 원하는 이미지를 찾기 쉬워집니다. 직접 입력해{' '}
+                  {MAX_BATCH_SIZE}장까지 만들 수 있어요.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>이미지 비율</Label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {ASPECT_RATIOS.map((r) => {
+                    const dims = ASPECT_RATIO_DIMENSIONS[r];
+                    const previewRatio = `${dims.width} / ${dims.height}`;
+                    const active = aspectRatio === r;
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={inFlight}
+                        onClick={() => setAspectRatio(r)}
+                        aria-pressed={active}
+                        className={cn(
+                          'flex flex-col items-center gap-1 rounded-md border py-2 text-xs font-medium transition-colors',
+                          active
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-input bg-background text-muted-foreground hover:bg-accent',
+                          inFlight && 'cursor-not-allowed opacity-50',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'w-6 rounded-sm border',
+                            active
+                              ? 'border-primary bg-primary/30'
+                              : 'border-current bg-current/20',
+                          )}
+                          style={{ aspectRatio: previewRatio }}
+                          aria-hidden="true"
+                        />
+                        <span>{ASPECT_RATIO_LABELS[r]}</span>
+                      </button>
                     );
-                  }}
-                  className={cn(
-                    'h-9 w-full rounded-md border border-input bg-background px-3 pr-12 text-center text-sm font-medium',
-                    // 브라우저 기본 number spinner 제거
-                    '[appearance:textfield]',
-                    '[&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none',
-                    '[&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none',
-                    'focus:outline-none focus:ring-2 focus:ring-primary/40',
-                    inFlight && 'cursor-not-allowed opacity-50',
-                  )}
-                />
-                <span
-                  className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-muted-foreground/60"
-                  aria-hidden="true"
-                >
-                  ~{MAX_BATCH_SIZE}장
-                </span>
+                  })}
+                </div>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              여러 장을 만들수록 원하는 이미지를 찾기 쉬워집니다. 직접 입력해{' '}
-              {MAX_BATCH_SIZE}장까지 만들 수 있어요.
-            </p>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="prompt">프롬프트</Label>
-            <Textarea
-              id="prompt"
-              rows={4}
-              placeholder={'예: 운동장에서 뛰는 초등학생\n벚꽃 아래에서 책을 읽는 학생'}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              disabled={inFlight}
-            />
-            <div className="space-y-1.5 pt-1">
-              <p className="text-xs text-muted-foreground">
-                AI 추천 — 클릭해서 프롬프트에 변형 힌트를 덧붙여 보세요
-              </p>
-              <PresetChips
-                hints={suggestionHints}
-                loading={suggestionQuery.isLoading || suggestionQuery.isFetching}
+            <div className="space-y-1.5">
+              <Label htmlFor="prompt">프롬프트</Label>
+              <Textarea
+                id="prompt"
+                rows={8}
+                placeholder={'예: 운동장에서 뛰는 초등학생\n벚꽃 아래에서 책을 읽는 학생'}
                 value={prompt}
-                onChange={setPrompt}
+                onChange={(e) => setPrompt(e.target.value)}
                 disabled={inFlight}
               />
+              <div className="space-y-1.5 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  AI 추천 — 클릭해서 프롬프트에 변형 힌트를 덧붙여 보세요
+                </p>
+                <PresetChips
+                  hints={suggestionHints}
+                  loading={suggestionQuery.isLoading || suggestionQuery.isFetching}
+                  value={prompt}
+                  onChange={setPrompt}
+                  disabled={inFlight}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>이미지 비율</Label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {ASPECT_RATIOS.map((r) => {
-                const dims = ASPECT_RATIO_DIMENSIONS[r];
-                const previewRatio = `${dims.width} / ${dims.height}`;
-                const active = aspectRatio === r;
-                return (
-                  <button
-                    key={r}
-                    type="button"
-                    disabled={inFlight}
-                    onClick={() => setAspectRatio(r)}
-                    aria-pressed={active}
-                    className={cn(
-                      'flex flex-col items-center gap-1 rounded-md border py-2 text-xs font-medium transition-colors',
-                      active
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-input bg-background text-muted-foreground hover:bg-accent',
-                      inFlight && 'cursor-not-allowed opacity-50',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'w-6 rounded-sm border',
-                        active
-                          ? 'border-primary bg-primary/30'
-                          : 'border-current bg-current/20',
-                      )}
-                      style={{ aspectRatio: previewRatio }}
-                      aria-hidden="true"
-                    />
-                    <span>{ASPECT_RATIO_LABELS[r]}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 학교 스타일 적용 UI 는 폼 아래 SchoolContextCard 로 이동. */}
+          {/* 학교 스타일 적용 UI 는 페이지 우측 사이드바 SchoolContextCard 로 이동. */}
 
         </form>
       </CardContent>
