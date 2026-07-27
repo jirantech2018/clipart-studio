@@ -117,7 +117,7 @@ export function CommunityGrid() {
             <p>
               {category
                 ? `"${category}" 카테고리에 공개된 이미지가 아직 없어요.`
-                : '워크스페이스에 공개된 이미지가 아직 없어요.'}
+                : '공유 라이브러리에 공개된 이미지가 아직 없어요.'}
             </p>
             <Link href="/generate" className={buttonVariants({ size: 'sm' })}>
               내가 첫 이미지 만들기

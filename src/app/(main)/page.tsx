@@ -85,10 +85,10 @@ export default async function HomePage() {
 
       <HomeSection
         title="인기 이미지"
-        subtitle="워크스페이스에서 많이 다운로드된 이미지"
+        subtitle="공유 라이브러리에서 많이 다운로드된 이미지"
         moreHref="/community?sort=popular"
         images={popular}
-        emptyLabel="아직 공개된 이미지가 없어요. 워크스페이스 공개를 켜면 여기 노출됩니다."
+        emptyLabel="아직 공개된 이미지가 없어요. 공유 라이브러리 공개를 켜면 여기 노출됩니다."
       />
 
       <HomeSection

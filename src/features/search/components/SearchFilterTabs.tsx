@@ -9,7 +9,7 @@ import type { SearchScope } from '@/features/search/hooks/useSearch';
 const TABS: Array<{ key: SearchScope; label: string }> = [
   { key: 'all', label: '전체' },
   { key: 'mine', label: '내 라이브러리' },
-  { key: 'community', label: '워크스페이스' },
+  { key: 'community', label: '공유 라이브러리' },
 ];
 
 interface SearchFilterTabsProps {
