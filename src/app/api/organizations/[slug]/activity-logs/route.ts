@@ -95,12 +95,18 @@ export async function GET(request: Request, { params }: { params: { slug: string
   }
 
   const emailMap = new Map<string, string>();
+  let profilesFound = 0;
+  let profilesError: string | null = null;
+  let authFallbackUsed = 0;
+  let authFallbackError: string | null = null;
   if (userIds.size > 0) {
     const service = createSupabaseServiceClient();
-    const { data: profiles } = await service
+    const { data: profiles, error: profErr } = await service
       .from('profiles')
       .select('id, email')
       .in('id', Array.from(userIds));
+    if (profErr) profilesError = profErr.message;
+    profilesFound = profiles?.length ?? 0;
     for (const p of profiles ?? []) {
       const row = p as { id: string; email: string };
       if (row.email) emailMap.set(row.id, row.email);
@@ -113,12 +119,19 @@ export async function GET(request: Request, { params }: { params: { slug: string
       const authLookups = await Promise.all(
         missingIds.map(async (id) => {
           const { data, error } = await service.auth.admin.getUserById(id);
-          if (error || !data?.user?.email) return null;
+          if (error) {
+            authFallbackError = error.message;
+            return null;
+          }
+          if (!data?.user?.email) return null;
           return { id, email: data.user.email };
         }),
       );
       for (const row of authLookups) {
-        if (row) emailMap.set(row.id, row.email);
+        if (row) {
+          emailMap.set(row.id, row.email);
+          authFallbackUsed += 1;
+        }
       }
     }
   }
@@ -133,5 +146,16 @@ export async function GET(request: Request, { params }: { params: { slug: string
     createdAt: row.created_at,
   }));
 
-  return apiOk({ entries });
+  return apiOk({
+    entries,
+    _debug: {
+      build: 'e628-debug-1',
+      userIdsCount: userIds.size,
+      profilesFound,
+      emailMapSize: emailMap.size,
+      profilesError,
+      authFallbackUsed,
+      authFallbackError,
+    },
+  });
 }
