@@ -1,3 +1,60 @@
+/* Pretendard — 프로젝트 전역 기본 폰트. jsdelivr CDN 에서 weight 별로 로드.
+   font-display: swap 이라 폰트가 오기 전에는 시스템 sans 로 렌더된 뒤 교체. */
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Thin.woff2') format('woff2');
+  font-weight: 100;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-ExtraLight.woff2') format('woff2');
+  font-weight: 200;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Black.woff2') format('woff2');
+  font-weight: 900;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -48,7 +105,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }
 

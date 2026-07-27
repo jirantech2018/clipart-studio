@@ -40,6 +40,24 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      // 전역 기본 폰트를 Pretendard 로. @font-face 정의는 globals.css 최상단.
+      // font-sans 유틸리티가 곧 Pretendard → 시스템 sans 순서를 갖는다.
+      fontFamily: {
+        sans: [
+          'Pretendard',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'Roboto',
+          'Helvetica Neue',
+          'Arial',
+          'Apple SD Gothic Neo',
+          'Noto Sans KR',
+          'Malgun Gothic',
+          'sans-serif',
+        ],
+      },
     },
   },
   plugins: [],
