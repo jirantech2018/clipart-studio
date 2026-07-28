@@ -96,66 +96,43 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
       <Dialog open={open} onClose={onClose} dismissable>
         <DialogHeader
           title="이미지 생성을 취소하시겠습니까?"
-          description="취소하기 전에 결과물과 크레딧 처리 내용을 확인해 주세요."
+          description="생성 요청이 시작된 이미지는 취소해도 중단되지 않습니다."
         />
         <DialogBody>
           <div className="space-y-4 text-sm">
-            <div className="space-y-3 rounded-md border bg-muted/30 p-3">
-              <div>
-                <p className="font-medium">• 이미 완성된 이미지</p>
-                <p className="text-muted-foreground">
-                  라이브러리에 그대로 저장되며, 사용된 크레딧은 환불되지 않습니다.
-                </p>
-              </div>
-              <div>
-                <p className="font-medium">• 현재 생성 중인 이미지</p>
-                <p className="text-muted-foreground">
-                  AI 생성 요청이 이미 시작된 경우 즉시 중단되지 않을 수 있습니다.
-                  <br />
-                  성공하면 이미지가 라이브러리에 저장되고 크레딧이 사용됩니다.
-                  <br />
-                  실패하면 해당 크레딧이 환불됩니다.
-                </p>
-              </div>
-              <div>
-                <p className="font-medium">• 아직 생성이 시작되지 않은 이미지</p>
-                <p className="text-muted-foreground">
-                  생성을 시작하지 않고 취소되며, 해당 크레딧은 자동으로 환불됩니다.
-                </p>
-              </div>
-            </div>
+            <ul className="space-y-2">
+              <li>
+                <strong>AI가 이미 작업 중인 이미지는 끝까지 생성되어 내 라이브러리에 저장됩니다.</strong>
+              </li>
+              <li>
+                이미 시작된 이미지에 <strong>사용된 크레딧은 되돌릴 수 없습니다.</strong>
+              </li>
+              <li>
+                취소하면 남은 생성만 중단되고, 바로 새로운 이미지 생성을 시작할 수 있습니다.
+              </li>
+            </ul>
 
             <div className="rounded-md border p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                현재 진행 상태
+                현재 상태
               </p>
               <ul className="space-y-0.5">
                 <li>
-                  전체 요청: <strong className="tabular-nums">{batchSize}장</strong>
+                  총 요청 : <strong className="tabular-nums">{batchSize}장</strong>
                 </li>
                 <li>
-                  완료된 이미지: <strong className="tabular-nums">{succeeded}장</strong>
+                  생성 완료 : <strong className="tabular-nums">{succeeded}장</strong>
                 </li>
                 <li>
-                  현재 생성 중 (추정):{' '}
-                  <strong className="tabular-nums">{running}장</strong>
-                </li>
-                <li>
-                  생성 대기 중: <strong className="tabular-nums">{waiting}장</strong>
+                  AI 작업 중 : <strong className="tabular-nums">{running}장</strong>
                 </li>
               </ul>
             </div>
 
-            <p className="text-sm text-muted-foreground">
-              지금 취소하면 대기 중인 <strong>{waiting}장</strong>의 생성이 중단되며,
-              해당 크레딧이 자동으로 환불됩니다.
+            <p className="rounded-md bg-muted/50 p-3 text-sm">
+              취소 후에도 AI가 작업 중인 이미지는 계속 처리됩니다.
               <br />
-              현재 생성 중인 <strong>{running}장</strong>은 처리 결과에 따라
-              라이브러리에 저장되거나 크레딧이 환불될 수 있습니다.
-              <br />
-              <span className="text-xs">
-                예상 환불: 최대 {waiting}크레딧 (실제 값은 서버 정산 후 확정)
-              </span>
+              <strong>정말 취소하시겠습니까?</strong>
             </p>
           </div>
         </DialogBody>
@@ -175,7 +152,7 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
             size="sm"
             onClick={handleConfirmCancel}
           >
-            그래도 생성 취소
+            생성 취소
           </Button>
         </DialogFooter>
       </Dialog>
@@ -184,53 +161,41 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
 
   // ===== Phase: pending =====
   if (phase === 'pending') {
-    // 이미 실행 중이던 슬롯 (chunk 최대 5장) 이 마무리될 때까지 서버 done 이
-    // 도착하지 않는다. UX 상 그 대기를 답답하지 않도록:
-    //   1) 실시간 완료 수 노출 (cards.length 는 SSE 로 계속 갱신)
-    //   2) 백그라운드에서 자연 정산되도록 두고 사용자는 라이브러리로 이동
-    //      할 수 있는 링크 제공
     return (
       <Dialog open={open} onClose={onClose} dismissable={false}>
-        <DialogHeader title="이미지 생성을 취소하고 있습니다" />
+        <DialogHeader title="이미지 생성을 취소하고 있습니다." />
         <DialogBody>
           <div className="space-y-4 text-sm">
             <div className="flex items-start gap-3">
               <Loader2 className="mt-1 h-5 w-5 shrink-0 animate-spin text-primary" />
               <div className="space-y-2">
-                <p>이미 생성이 시작된 이미지의 마무리를 기다리고 있어요.</p>
-                <p className="text-muted-foreground">
-                  대기 중인 이미지의 생성은 이미 중단됐고,
+                <p>남은 생성 예약은 취소되었습니다.</p>
+                <p>
+                  이미 생성이 시작된 이미지는 계속 처리되며,
                   <br />
-                  해당 크레딧은 환불 처리 중입니다.
+                  완료되면 내 라이브러리에 자동 저장됩니다.
+                </p>
+                <p className="text-muted-foreground">
+                  생성이 완료될 때까지 기다릴 필요는 없습니다.
+                  <br />
+                  다른 작업을 계속 진행하셔도 됩니다.
                 </p>
               </div>
             </div>
 
-            {/* 실시간 진행 표시 — 서버 done 이벤트를 기다리는 동안 SSE 로
-                cards / failures 는 계속 갱신되므로 그대로 반영해준다. */}
             <div className="rounded-md border p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                실시간 진행
+                현재 상태
               </p>
               <ul className="space-y-0.5 tabular-nums">
                 <li>
-                  완료된 이미지: <strong>{succeeded}장</strong> / {batchSize}장
+                  생성 완료 : <strong>{succeeded}</strong> / {batchSize}장
                 </li>
-                {failed > 0 && (
-                  <li>
-                    실패: <strong>{failed}장</strong>
-                  </li>
-                )}
-                <li className="text-muted-foreground">
-                  진행 중이던 이미지 마무리 대기: <strong>{running}장</strong>
+                <li>
+                  AI 작업 중 : <strong>{running}장</strong>
                 </li>
               </ul>
             </div>
-
-            <p className="text-xs text-muted-foreground">
-              굳이 기다리지 않아도 됩니다. 아래 링크로 이동해도 서버는
-              나머지 처리를 백그라운드에서 마치고 크레딧을 정산합니다.
-            </p>
           </div>
         </DialogBody>
         <DialogFooter>
@@ -241,9 +206,9 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
               setPhase('confirm');
               setTimeout(() => reset(), 0);
             }}
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            className={cn(buttonVariants({ variant: 'default', size: 'sm' }))}
           >
-            지금 라이브러리로 이동
+            내 라이브러리로 이동
           </Link>
         </DialogFooter>
       </Dialog>
@@ -263,47 +228,35 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
 
   return (
     <Dialog open={open} onClose={handleFinalClose} dismissable>
-      <DialogHeader title="이미지 생성이 취소되었습니다" />
+      <DialogHeader title="이미지 생성이 취소되었습니다." />
       <DialogBody>
         <div className="space-y-3 text-sm">
           <div className="inline-flex items-center gap-2 text-primary">
             <CheckCircle2 className="h-4 w-4" />
-            <span className="font-medium">정산 완료</span>
+            <span className="font-medium">정리가 완료됐어요</span>
           </div>
-          <ul className="space-y-1 rounded-md border p-3">
+          <ul className="space-y-1 rounded-md border p-3 tabular-nums">
             <li>
-              완료된 이미지:{' '}
-              <strong className="tabular-nums">{finalSummary.completed}장</strong>
+              라이브러리에 저장된 이미지 :{' '}
+              <strong>{finalSummary.completed}장</strong>
             </li>
-            <li>
-              라이브러리에 저장된 이미지:{' '}
-              <strong className="tabular-nums">{finalSummary.completed}장</strong>
-            </li>
-            <li>
-              환불된 크레딧:{' '}
-              <strong className="tabular-nums">
-                {finalSummary.refundedCredits}크레딧
-              </strong>
-            </li>
+            {finalSummary.refundedCredits > 0 && (
+              <li>
+                되돌아온 크레딧 : <strong>{finalSummary.refundedCredits}크레딧</strong>
+              </li>
+            )}
             {finalSummary.finalRemainingCredits !== null && (
               <li>
-                현재 잔액:{' '}
-                <strong className="tabular-nums">
-                  {finalSummary.finalRemainingCredits}
-                </strong>
+                현재 잔액 : <strong>{finalSummary.finalRemainingCredits}</strong>
               </li>
             )}
           </ul>
-          <p className="text-muted-foreground">
-            완료된 이미지는 라이브러리에 저장되어 있습니다.
-            {stillProcessing > 0 && (
-              <>
-                <br />
-                취소 요청 전에 이미 생성이 시작된 <strong>{stillProcessing}장</strong>
-                은 처리 결과에 따라 추가로 저장되거나 해당 크레딧이 환불될 수 있어요.
-              </>
-            )}
-          </p>
+          {stillProcessing > 0 && (
+            <p className="text-muted-foreground">
+              이미 시작된 <strong>{stillProcessing}장</strong>은 완료되는 대로
+              라이브러리에 자동 저장돼요.
+            </p>
+          )}
         </div>
       </DialogBody>
       <DialogFooter>
@@ -312,7 +265,7 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
           onClick={handleFinalClose}
           className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
         >
-          라이브러리에서 확인
+          내 라이브러리로 이동
         </Link>
         <Button type="button" variant="default" size="sm" onClick={handleFinalClose}>
           확인
