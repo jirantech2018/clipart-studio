@@ -194,6 +194,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         const chunkCount = Math.ceil(totalSlots / CHUNK_SIZE);
 
         for (let chunk = 0; chunk < chunkCount; chunk += 1) {
+          // 취소 감지 — 각 chunk 시작 전에 최신 job.status 를 조회. 사용자가
+          // POST /api/jobs/[id]/cancel 로 'canceled' 로 전환한 상태라면 여기서
+          // 새 chunk 를 시작하지 않고 loop 를 빠져나간다. 이미 시작된 이번
+          // chunk 의 슬롯은 그대로 완료 (성공 or 실패 각각 정산).
+          const { data: statusRow } = await service
+            .from('generation_jobs')
+            .select('status')
+            .eq('id', job.id)
+            .single();
+          if ((statusRow as { status: string } | null)?.status === 'canceled') {
+            break;
+          }
+
           const chunkStart = chunk * CHUNK_SIZE;
           const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalSlots);
           const isDiversity = chunk < job.diversityLevel;
@@ -263,14 +276,26 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           failed += untouched;
         }
 
+        // 사용자가 도중에 취소했는지 확인 — 그렇다면 finalStatus 는 'canceled'
+        // 로 유지한다 (partial/done/failed 로 덮어쓰지 않음).
+        const { data: preStatusRow } = await service
+          .from('generation_jobs')
+          .select('status')
+          .eq('id', job.id)
+          .single();
+        const wasCanceled =
+          (preStatusRow as { status: string } | null)?.status === 'canceled';
+
         // Always resolve job.status so the partial-unique index unblocks retries
-        const finalStatus = fatal
-          ? 'failed'
-          : failed === 0
-            ? 'done'
-            : succeeded === 0
-              ? 'failed'
-              : 'partial';
+        const finalStatus = wasCanceled
+          ? 'canceled'
+          : fatal
+            ? 'failed'
+            : failed === 0
+              ? 'done'
+              : succeeded === 0
+                ? 'failed'
+                : 'partial';
 
         const { data: finalProfile } = await service
           .from('profiles')
@@ -296,6 +321,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
               failed,
               refundedCredits: failed,
               finalRemainingCredits: finalProfile?.credits ?? null,
+              canceled: wasCanceled,
             }),
           );
           // done 이벤트가 클라이언트에 도달해 EventSource.close() 를 부를 시간을

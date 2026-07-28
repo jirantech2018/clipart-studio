@@ -80,7 +80,13 @@ export interface InvitePreview {
   alreadyAccepted: boolean; // 초대 자체가 이미 사용됨 (accepted_at 세팅)
   emailMismatch: boolean; // 로그인 사용자 이메일 ≠ 초대 대상 이메일
 }
-export type JobStatus = 'queued' | 'running' | 'partial' | 'done' | 'failed';
+export type JobStatus =
+  | 'queued'
+  | 'running'
+  | 'partial'
+  | 'done'
+  | 'failed'
+  | 'canceled';
 export type ImageModel = 'gpt-image-2' | 'gpt-image-1' | 'flux-schnell';
 
 export interface Profile {

@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { CancelDialog } from '@/features/generation/components/CancelDialog';
 import { PresetChips } from '@/features/generation/components/PresetChips';
 import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCreateJob';
 import { usePromptSuggestions } from '@/features/generation/hooks/usePromptSuggestions';
@@ -97,6 +98,7 @@ export function GenerationForm({
 
   const [prompt, setPrompt] = useState<string>(parent?.prompt ?? '');
   const [batchSize, setBatchSize] = useState<number>(5);
+  const [cancelOpen, setCancelOpen] = useState(false);
   // 학교 스타일 적용 여부는 SchoolContextCard 의 드롭다운이 결정한다.
   // 조직이 선택돼 있으면 자동 true, "설정 안 함" 이면 false.
   const schoolProfileApplied = useSchoolApplyStore((s) => s.applied);
@@ -331,13 +333,22 @@ export function GenerationForm({
                     {Math.max(0, credits - batchSize)} 크레딧 남음
                   </div>
                 </div>
-                <Button type="submit" disabled={disabled} className="min-w-[8rem]">
-                  {inFlight
-                    ? '생성 중…'
-                    : insufficient
-                      ? '크레딧 부족'
-                      : '이미지 만들기'}
-                </Button>
+                {inFlight ? (
+                  // 스트리밍 중: 제출 버튼 자리에 '생성 취소' 버튼을 교체 노출.
+                  // 확인 팝업 흐름은 CancelDialog 가 담당.
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setCancelOpen(true)}
+                    className="min-w-[8rem]"
+                  >
+                    생성 취소
+                  </Button>
+                ) : (
+                  <Button type="submit" disabled={disabled} className="min-w-[8rem]">
+                    {insufficient ? '크레딧 부족' : '이미지 만들기'}
+                  </Button>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -481,6 +492,7 @@ export function GenerationForm({
 
         </form>
       </CardContent>
+      <CancelDialog open={cancelOpen} onClose={() => setCancelOpen(false)} />
     </Card>
   );
 }
