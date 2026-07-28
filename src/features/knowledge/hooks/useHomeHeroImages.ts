@@ -46,6 +46,28 @@ export function useUploadHomeHeroImage() {
   });
 }
 
+export function useCurateHomeHeroImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (imageId: string): Promise<HomeHeroImage> => {
+      const res = await fetch('/api/admin/home-hero-images/from-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '배너 등록 실패');
+      }
+      const json = (await res.json()) as { data: { image: HomeHeroImage } };
+      return json.data.image;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: LIST_KEY }),
+  });
+}
+
 export function useDeleteHomeHeroImage() {
   const qc = useQueryClient();
   return useMutation({

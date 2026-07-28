@@ -2,6 +2,8 @@
 // Server component: 히어로 배경만 서버에서 로드하고, 공유 라이브러리 그리드는
 // community 페이지에서 쓰는 CommunityGrid 를 그대로 재활용한다.
 
+import Link from 'next/link';
+
 import { HomeCommunitySection } from '@/features/community/components/HomeCommunitySection';
 import { HomeStepsSection } from '@/features/community/components/HomeStepsSection';
 import { TutorialOverlay } from '@/features/onboarding/components/TutorialOverlay';
@@ -11,20 +13,37 @@ import { createSupabaseServiceClient } from '@/services/supabase/server';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  // 히어로 상단 배경 — 관리자가 /admin/knowledge 화면의 "홈 배너 배경 이미지"
-  // 섹션에 등록한 전용 카탈로그(home_hero_images) 에서 랜덤 하나. RLS 로 anon /
-  // authenticated 모두 차단되어 있으므로 service_role 로 조회.
-  // force-dynamic 이라 새로고침마다 다른 이미지가 뽑힌다.
+  // 히어로 배너 — 관리자가 /admin/knowledge 에서 큐레이션한 대표 작품 (or
+  // 업로드 배경). 방문마다 랜덤 하나. source_image_id 가 있으면 클릭 시 상세
+  // 페이지로 이동하고 우측 하단에 그 이미지의 자동 태그를 chip 으로 노출한다.
   const service = createSupabaseServiceClient();
   let heroBackground: string | null = null;
+  let heroImageId: string | null = null;
+  let heroTags: string[] = [];
   const { data: bgCandidates } = await service
     .from('home_hero_images')
-    .select('r2_key')
+    .select('r2_key, source_image_id')
     .eq('enabled', true)
     .limit(30);
-  const rows = (bgCandidates ?? []) as { r2_key: string }[];
+  const rows = (bgCandidates ?? []) as {
+    r2_key: string;
+    source_image_id: string | null;
+  }[];
   const pick = rows[Math.floor(Math.random() * rows.length)];
-  if (pick) heroBackground = publicUrl(pick.r2_key);
+  if (pick) {
+    heroBackground = publicUrl(pick.r2_key);
+    if (pick.source_image_id) {
+      heroImageId = pick.source_image_id;
+      const { data: tagRows } = await service
+        .from('image_tags')
+        .select('tag')
+        .eq('image_id', pick.source_image_id)
+        .limit(6);
+      heroTags = ((tagRows ?? []) as { tag: string }[])
+        .map((r) => r.tag)
+        .filter(Boolean);
+    }
+  }
 
   // 홈 상단 TagMarquee 용 태그 리스트 — 공유 라이브러리(is_on_community=TRUE)
   // 에 실제 노출되고 있는 이미지들의 태그만 뽑는다. 두 단계 조회:
@@ -60,26 +79,59 @@ export default async function HomePage() {
           AppHeader 가 sticky h-14 라서, -mx-6 로 좌우 padding 을 없애고
           -mt-20 (헤더 3.5rem + main 상단 1.5rem = 5rem) 만큼 위로 밀어
           배너 상단이 반투명 헤더 뒤로 흘러들어간다. */}
-      {/* min-h-[..] 로 배너 최소 높이를 확보한 뒤 flex items-end 로 h1 을 하단에
-          가깝게 붙인다. 모바일에서는 h1 폰트를 줄이고 <br className="sm:hidden">
-          로 "학교에서 필요한 클립아트를 / 쉽고 빠르게 만들어 보세요." 두 줄로. */}
+      {/* 히어로 = 관리자 큐레이션 대표 작품 전시관.
+          - source_image_id 가 있으면 배너 전체가 이미지 상세로 이어지는 Link.
+          - 우측 하단에 자동 태그 chip (검색 라우팅).
+          - min-h + flex items-end 로 h1 은 하단에 붙임. 모바일에선 h1 크기 축소
+            + <br className="sm:hidden"> 로 두 줄 표시. */}
       <section className="relative isolate -mx-6 -mt-20 flex min-h-[42vh] items-end overflow-hidden bg-muted md:min-h-[48vh]">
-        {heroBackground && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={heroBackground}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        )}
+        {heroBackground &&
+          (heroImageId ? (
+            <Link
+              href={`/image/${heroImageId}`}
+              aria-label="이 대표 작품 상세 보기"
+              className="absolute inset-0"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={heroBackground}
+                alt="관리자가 선정한 대표 작품"
+                className="h-full w-full object-cover"
+              />
+            </Link>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={heroBackground}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ))}
+
         <div className="relative mx-auto w-full max-w-6xl px-6 pb-8 text-center md:pb-12">
-          <h1 className="text-2xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.55)] sm:text-3xl md:text-4xl">
+          <h1 className="pointer-events-none text-2xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.55)] sm:text-3xl md:text-4xl">
             학교에서 필요한 클립아트를
             <br className="sm:hidden" />{' '}
             쉽고 빠르게 만들어 보세요.
           </h1>
         </div>
+
+        {/* 태그 chip — 큐레이션 배너에만 노출. 우측 하단, Link 위에 얹혀 개별
+            클릭이 검색으로 향하도록 (z-index 확보). */}
+        {heroTags.length > 0 && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 mx-auto flex max-w-6xl flex-wrap justify-end gap-1 px-6 md:bottom-3">
+            {heroTags.map((tag) => (
+              <Link
+                key={tag}
+                href={`/search?q=${encodeURIComponent(tag)}`}
+                className="pointer-events-auto inline-flex items-center rounded-full bg-black/45 px-2.5 py-0.5 text-sm text-white backdrop-blur-sm transition-colors hover:bg-black/65"
+              >
+                #{tag}
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
       {/* AppHeader 가 관측할 sentinel — 이 지점이 뷰포트 위로 스크롤되면
           "히어로를 지나갔다" 로 판정하고 헤더가 흰색 불투명 모드로 전환된다. */}

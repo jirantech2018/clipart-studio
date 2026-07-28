@@ -39,6 +39,7 @@ interface HomeHeroImageRow {
   sort_order: number;
   enabled: boolean;
   created_at: string;
+  source_image_id: string | null;
 }
 
 export interface HomeHeroImage {
@@ -51,6 +52,8 @@ export interface HomeHeroImage {
   sortOrder: number;
   enabled: boolean;
   createdAt: string;
+  /** null 이면 파일 업로드 방식, UUID 면 공유 라이브러리 이미지 큐레이션. */
+  sourceImageId: string | null;
 }
 
 function rowToDomain(row: HomeHeroImageRow): HomeHeroImage {
@@ -64,6 +67,7 @@ function rowToDomain(row: HomeHeroImageRow): HomeHeroImage {
     sortOrder: row.sort_order,
     enabled: row.enabled,
     createdAt: row.created_at,
+    sourceImageId: row.source_image_id,
   };
 }
 
@@ -88,7 +92,7 @@ export async function GET() {
   const service = createSupabaseServiceClient();
   const { data, error } = await service
     .from('home_hero_images')
-    .select('id, r2_key, filename, width, height, sort_order, enabled, created_at')
+    .select('id, r2_key, filename, width, height, sort_order, enabled, created_at, source_image_id')
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false });
 
@@ -161,7 +165,7 @@ export async function POST(request: Request) {
       width: normalized.width,
       height: normalized.height,
     })
-    .select('id, r2_key, filename, width, height, sort_order, enabled, created_at')
+    .select('id, r2_key, filename, width, height, sort_order, enabled, created_at, source_image_id')
     .single();
 
   if (error || !data) {
