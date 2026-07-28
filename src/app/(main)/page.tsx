@@ -2,13 +2,9 @@
 // Server component: 히어로 배경만 서버에서 로드하고, 공유 라이브러리 그리드는
 // community 페이지에서 쓰는 CommunityGrid 를 그대로 재활용한다.
 
-import Link from 'next/link';
-import { Suspense } from 'react';
-
-import { buttonVariants } from '@/components/ui/button';
 import { HomeCommunitySection } from '@/features/community/components/HomeCommunitySection';
+import { HomeStepsSection } from '@/features/community/components/HomeStepsSection';
 import { TutorialOverlay } from '@/features/onboarding/components/TutorialOverlay';
-import { SearchBar } from '@/features/search/components/SearchBar';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 
@@ -90,23 +86,9 @@ export default async function HomePage() {
       <div id="home-hero-sentinel" aria-hidden="true" className="h-0" />
 
       <div className="mx-auto max-w-6xl space-y-4 pt-4">
-        {/* 좌: 검색 · 우: CTA. 배경 배너 아래에 별도 행. */}
-        <div className="grid items-center gap-4 md:grid-cols-2">
-          <Suspense fallback={null}>
-            <SearchBar className="w-full" />
-          </Suspense>
-          <div className="flex flex-wrap items-center justify-center gap-2 md:justify-end">
-            <Link href="/generate" className={buttonVariants({ size: 'lg' })}>
-              AI로 이미지 만들기
-            </Link>
-            <Link
-              href="/library"
-              className={buttonVariants({ variant: 'outline', size: 'lg' })}
-            >
-              내 라이브러리 열기
-            </Link>
-          </div>
-        </div>
+        {/* 4-Step 기능 카드 — 검색 → AI 생성 → 라이브러리 → 스타일 이어 만들기.
+            기존 검색바 + CTA 두 개를 카드 안으로 흡수. */}
+        <HomeStepsSection />
 
         {/* 공유 라이브러리 임베드 — 좌 화살표+태그 캐러셀 + 우 sort 드롭다운
             + 그리드. sort state 를 두 파트가 공유해야 해서 client wrapper 로. */}
