@@ -29,7 +29,8 @@ export function HomeStepsSection() {
             <h3 className="text-base font-semibold">먼저 검색하세요</h3>
           </div>
           <p className="text-sm text-muted-foreground">
-            이미 있는 이미지는 바로 사용할 수 있습니다.
+            원하는 이미지를 먼저 검색해 보세요. 이미 있는 이미지는 바로 내려받아
+            사용할 수 있습니다.
           </p>
           <Suspense fallback={null}>
             <SearchBar className="w-full" />
@@ -47,7 +48,8 @@ export function HomeStepsSection() {
             <h3 className="text-base font-semibold">AI 생성</h3>
           </div>
           <p className="flex-1 text-sm text-muted-foreground">
-            찾는 이미지가 없다면 AI가 새롭게 만듭니다.
+            찾는 이미지가 없다면 AI가 새롭게 만들어 드립니다. 저작권 고민은
+            줄이고, 학교에 맞는 이미지를 만들어 보세요.
           </p>
           <Link
             href="/generate"
@@ -60,21 +62,22 @@ export function HomeStepsSection() {
 
       <StepArrow />
 
-      {/* Step 3 — 내 라이브러리 */}
+      {/* Step 3 — 라이브러리 */}
       <Card className="flex-1">
         <CardContent className="flex h-full flex-col gap-3 p-4">
           <div className="flex items-center gap-2">
             <FolderOpen className="h-5 w-5 text-primary" />
-            <h3 className="text-base font-semibold">내 라이브러리</h3>
+            <h3 className="text-base font-semibold">라이브러리</h3>
           </div>
           <p className="flex-1 text-sm text-muted-foreground">
-            만든 이미지는 자동으로 저장됩니다.
+            만든 이미지는 내 라이브러리에 저장되고, 조직 라이브러리 → 공유
+            라이브러리로 공유하여 활용할 수 있습니다.
           </p>
           <Link
             href="/library"
             className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'w-full')}
           >
-            내 라이브러리 열기
+            MY 라이브러리 열기
           </Link>
         </CardContent>
       </Card>
@@ -89,7 +92,7 @@ export function HomeStepsSection() {
             <h3 className="text-base font-semibold">스타일 이어 만들기</h3>
           </div>
           <p className="text-sm text-muted-foreground">
-            원하는 이미지를 기반으로 새로운 이미지를 만들 수 있습니다.
+            마음에 드는 이미지를 바탕으로 새로운 이미지를 만들어 보세요.
           </p>
           {/* img → img 시각 힌트 — 실제 진입은 이미지 상세의 "다시 만들기" */}
           <div className="mt-auto flex items-center justify-center gap-2 rounded-md border bg-muted/40 py-3 text-primary">
