@@ -1,14 +1,14 @@
-// 홈 히어로 배너 이미지 단건 — 삭제만 지원 (관리자 전용).
+// 홈 히어로 배너 카탈로그 단건 — "설정 해제"만 지원.
 //
-// 두 방식이 공존하므로 R2 파일 삭제는 조건부:
-//   source_image_id 세팅됨 (큐레이션) → home_hero_images row 만 지우고
-//     R2 파일은 원본 이미지가 계속 사용 중이므로 절대 삭제하지 않는다.
-//   source_image_id NULL (파일 업로드) → 배너 전용으로 올린 파일이라
-//     row 삭제와 함께 R2 파일도 정리.
+// 이 화면에서는 원본 이미지를 지우는 개념이 존재하지 않는다.
+// home_hero_images row 만 제거 (= 홈 배너에서 내리기) 하고 R2 파일은
+// 어떤 경우에도 손대지 않는다.
+//   - 큐레이션 방식 : r2_key 는 원본 이미지가 계속 참조 중
+//   - 업로드 방식   : 향후 재사용 가능하도록 orphan 파일로 남겨둠
+//     (필요 시 별도 R2 정리 배치에서 처리)
 
 import { isAdmin } from '@/lib/admin';
 import { apiError, apiOk } from '@/lib/api-error';
-import { deleteObject } from '@/services/r2/upload';
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -39,13 +39,11 @@ export async function DELETE(
 
   const { data: row } = await service
     .from('home_hero_images')
-    .select('r2_key, source_image_id')
+    .select('id')
     .eq('id', params.id)
     .maybeSingle();
 
-  if (!row) return apiError('NOT_FOUND', '이미지를 찾을 수 없습니다');
-
-  const banner = row as { r2_key: string; source_image_id: string | null };
+  if (!row) return apiError('NOT_FOUND', '배너를 찾을 수 없습니다');
 
   const { error } = await service
     .from('home_hero_images')
@@ -55,14 +53,6 @@ export async function DELETE(
   if (error) {
     console.error('[admin/home-hero-images DELETE]', error);
     return apiError('INTERNAL_ERROR', '배너 해제 실패');
-  }
-
-  // 큐레이션 방식이면 R2 파일은 원본 이미지의 것 → 절대 지우면 안 됨.
-  // 업로드 방식일 때만 R2 정리.
-  if (!banner.source_image_id) {
-    await deleteObject(banner.r2_key).catch((err) => {
-      console.error('[admin/home-hero-images DELETE] R2 cleanup failed', err);
-    });
   }
 
   return apiOk({ id: params.id });

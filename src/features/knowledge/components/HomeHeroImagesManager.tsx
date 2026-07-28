@@ -6,7 +6,7 @@
 //   • "이미지 업로드" — 임의 파일 업로드 (호환성 유지). 향후 마케팅 배너 등
 //     생성 이미지가 아닌 자료에 사용.
 
-import { CheckCircle2, ImagePlus, Loader2, Trash2, Upload } from 'lucide-react';
+import { CheckCircle2, ImagePlus, Loader2, Upload, XCircle } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -45,16 +45,15 @@ export function HomeHeroImagesManager() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  async function handleDelete(id: string, isCurated: boolean) {
-    const msg = isCurated
-      ? '이 이미지의 홈 배너 설정을 해제할까요? 원본 이미지는 라이브러리에 그대로 남습니다.'
-      : '이 업로드 배너를 삭제할까요? R2 파일도 함께 삭제됩니다.';
-    if (!confirm(msg)) return;
+  async function handleRelease(id: string) {
+    if (!confirm('이 이미지의 홈 배너 설정을 해제할까요? 원본 이미지는 라이브러리에 그대로 남아요.')) {
+      return;
+    }
     try {
       await del.mutateAsync(id);
-      toast.success(isCurated ? '배너에서 해제했어요' : '삭제했어요');
+      toast.success('홈 배너에서 해제했어요');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '실패');
+      toast.error(err instanceof Error ? err.message : '해제 실패');
     }
   }
 
@@ -144,17 +143,13 @@ export function HomeHeroImagesManager() {
                 )}
                 <button
                   type="button"
-                  onClick={() => handleDelete(img.id, !!img.sourceImageId)}
+                  onClick={() => handleRelease(img.id)}
                   disabled={del.isPending}
                   className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md bg-background/80 text-destructive opacity-0 backdrop-blur transition-opacity hover:bg-background focus:opacity-100 group-hover:opacity-100"
-                  aria-label={img.sourceImageId ? '배너 해제' : '삭제'}
-                  title={
-                    img.sourceImageId
-                      ? '홈 배너에서 해제 (원본 이미지는 유지)'
-                      : '삭제 (R2 파일도 제거)'
-                  }
+                  aria-label="홈 배너에서 해제"
+                  title="홈 배너에서 해제 (원본 이미지는 유지)"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <XCircle className="h-3.5 w-3.5" />
                 </button>
                 {img.filename && (
                   <div className="absolute inset-x-0 bottom-0 truncate bg-background/80 px-2 py-1 text-sm text-muted-foreground backdrop-blur">
