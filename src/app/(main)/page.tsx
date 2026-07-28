@@ -31,19 +31,32 @@ export default async function HomePage() {
   const pick = rows[Math.floor(Math.random() * rows.length)];
   if (pick) heroBackground = publicUrl(pick.r2_key);
 
-  // 홈 상단 TagMarquee 용 태그 리스트 — 실제 이미지 태그를 랜덤 셔플해 노출.
-  // image_tags 는 RLS 로 조회 제한이 있어 service_role 사용. distinct 후 shuffle.
-  const { data: tagRows } = await service
-    .from('image_tags')
-    .select('tag')
+  // 홈 상단 TagMarquee 용 태그 리스트 — 공유 라이브러리(is_on_community=TRUE)
+  // 에 실제 노출되고 있는 이미지들의 태그만 뽑는다. 두 단계 조회:
+  //   1) 공유 라이브러리 이미지 id (최근순, 최대 500장)
+  //   2) 그 이미지들의 image_tags.tag 를 join 없이 IN 필터로 조회
+  // 이후 distinct + Fisher-Yates 셔플 후 60개까지 자름.
+  const { data: communityImages } = await service
+    .from('images')
+    .select('id')
+    .eq('is_on_community', true)
+    .order('created_at', { ascending: false })
     .limit(500);
-  const tagSet = new Set<string>();
-  for (const r of (tagRows ?? []) as { tag: string }[]) {
-    if (r.tag) tagSet.add(r.tag);
+  const publicIds = ((communityImages ?? []) as { id: string }[]).map((r) => r.id);
+  let tagsForMarquee: string[] = [];
+  if (publicIds.length > 0) {
+    const { data: tagRows } = await service
+      .from('image_tags')
+      .select('tag')
+      .in('image_id', publicIds);
+    const tagSet = new Set<string>();
+    for (const r of (tagRows ?? []) as { tag: string }[]) {
+      if (r.tag) tagSet.add(r.tag);
+    }
+    tagsForMarquee = Array.from(tagSet)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 60);
   }
-  const tagsForMarquee = Array.from(tagSet)
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 60);
 
   return (
     <div>

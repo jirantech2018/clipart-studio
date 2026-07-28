@@ -155,21 +155,4 @@
   .animate-loading-bar {
     animation: loading-bar 1.1s ease-in-out infinite;
   }
-
-  /* 태그 마퀴 — 두 세트가 나란히 이어지고 첫 세트가 완전히 사라지는 시점 (=
-     -50%) 에 두 번째 세트가 원래 위치로 오면서 seamless 하게 반복. */
-  @keyframes marquee {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-50%);
-    }
-  }
-  .animate-marquee {
-    animation: marquee 40s linear infinite;
-  }
-  .animate-marquee:hover {
-    animation-play-state: paused;
-  }
 }
