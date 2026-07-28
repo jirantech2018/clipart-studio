@@ -45,13 +45,16 @@ export function HomeHeroImagesManager() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('이 이미지를 홈 배너 카탈로그에서 삭제할까요?')) return;
+  async function handleDelete(id: string, isCurated: boolean) {
+    const msg = isCurated
+      ? '이 이미지의 홈 배너 설정을 해제할까요? 원본 이미지는 라이브러리에 그대로 남습니다.'
+      : '이 업로드 배너를 삭제할까요? R2 파일도 함께 삭제됩니다.';
+    if (!confirm(msg)) return;
     try {
       await del.mutateAsync(id);
-      toast.success('삭제했어요');
+      toast.success(isCurated ? '배너에서 해제했어요' : '삭제했어요');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '실패');
     }
   }
 
@@ -141,11 +144,15 @@ export function HomeHeroImagesManager() {
                 )}
                 <button
                   type="button"
-                  onClick={() => handleDelete(img.id)}
+                  onClick={() => handleDelete(img.id, !!img.sourceImageId)}
                   disabled={del.isPending}
                   className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md bg-background/80 text-destructive opacity-0 backdrop-blur transition-opacity hover:bg-background focus:opacity-100 group-hover:opacity-100"
-                  aria-label="삭제"
-                  title="삭제"
+                  aria-label={img.sourceImageId ? '배너 해제' : '삭제'}
+                  title={
+                    img.sourceImageId
+                      ? '홈 배너에서 해제 (원본 이미지는 유지)'
+                      : '삭제 (R2 파일도 제거)'
+                  }
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
