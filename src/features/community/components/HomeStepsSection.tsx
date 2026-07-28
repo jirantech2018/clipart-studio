@@ -18,8 +18,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SearchBar } from '@/features/search/components/SearchBar';
 import { cn } from '@/lib/utils';
 
-const POPULAR_TAGS = ['봄', '운동회', '과학실', '칠판', '수업', '여름'];
-
 export function HomeStepsSection() {
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-stretch">
@@ -36,20 +34,6 @@ export function HomeStepsSection() {
           <Suspense fallback={null}>
             <SearchBar className="w-full" />
           </Suspense>
-          <div className="border-t pt-2">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">인기 검색</p>
-            <div className="flex flex-wrap gap-1">
-              {POPULAR_TAGS.map((tag) => (
-                <Link
-                  key={tag}
-                  href={`/search?q=${encodeURIComponent(tag)}`}
-                  className="inline-flex items-center rounded-full border border-input bg-background px-2 py-0.5 text-sm transition-colors hover:border-primary hover:bg-accent"
-                >
-                  #{tag}
-                </Link>
-              ))}
-            </div>
-          </div>
         </CardContent>
       </Card>
 
