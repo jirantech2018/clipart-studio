@@ -22,7 +22,13 @@ import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 
 import type { CommunitySort } from '@/features/community/hooks/useCommunity';
 
-export function CommunityGrid() {
+interface CommunityGridProps {
+  /** 홈에서는 12개 고정 카테고리 chip 대신 TagMarquee 를 위에 배치하므로
+   *  Grid 내부 필터의 category 버튼 영역만 감춘다 (sort 드롭다운은 유지). */
+  hideCategoryFilters?: boolean;
+}
+
+export function CommunityGrid({ hideCategoryFilters = false }: CommunityGridProps = {}) {
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<CommunitySort>('newest');
   const [zipPending, setZipPending] = useState(false);
@@ -86,6 +92,7 @@ export function CommunityGrid() {
         sort={sort}
         onCategoryChange={setCategory}
         onSortChange={setSort}
+        hideCategoryButtons={hideCategoryFilters}
       />
 
       {isLoading ? (

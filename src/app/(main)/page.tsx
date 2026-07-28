@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
 import { CommunityGrid } from '@/features/community/components/CommunityGrid';
+import { TagMarquee } from '@/features/community/components/TagMarquee';
 import { TutorialOverlay } from '@/features/onboarding/components/TutorialOverlay';
 import { SearchBar } from '@/features/search/components/SearchBar';
 import { publicUrl } from '@/services/r2/upload';
@@ -29,6 +30,20 @@ export default async function HomePage() {
   const rows = (bgCandidates ?? []) as { r2_key: string }[];
   const pick = rows[Math.floor(Math.random() * rows.length)];
   if (pick) heroBackground = publicUrl(pick.r2_key);
+
+  // 홈 상단 TagMarquee 용 태그 리스트 — 실제 이미지 태그를 랜덤 셔플해 노출.
+  // image_tags 는 RLS 로 조회 제한이 있어 service_role 사용. distinct 후 shuffle.
+  const { data: tagRows } = await service
+    .from('image_tags')
+    .select('tag')
+    .limit(500);
+  const tagSet = new Set<string>();
+  for (const r of (tagRows ?? []) as { tag: string }[]) {
+    if (r.tag) tagSet.add(r.tag);
+  }
+  const tagsForMarquee = Array.from(tagSet)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 60);
 
   return (
     <div>
@@ -81,8 +96,10 @@ export default async function HomePage() {
         </div>
 
         {/* 공유 라이브러리 그리드 — /community 페이지의 그리드를 그대로 임베드.
-            홈에서는 헤딩/서브카피 없이 그리드만 이어붙여 여백을 최소화. */}
-        <CommunityGrid />
+            홈에서는 12개 고정 카테고리 chip 대신 실제 이미지 태그 marquee 로
+            대체 (hideCategoryFilters). */}
+        <TagMarquee tags={tagsForMarquee} />
+        <CommunityGrid hideCategoryFilters />
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ interface CommunityFiltersProps {
   sort: CommunitySort;
   onCategoryChange: (next: string | null) => void;
   onSortChange: (next: CommunitySort) => void;
+  /** 홈에서는 12개 고정 카테고리 chip 을 감추고 TagMarquee 로 대체한다. */
+  hideCategoryButtons?: boolean;
 }
 
 const SORT_LABELS: Record<CommunitySort, string> = {
@@ -24,38 +26,41 @@ export function CommunityFilters({
   sort,
   onCategoryChange,
   onSortChange,
+  hideCategoryButtons = false,
 }: CommunityFiltersProps) {
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          onClick={() => onCategoryChange(null)}
-          className={cn(
-            'h-8 rounded-full border px-3 text-sm transition-colors',
-            category === null
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-input bg-background hover:bg-accent',
-          )}
-        >
-          전체
-        </button>
-        {SCHOOL_CATEGORIES.map((cat) => (
+      {!hideCategoryButtons && (
+        <div className="flex flex-wrap gap-1.5">
           <button
-            key={cat}
             type="button"
-            onClick={() => onCategoryChange(cat)}
+            onClick={() => onCategoryChange(null)}
             className={cn(
               'h-8 rounded-full border px-3 text-sm transition-colors',
-              category === cat
+              category === null
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-input bg-background hover:bg-accent',
             )}
           >
-            {cat}
+            전체
           </button>
-        ))}
-      </div>
+          {SCHOOL_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => onCategoryChange(cat)}
+              className={cn(
+                'h-8 rounded-full border px-3 text-sm transition-colors',
+                category === cat
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-background hover:bg-accent',
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex justify-end">
         <select
