@@ -60,7 +60,10 @@ export default async function HomePage() {
           AppHeader 가 sticky h-14 라서, -mx-6 로 좌우 padding 을 없애고
           -mt-20 (헤더 3.5rem + main 상단 1.5rem = 5rem) 만큼 위로 밀어
           배너 상단이 반투명 헤더 뒤로 흘러들어간다. */}
-      <section className="relative isolate -mx-6 -mt-20 overflow-hidden bg-muted">
+      {/* min-h-[..] 로 배너 최소 높이를 확보한 뒤 flex items-end 로 h1 을 하단에
+          가깝게 붙인다. 모바일에서는 h1 폰트를 줄이고 <br className="sm:hidden">
+          로 "학교에서 필요한 클립아트를 / 쉽고 빠르게 만들어 보세요." 두 줄로. */}
+      <section className="relative isolate -mx-6 -mt-20 flex min-h-[42vh] items-end overflow-hidden bg-muted md:min-h-[48vh]">
         {heroBackground && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -70,15 +73,12 @@ export default async function HomePage() {
             className="absolute inset-0 h-full w-full object-cover"
           />
         )}
-        <div className="relative mx-auto max-w-6xl space-y-3 px-6 pb-14 pt-28 text-center md:pb-24 md:pt-36">
-          <h1 className="text-4xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
-            학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
+        <div className="relative mx-auto w-full max-w-6xl px-6 pb-8 text-center md:pb-12">
+          <h1 className="text-2xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.55)] sm:text-3xl md:text-4xl">
+            학교에서 필요한 클립아트를
+            <br className="sm:hidden" />{' '}
+            쉽고 빠르게 만들어 보세요.
           </h1>
-          <p className="whitespace-pre-line text-lg font-semibold text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.65)]">
-            {`원하는 이미지를 찾고, 없다면 AI와 함께 새롭게 만들어 보세요.
-만든 이미지는 내 라이브러리에 저장되어 언제든 다시 사용할 수 있습니다.
-다른 사람들이 만든 다양한 이미지를 살펴보고, 원하는 스타일을 이어 나만의 이미지로 완성해 보세요.`}
-          </p>
         </div>
       </section>
       {/* AppHeader 가 관측할 sentinel — 이 지점이 뷰포트 위로 스크롤되면
