@@ -81,10 +81,13 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
   }
 
   function handleFinalClose() {
-    // result 확인 후에만 로컬 상태 리셋 (사용자 명시 지시:
-    // "서버 응답 전에 화면을 초기화하지 않는다").
-    reset();
+    // 순서 중요: dialog 를 먼저 unmount 시키고 그 뒤에 store 를 초기화한다.
+    // 반대 순서로 하면 summary 가 null 이 되는 순간 result phase 렌더가
+    // finalSummary.completed 접근에서 크래시 (client-side exception).
     onClose();
+    setPhase('confirm');
+    // 다음 tick 에 reset — Dialog 가 unmount 된 뒤라 안전.
+    setTimeout(() => reset(), 0);
   }
 
   // ===== Phase: confirm =====
@@ -181,29 +184,78 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
 
   // ===== Phase: pending =====
   if (phase === 'pending') {
+    // 이미 실행 중이던 슬롯 (chunk 최대 5장) 이 마무리될 때까지 서버 done 이
+    // 도착하지 않는다. UX 상 그 대기를 답답하지 않도록:
+    //   1) 실시간 완료 수 노출 (cards.length 는 SSE 로 계속 갱신)
+    //   2) 백그라운드에서 자연 정산되도록 두고 사용자는 라이브러리로 이동
+    //      할 수 있는 링크 제공
     return (
       <Dialog open={open} onClose={onClose} dismissable={false}>
         <DialogHeader title="이미지 생성을 취소하고 있습니다" />
         <DialogBody>
-          <div className="flex items-start gap-3 text-sm">
-            <Loader2 className="mt-1 h-5 w-5 shrink-0 animate-spin text-primary" />
-            <div className="space-y-2">
-              <p>완료된 이미지와 현재 생성 상태를 확인하고 있습니다.</p>
-              <p className="text-muted-foreground">
-                생성을 시작하지 않은 이미지의 중단과
-                <br />
-                환불 가능한 크레딧을 정산하고 있습니다.
-              </p>
+          <div className="space-y-4 text-sm">
+            <div className="flex items-start gap-3">
+              <Loader2 className="mt-1 h-5 w-5 shrink-0 animate-spin text-primary" />
+              <div className="space-y-2">
+                <p>이미 생성이 시작된 이미지의 마무리를 기다리고 있어요.</p>
+                <p className="text-muted-foreground">
+                  대기 중인 이미지의 생성은 이미 중단됐고,
+                  <br />
+                  해당 크레딧은 환불 처리 중입니다.
+                </p>
+              </div>
             </div>
+
+            {/* 실시간 진행 표시 — 서버 done 이벤트를 기다리는 동안 SSE 로
+                cards / failures 는 계속 갱신되므로 그대로 반영해준다. */}
+            <div className="rounded-md border p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                실시간 진행
+              </p>
+              <ul className="space-y-0.5 tabular-nums">
+                <li>
+                  완료된 이미지: <strong>{succeeded}장</strong> / {batchSize}장
+                </li>
+                {failed > 0 && (
+                  <li>
+                    실패: <strong>{failed}장</strong>
+                  </li>
+                )}
+                <li className="text-muted-foreground">
+                  진행 중이던 이미지 마무리 대기: <strong>{running}장</strong>
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              굳이 기다리지 않아도 됩니다. 아래 링크로 이동해도 서버는
+              나머지 처리를 백그라운드에서 마치고 크레딧을 정산합니다.
+            </p>
           </div>
         </DialogBody>
+        <DialogFooter>
+          <Link
+            href="/library"
+            onClick={() => {
+              onClose();
+              setPhase('confirm');
+              setTimeout(() => reset(), 0);
+            }}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+          >
+            지금 라이브러리로 이동
+          </Link>
+        </DialogFooter>
       </Dialog>
     );
   }
 
   // ===== Phase: result =====
-  // 이 시점에서는 summary 가 반드시 있다 (pending → result 전환 조건).
-  const finalSummary = summary!;
+  // Null-safe guard — handleFinalClose 가 setTimeout 으로 store.reset 을 걸면
+  // summary 가 null 로 돌아가지만, phase 도 confirm 으로 복귀되고 dialog 는
+  // 이미 unmount 된 뒤. 그래도 방어적으로 처리.
+  if (!summary) return null;
+  const finalSummary = summary;
   const stillProcessing = Math.max(
     0,
     batchSize - finalSummary.completed - finalSummary.failed,
