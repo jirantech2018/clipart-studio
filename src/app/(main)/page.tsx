@@ -90,6 +90,18 @@ export default async function HomePage() {
             기존 검색바 + CTA 두 개를 카드 안으로 흡수. */}
         <HomeStepsSection />
 
+        {/* 공유 라이브러리 헤더 — 좌측 제목 + 우측(md 이상) 안내 문구.
+            모바일에선 세로 스택. */}
+        <div className="flex flex-col gap-1 pt-2 md:flex-row md:items-baseline md:gap-3">
+          <h2 className="shrink-0 text-xl font-semibold tracking-tight">
+            공유 라이브러리
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            다른 사람들이 만든 이미지를 자유롭게 둘러보세요. 마음에 드는 이미지를
+            발견했다면, 비슷한 스타일로 새로운 이미지를 만들어 볼 수 있습니다.
+          </p>
+        </div>
+
         {/* 공유 라이브러리 임베드 — 좌 화살표+태그 캐러셀 + 우 sort 드롭다운
             + 그리드. sort state 를 두 파트가 공유해야 해서 client wrapper 로. */}
         <HomeCommunitySection tags={tagsForMarquee} />
