@@ -96,19 +96,22 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
       <Dialog open={open} onClose={onClose} dismissable>
         <DialogHeader
           title="이미지 생성을 취소하시겠습니까?"
-          description="생성 요청이 시작된 이미지는 취소해도 중단되지 않습니다."
+          description="이미 생성이 시작된 이미지는 취소해도 중단되지 않습니다."
         />
         <DialogBody>
           <div className="space-y-4 text-sm">
-            <ul className="space-y-2">
+            <ul className="list-disc space-y-2 pl-5">
               <li>
-                <strong>AI가 이미 작업 중인 이미지는 끝까지 생성되어 내 라이브러리에 저장됩니다.</strong>
+                AI가 이미 작업 중인 이미지는 끝까지 생성되어 내 라이브러리에 저장됩니다.
               </li>
               <li>
-                이미 시작된 이미지에 <strong>사용된 크레딧은 되돌릴 수 없습니다.</strong>
+                이미 생성이 시작된 이미지에 사용된 크레딧은 환불되지 않습니다.
               </li>
               <li>
-                취소하면 남은 생성만 중단되고, 바로 새로운 이미지 생성을 시작할 수 있습니다.
+                아직 생성이 시작되지 않은 이미지는 취소되며 크레딧이 자동 환불됩니다.
+              </li>
+              <li>
+                생성 중 오류가 발생한 이미지는 크레딧이 자동 환불됩니다.
               </li>
             </ul>
 
@@ -116,21 +119,27 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 현재 상태
               </p>
-              <ul className="space-y-0.5">
+              <ul className="space-y-0.5 tabular-nums">
                 <li>
-                  총 요청 : <strong className="tabular-nums">{batchSize}장</strong>
+                  총 요청: <strong>{batchSize}장</strong>
                 </li>
                 <li>
-                  생성 완료 : <strong className="tabular-nums">{succeeded}장</strong>
+                  생성 완료: <strong>{succeeded}장</strong>
                 </li>
                 <li>
-                  AI 작업 중 : <strong className="tabular-nums">{running}장</strong>
+                  AI 작업 중: <strong>{running}장</strong>
+                </li>
+                <li className="text-destructive">
+                  아직 시작되지 않음: <strong>{waiting}장</strong>
                 </li>
               </ul>
             </div>
 
             <p className="rounded-md bg-muted/50 p-3 text-sm">
-              취소 후에도 AI가 작업 중인 이미지는 계속 처리됩니다.
+              취소하면 아직 시작되지 않은 <strong>{waiting}장</strong>만 취소 및
+              환불되며,
+              <br />
+              AI가 이미 작업 중인 <strong>{running}장</strong>은 계속 생성됩니다.
               <br />
               <strong>정말 취소하시겠습니까?</strong>
             </p>
@@ -169,11 +178,16 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
             <div className="flex items-start gap-3">
               <Loader2 className="mt-1 h-5 w-5 shrink-0 animate-spin text-primary" />
               <div className="space-y-2">
-                <p>남은 생성 예약은 취소되었습니다.</p>
+                <p>아직 시작되지 않은 이미지의 생성은 취소되었습니다.</p>
                 <p>
-                  이미 생성이 시작된 이미지는 계속 처리되며,
+                  AI가 이미 작업 중인 이미지는 계속 처리되며,
                   <br />
                   완료되면 내 라이브러리에 자동 저장됩니다.
+                </p>
+                <p>
+                  작업 중 오류가 발생한 이미지는
+                  <br />
+                  크레딧이 자동 환불됩니다.
                 </p>
                 <p className="text-muted-foreground">
                   생성이 완료될 때까지 기다릴 필요는 없습니다.
@@ -189,10 +203,13 @@ export function CancelDialog({ open, onClose }: CancelDialogProps) {
               </p>
               <ul className="space-y-0.5 tabular-nums">
                 <li>
-                  생성 완료 : <strong>{succeeded}</strong> / {batchSize}장
+                  생성 완료: <strong>{succeeded}</strong> / {batchSize}장
                 </li>
                 <li>
-                  AI 작업 중 : <strong>{running}장</strong>
+                  AI 작업 중: <strong>{running}장</strong>
+                </li>
+                <li className="text-destructive">
+                  취소 및 환불 대기: <strong>{waiting}장</strong>
                 </li>
               </ul>
             </div>
