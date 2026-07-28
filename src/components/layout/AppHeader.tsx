@@ -12,14 +12,12 @@ import { useAuthStore } from '@/lib/store/authStore';
 import { cn } from '@/lib/utils';
 import { createSupabaseBrowserClient } from '@/services/supabase/client';
 
-// 상단 메뉴. 공유라이브러리는 홈("/")과 동일한 컨텐츠라 별도 라우트를
-// 두지 않고 홈으로 직행. 관리 는 isAdmin 일 때만 렌더 (계산은 서버 layout
-// 에서 isAdmin(user.email)).
+// 상단 메뉴. 홈("/") = 공유라이브러리라서 로고 클릭이 진입점이고 nav 에는
+// 굳이 두지 않음. 관리 는 isAdmin 일 때만 렌더.
 const NAV_ITEMS = [
   { href: '/generate', label: '+클립아트 만들기' },
   { href: '/library', label: 'MY' },
   { href: '/organizations', label: '우리학교' },
-  { href: '/', label: '공유라이브러리' },
 ] as const;
 
 const ADMIN_ITEM = { href: '/admin', label: '관리' } as const;
@@ -156,12 +154,8 @@ export function AppHeader({
         </div>
         <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
           {items.map((item) => {
-            // href '/' 는 startsWith 로 매칭하면 모든 페이지가 걸리니 정확히
-            // 일치할 때만 활성으로 표시.
             const active =
-              item.href === '/'
-                ? pathname === '/'
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
