@@ -78,9 +78,10 @@ export default async function HomePage() {
           <h1 className="text-4xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
             학교에서 필요한 클립아트를 쉽고 빠르게 만들어 보세요.
           </h1>
-          <p className="whitespace-pre-line text-lg text-white/95 [text-shadow:0_2px_10px_rgba(0,0,0,0.5)]">
-            {`원하는 이미지를 검색하고, 없다면 AI로 새롭게 만들 수 있습니다.
-만든 이미지는 내 라이브러리에 저장되어 언제든 다시 사용할 수 있습니다.`}
+          <p className="whitespace-pre-line text-lg font-semibold text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.65)]">
+            {`원하는 이미지를 찾고, 없다면 AI와 함께 새롭게 만들어 보세요.
+만든 이미지는 내 라이브러리에 저장되어 언제든 다시 사용할 수 있습니다.
+다른 사람들이 만든 다양한 이미지를 살펴보고, 원하는 스타일을 이어 나만의 이미지로 완성해 보세요.`}
           </p>
         </div>
       </section>
