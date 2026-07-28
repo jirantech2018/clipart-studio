@@ -24,13 +24,26 @@ import type { CommunitySort } from '@/features/community/hooks/useCommunity';
 
 interface CommunityGridProps {
   /** 홈에서는 12개 고정 카테고리 chip 대신 TagMarquee 를 위에 배치하므로
-   *  Grid 내부 필터의 category 버튼 영역만 감춘다 (sort 드롭다운은 유지). */
+   *  Grid 내부 필터의 category 버튼 영역만 감춘다. */
   hideCategoryFilters?: boolean;
+  /** 홈에서는 sort 드롭다운을 TagMarquee 우측으로 옮기므로 Grid 내부의
+   *  정렬 필터 자체를 완전히 감춘다. */
+  hideFilters?: boolean;
+  /** sort 를 외부에서 제어. 지정하지 않으면 내부 state 로 폴백. */
+  sort?: CommunitySort;
+  onSortChange?: (next: CommunitySort) => void;
 }
 
-export function CommunityGrid({ hideCategoryFilters = false }: CommunityGridProps = {}) {
+export function CommunityGrid({
+  hideCategoryFilters = false,
+  hideFilters = false,
+  sort: externalSort,
+  onSortChange,
+}: CommunityGridProps = {}) {
   const [category, setCategory] = useState<string | null>(null);
-  const [sort, setSort] = useState<CommunitySort>('newest');
+  const [internalSort, setInternalSort] = useState<CommunitySort>('newest');
+  const sort = externalSort ?? internalSort;
+  const setSort = onSortChange ?? setInternalSort;
   const [zipPending, setZipPending] = useState(false);
   const selection = useMultiSelection('community');
 
@@ -87,13 +100,15 @@ export function CommunityGrid({ hideCategoryFilters = false }: CommunityGridProp
 
   return (
     <div className="space-y-4">
-      <CommunityFilters
-        category={category}
-        sort={sort}
-        onCategoryChange={setCategory}
-        onSortChange={setSort}
-        hideCategoryButtons={hideCategoryFilters}
-      />
+      {!hideFilters && (
+        <CommunityFilters
+          category={category}
+          sort={sort}
+          onCategoryChange={setCategory}
+          onSortChange={setSort}
+          hideCategoryButtons={hideCategoryFilters}
+        />
+      )}
 
       {isLoading ? (
         <div className="columns-2 gap-3 sm:columns-3 xl:columns-4">

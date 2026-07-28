@@ -6,8 +6,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
-import { CommunityGrid } from '@/features/community/components/CommunityGrid';
-import { TagMarquee } from '@/features/community/components/TagMarquee';
+import { HomeCommunitySection } from '@/features/community/components/HomeCommunitySection';
 import { TutorialOverlay } from '@/features/onboarding/components/TutorialOverlay';
 import { SearchBar } from '@/features/search/components/SearchBar';
 import { publicUrl } from '@/services/r2/upload';
@@ -108,11 +107,9 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* 공유 라이브러리 그리드 — /community 페이지의 그리드를 그대로 임베드.
-            홈에서는 12개 고정 카테고리 chip 대신 실제 이미지 태그 marquee 로
-            대체 (hideCategoryFilters). */}
-        <TagMarquee tags={tagsForMarquee} />
-        <CommunityGrid hideCategoryFilters />
+        {/* 공유 라이브러리 임베드 — 좌 화살표+태그 캐러셀 + 우 sort 드롭다운
+            + 그리드. sort state 를 두 파트가 공유해야 해서 client wrapper 로. */}
+        <HomeCommunitySection tags={tagsForMarquee} />
       </div>
     </div>
   );
