@@ -8,7 +8,13 @@ import { useEffect, useState } from 'react';
 
 import type { FormEvent } from 'react';
 
-export function SearchBar({ className }: { className?: string }) {
+export function SearchBar({
+  className,
+  placeholder = '찾고 싶은 이미지를 검색해보세요',
+}: {
+  className?: string;
+  placeholder?: string;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const [value, setValue] = useState('');
@@ -37,7 +43,7 @@ export function SearchBar({ className }: { className?: string }) {
           type="search"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="찾고 싶은 이미지를 검색해보세요"
+          placeholder={placeholder}
           className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </label>

@@ -33,7 +33,10 @@ export function HomeStepsSection() {
             사용할 수 있습니다.
           </p>
           <Suspense fallback={null}>
-            <SearchBar className="w-full" />
+            <SearchBar
+              className="w-full"
+              placeholder="예) 운동회, 졸업식, 과학실, 칠판"
+            />
           </Suspense>
         </CardContent>
       </Card>
