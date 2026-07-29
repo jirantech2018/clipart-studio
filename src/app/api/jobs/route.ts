@@ -136,6 +136,7 @@ export async function POST(request: Request) {
       reserved_credits: body.batchSize,
       status: 'queued',
       org_id: orgIdSnapshot,
+      slot_prompts: body.slotPrompts ?? null,
     })
     .select('id')
     .single();

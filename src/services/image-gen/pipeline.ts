@@ -94,14 +94,23 @@ export async function runOne({
 }: RunOneParams): Promise<PipelineResult> {
   const adapter = primaryAdapter();
 
+  // 다양성 생성 (Custom Diversity): 슬롯별 추가 프롬프트가 있으면 공통
+  // prompt 에 append. 예)
+  //   job.prompt        = "한국 남자 선생님, 클레이 스타일, 배경 없음"
+  //   slot_prompts[0]   = "사회 선생님"
+  //   → basePrompt      = "한국 남자 선생님, 클레이 스타일, 배경 없음. 사회 선생님"
+  // 빈 문자열 슬롯은 공통 프롬프트만 사용 (기존 동작).
+  const slotAddon = job.slotPrompts?.[order]?.trim() ?? '';
+  const basePrompt = slotAddon ? `${job.prompt}. ${slotAddon}` : job.prompt;
+
   // 조직 컨텍스트 job 이면 조직 base_prompt 를 앞에 병합, 그렇지 않으면
   // 기존 개인 school_profile 로직 그대로. 두 소스는 상호 배타적이다 (조직
   // 선택 자체가 학교 설정 apply 신호이므로 개인 school_profile 은 무시).
   const merged = job.orgId
     ? orgBasePrompt
-      ? `${job.prompt}. ${orgBasePrompt}`
-      : job.prompt
-    : mergePrompt(job.prompt, schoolProfile, job.schoolProfileApplied);
+      ? `${basePrompt}. ${orgBasePrompt}`
+      : basePrompt
+    : mergePrompt(basePrompt, schoolProfile, job.schoolProfileApplied);
   // 사용자 자연어를 structurePrompt 결과로 라벨링된 형식으로 재조립. structuredPrompt
   // 없으면 원본 그대로.
   const userSection = structuredPrompt

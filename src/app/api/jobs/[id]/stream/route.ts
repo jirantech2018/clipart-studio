@@ -54,6 +54,7 @@ function jobFromRow(row: Record<string, unknown>): GenerationJob {
     createdAt: row.created_at as string,
     completedAt: (row.completed_at as string) ?? null,
     orgId: (row.org_id as string) ?? null,
+    slotPrompts: (row.slot_prompts as string[] | null) ?? null,
   };
 }
 

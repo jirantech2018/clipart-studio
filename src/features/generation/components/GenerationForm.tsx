@@ -99,6 +99,25 @@ export function GenerationForm({
   const [prompt, setPrompt] = useState<string>(parent?.prompt ?? '');
   const [batchSize, setBatchSize] = useState<number>(5);
   const [cancelOpen, setCancelOpen] = useState(false);
+  // 다양성 생성 (Custom Diversity) — 각 슬롯이 공통 프롬프트 + 자기 추가
+  // 프롬프트로 생성. 체크박스 off 상태에서는 slotPrompts 를 서버에 보내지
+  // 않으므로 기존 동작 그대로.
+  const [diversityCustomOn, setDiversityCustomOn] = useState<boolean>(false);
+  const [slotPrompts, setSlotPrompts] = useState<string[]>(
+    Array.from({ length: 5 }, () => ''),
+  );
+
+  // batchSize 가 바뀌면 slotPrompts 길이를 맞춰 리사이즈.
+  // 늘어난 부분은 빈 문자열, 줄어든 부분은 잘라냄.
+  useEffect(() => {
+    setSlotPrompts((prev) => {
+      if (prev.length === batchSize) return prev;
+      if (prev.length < batchSize) {
+        return [...prev, ...Array.from({ length: batchSize - prev.length }, () => '')];
+      }
+      return prev.slice(0, batchSize);
+    });
+  }, [batchSize]);
   // 학교 스타일 적용 여부는 SchoolContextCard 의 드롭다운이 결정한다.
   // 조직이 선택돼 있으면 자동 true, "설정 안 함" 이면 false.
   const schoolProfileApplied = useSchoolApplyStore((s) => s.applied);
@@ -172,6 +191,7 @@ export function GenerationForm({
       aspectRatio,
       orgSlug: isOrgContext ? orgContext.slug : null,
       orgReferenceId: effectiveOrgRef,
+      slotPrompts: diversityCustomOn ? slotPrompts : null,
     });
     if (!parsed.success) {
       const first = parsed.error.issues[0];
@@ -484,6 +504,58 @@ export function GenerationForm({
                   onChange={setPrompt}
                   disabled={inFlight}
                 />
+              </div>
+
+              {/* 다양성 생성 (Custom) — 각 슬롯이 공통 프롬프트 + 자기 프롬프트로
+                  생성. 체크 시 batchSize 만큼의 입력창이 아래에 열림. */}
+              <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={diversityCustomOn}
+                    onChange={(e) => setDiversityCustomOn(e.target.checked)}
+                    disabled={inFlight}
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                  />
+                  <span>
+                    <span className="font-medium">다양성 생성</span>
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      이미지마다 다른 주제·소재를 지정할 수 있어요
+                    </span>
+                  </span>
+                </label>
+                {diversityCustomOn && (
+                  <div className="space-y-1.5 pt-1">
+                    {slotPrompts.map((slot, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-sm tabular-nums text-muted-foreground">
+                          이미지 {i + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={slot}
+                          onChange={(e) => {
+                            const next = [...slotPrompts];
+                            next[i] = e.target.value;
+                            setSlotPrompts(next);
+                          }}
+                          disabled={inFlight}
+                          placeholder="예) 사회 선생님"
+                          maxLength={500}
+                          className={cn(
+                            'h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm',
+                            'focus:outline-none focus:ring-2 focus:ring-primary/40',
+                            inFlight && 'cursor-not-allowed opacity-50',
+                          )}
+                        />
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground">
+                      비워두면 공통 프롬프트만 사용해요. 각 슬롯에는 공통
+                      프롬프트에 이 문구가 추가되어 전달됩니다.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

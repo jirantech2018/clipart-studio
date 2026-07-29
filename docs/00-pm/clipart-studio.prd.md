@@ -100,6 +100,7 @@
 - 계정 프로필 + School Profile (Optional)
 - 이미지 검색 (내 라이브러리 + 공유 라이브러리 + 공식 컬렉션, PostgreSQL FTS + 태그)
 - AI 배치 생성 (1~50장, gpt-image-1 주 + FLUX 대체)
+- **다양성 강화 (Automatic)** — 같은 주제를 랜덤 seed/자동 힌트로 자연스럽게 변형 (`diversityLevel`)
 - 참조 이미지 첨부 (개인 슬롯 · 조직 슬롯)
 - 이미지 체이닝 (i2i)
 - 자동 태그·카테고리 (gpt-4o-mini)
@@ -115,6 +116,7 @@
 - **생성 취소 흐름** — 3-phase Dialog (confirm / pending / result). CAS status + finally refund 로 double refund 방지
 - **업스케일** — Real-ESRGAN 2x (1 크레딧) / 4x (2 크레딧). 결과가 라이브러리에 새 이미지로 저장
 - **홈 큐레이션 배너** — 관리자가 공유 라이브러리 이미지를 대표 작품으로 승격. 클릭 → 이미지 상세, 우측 하단 자동 태그 chip
+- **다양성 생성 (Custom Diversity)** — 공통 프롬프트 + 이미지별 프롬프트. 슬롯마다 다른 주제 지정 가능 (`generation_jobs.slot_prompts JSONB`). 다양성 강화 (auto) 와 병존 · 조합 가능
 - **홈 4-Step 카드** — 검색 → AI 생성 → MY 라이브러리 → 스타일 이어 만들기 흐름 가이드
 - **태그 캐러셀** — 공유 라이브러리 이미지의 실제 태그를 좌측 화살표로 페이지 순환
 - **브랜드** — "우리학교 클립아트스튜디오" 워드마크, 로고 화이트/블루 2종, Pretendard 전역, 홈 반투명 헤더 (스크롤 감지)
@@ -236,7 +238,7 @@ Admin 이 /admin/knowledge → "공유 라이브러리에서 선택" → 이미�
 - **images** — 통합 이미지 (visibility enum + is_on_community + parent_image_id + upscaled_from_id + batch_id + generation_mode)
 - **image_tags** / **image_categories** — 자동 태그 (FTS 대상)
 - **image_organization_shares** — 이미지-조직 N:N
-- **generation_jobs** — 배치 잡 (status enum 확장: queued/running/partial/done/failed/**canceled**)
+- **generation_jobs** — 배치 잡 (status enum 확장: queued/running/partial/done/failed/**canceled**, `slot_prompts JSONB` 다양성 생성용)
 - **download_events** — 재사용 KPI
 - **home_hero_images** — 홈 배너 카탈로그 (source_image_id FK → images)
 - **knowledge** / **knowledge_images** — 학교 특화 지식 CMS
@@ -323,6 +325,7 @@ Admin 이 /admin/knowledge → "공유 라이브러리에서 선택" → 이미�
 - 048 home_hero_images — 홈 배너 카탈로그
 - 049 generation_jobs canceled status
 - 050 home_hero source_image — 큐레이션 FK
+- 051 generation_jobs.slot_prompts — 다양성 생성 (Custom) 슬롯별 프롬프트
 
 ### 14.3 Glossary
 
@@ -333,6 +336,8 @@ Admin 이 /admin/knowledge → "공유 라이브러리에서 선택" → 이미�
 - **활성 Job** — status ∈ (queued, running). 사용자당 1개만 허용
 - **Slot** — 배치 안의 개별 이미지 순번 (order 0-based)
 - **CHUNK_SIZE** — SSE 처리 병렬 단위 (현재 5)
+- **다양성 강화 (Automatic Diversity)** — `diversityLevel > 0` 이면 서버가 chunk 마다 자동 힌트/랜덤 seed 적용. 같은 주제의 자연스러운 변형
+- **다양성 생성 (Custom Diversity)** — 공통 프롬프트에 슬롯별 프롬프트를 append 하여 슬롯마다 다른 결과 유도. `job.slot_prompts` 사용. 자동 강화와 독립·조합 가능
 
 ---
 

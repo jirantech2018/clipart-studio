@@ -189,6 +189,9 @@ export interface GenerationJob {
   completedAt: string | null;
   /** 조직 컨텍스트에서 생성된 job (P5-D-C). NULL 이면 개인 컨텍스트. */
   orgId: string | null;
+  /** 다양성 생성 (Custom): 슬롯별 추가 프롬프트 (길이 == batchSize). NULL 이면
+   *  모든 슬롯이 공통 prompt 만 사용. */
+  slotPrompts: string[] | null;
 }
 
 export interface ReferenceImageSlot {

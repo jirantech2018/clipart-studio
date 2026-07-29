@@ -68,6 +68,12 @@ export const createJobSchema = z
     // 참조 이미지를 img2img 참조로 사용한다.
     orgSlug: z.string().min(1).max(64).nullable().optional(),
     orgReferenceId: z.string().uuid().nullable().optional(),
+    // 다양성 생성 (Custom Diversity): 배열 길이 == batchSize 여야 하고 각 원소는
+    // "이미지별 추가 프롬프트". 미사용 시 null/undefined.
+    slotPrompts: z
+      .array(z.string().max(500, '슬롯 프롬프트는 500자 이내'))
+      .nullable()
+      .optional(),
   })
   .refine((data) => !(data.referenceImageId && data.customReferenceId), {
     message: '라이브러리 참조와 업로드 참조는 동시에 사용할 수 없어요',
@@ -80,7 +86,14 @@ export const createJobSchema = z
   .refine((data) => !(data.orgReferenceId && !data.orgSlug), {
     message: '조직 참조 이미지는 조직 컨텍스트에서만 사용할 수 있어요',
     path: ['orgReferenceId'],
-  });
+  })
+  .refine(
+    (data) => !data.slotPrompts || data.slotPrompts.length === data.batchSize,
+    {
+      message: '이미지별 프롬프트 개수는 배치 크기와 같아야 해요',
+      path: ['slotPrompts'],
+    },
+  );
 
 export type CreateJobInput = z.infer<typeof createJobSchema>;
 
