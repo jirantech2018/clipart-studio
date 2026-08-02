@@ -111,7 +111,7 @@ export function CommunityGrid({
       )}
 
       {isLoading ? (
-        <div className="columns-2 gap-3 sm:columns-3 xl:columns-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
@@ -148,17 +148,18 @@ export function CommunityGrid({
         </Card>
       ) : (
         <>
-          <div className="columns-2 gap-3 sm:columns-3 xl:columns-4">
+          {/* CSS Grid — 좌→우, 위→아래 순차 채움. 이전 CSS columns (masonry)
+              에서는 새 데이터가 첫 컬럼 아래에 세로로 붙어 사용자가 "종렬"
+              흐름으로 느꼈던 문제 해결. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {images.map((image) => (
-              <div key={image.id} className="mb-3 break-inside-avoid">
-                <CommunityCard image={image} />
-              </div>
+              <CommunityCard key={image.id} image={image} />
             ))}
             {isFetchingNextPage &&
               Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={`skeleton-${i}`}
-                  className="mb-3 aspect-square animate-pulse break-inside-avoid rounded-lg bg-muted"
+                  className="aspect-square animate-pulse rounded-lg bg-muted"
                   aria-hidden="true"
                 />
               ))}
