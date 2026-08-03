@@ -79,6 +79,16 @@
     --input: 240 5.9% 90%;
     --ring: 240 5.9% 10%;
     --radius: 0.5rem;
+
+    /* Glass background + card tokens.
+       shadcn 의 --border / --radius 와 이름이 겹치지 않도록 --glass-* 로 분리한다.
+       라이트 전용 톤 (프로젝트는 다크 모드를 활성화하지 않는다). */
+    --bg-start: #edf5ff;
+    --bg-middle: #ffffff;
+    --bg-end: #fff7ea;
+    --glass-card-bg: rgba(255, 255, 255, 0.88);
+    --glass-border: rgba(255, 255, 255, 0.75);
+    --glass-radius: 22px;
   }
 
   .dark {
@@ -105,7 +115,41 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply text-foreground font-sans;
+    /* 페이지 전역 배경 = 라이트 소프트 gradient.
+       background-attachment: fixed 로 스크롤 시 gradient 가 함께 밀리지 않게 하고,
+       min-height 로 짧은 페이지에서도 gradient 가 전체 뷰포트를 채우도록 한다. */
+    background:
+      radial-gradient(circle at top left, #dcecff 0%, transparent 45%),
+      radial-gradient(circle at top right, #fff2d8 0%, transparent 40%),
+      linear-gradient(180deg, var(--bg-start), var(--bg-middle), var(--bg-end));
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  /* Glass card — shadcn Card 컴포넌트가 이 클래스를 상속해 사용한다.
+     기존 border/shadow 계열 tailwind 유틸을 대신하므로 Card 컴포넌트에서는
+     border/bg/shadow 를 붙이지 않는다. */
+  .card {
+    background: var(--glass-card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 8px 24px rgba(15, 23, 42, 0.05),
+      0 24px 60px rgba(15, 23, 42, 0.08);
+    transition: 0.25s ease;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 14px 32px rgba(15, 23, 42, 0.08),
+      0 32px 70px rgba(15, 23, 42, 0.12);
   }
 }
 

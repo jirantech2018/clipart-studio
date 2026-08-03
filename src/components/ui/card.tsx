@@ -4,9 +4,13 @@ import { cn } from '@/lib/utils';
 
 export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
+    // .card 는 globals.css @layer components 의 glass 스타일 (배경/반투명
+    // 테두리/backdrop-blur/layered shadow/hover lift) 을 담당. tailwind
+    // border/bg-card/shadow-sm 유틸은 이 스타일과 겹치므로 여기서는 제거하고,
+    // 소비자가 필요 시 className 으로 개별 지정할 수 있게 둔다.
     <div
       ref={ref}
-      className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)}
+      className={cn('card text-card-foreground', className)}
       {...props}
     />
   ),
