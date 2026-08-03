@@ -172,6 +172,15 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
             autoFocus={isDraft && isLast && !activeJobExists}
             onChange={(next) => updatePrompt(convId, block.id, next)}
             recentPrompts={recentPrompts}
+            diversityEnabled={block.options.diversityCustomOn}
+            onDiversityEnabledChange={(next) =>
+              updateOptions(convId, block.id, { diversityCustomOn: next })
+            }
+            slotPrompts={block.options.slotPrompts}
+            onSlotPromptsChange={(next) =>
+              updateOptions(convId, block.id, { slotPrompts: next })
+            }
+            batchSize={block.options.batchSize}
           />
 
           <OptionStep

@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AspectRatioSelector } from '@/features/generation/components/AspectRatioSelector';
 import { BatchSizeSelector } from '@/features/generation/components/BatchSizeSelector';
-import { DiversityPromptList } from '@/features/generation/components/DiversityPromptList';
 import { resizeSlotPrompts } from '@/features/generation/lib/resizeSlotPrompts';
 import { OptionReferencePicker } from '@/features/generation-v2/components/OptionReferencePicker';
 import { OptionSchoolPicker } from '@/features/generation-v2/components/OptionSchoolPicker';
@@ -150,18 +149,8 @@ export function OptionStep({
         onOrgReferenceIdChange={handleOrgReferenceIdChange}
       />
 
-      {/* 5. 다양성 생성 — /generate 와 공유하는 Controlled 컴포넌트. */}
-      <DiversityPromptList
-        enabled={options.diversityCustomOn}
-        onEnabledChange={(next) => onChange({ diversityCustomOn: next })}
-        slotPrompts={options.slotPrompts}
-        onSlotPromptsChange={(next) => onChange({ slotPrompts: next })}
-        batchSize={options.batchSize}
-        disabled={disabled}
-        variant="compact"
-      />
-
-      {/* 6 + 7. 하단 안내 + CTA (locked 이면 CTA 숨김) */}
+      {/* 5 + 6. 하단 안내 + CTA (locked 이면 CTA 숨김).
+          다양성 생성은 시안에 따라 PromptStep (AI 추천 하단) 으로 이동. */}
       {!locked && (
         <div className="mt-auto space-y-2 pt-1">
           {issueMessage && (

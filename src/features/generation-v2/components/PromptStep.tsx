@@ -3,31 +3,36 @@
 // STEP 1 — Prompt.
 //
 // Conversation Timeline 안에서 하나의 Block 상단을 구성하는 카드.
-// 이 커밋(3-A)에서 시안 목표에 맞춰 아래 요소를 실제 wiring 한다.
 //
-//   [1] 무엇을 만들까요?          [최근 사용 ▾]
+//   [1] 어떤 클립아트를 만들까요?      [최근 사용 ▾]
 //   ┌──────────────────────────────┐
 //   │  Textarea                    │
 //   │                       0/500  │
 //   └──────────────────────────────┘
 //   [Lightbulb] AI 추천
 //   [Chip] [Chip] [Chip] ...
+//   ┌──────────────────────────────────────────────┐
+//   │ ☑ 클립아트마다 다르게 만들기 (compact)        │
+//   └──────────────────────────────────────────────┘
 //
-// 재사용 자산 (Reuse First):
-//   - PresetChips        : /generate 와 공유되는 controlled chip
-//   - usePromptSuggestions : debounce + fallback 을 이미 처리 (변경 없음)
-//   - RecentPromptDropdown : v2 신규. Conversation 내부 데이터만 소비
+// 재사용 자산:
+//   - PresetChips             : /generate 와 공유되는 controlled chip
+//   - usePromptSuggestions    : debounce + fallback (변경 없음)
+//   - RecentPromptDropdown    : v2 신규
+//   - DiversityPromptList     : /generate 와 공유. 여기서는 compact variant
+//                               (시안 hero UI: 체크박스 + 5-슬롯 예시 세트)
 //
 // draft 이외 상태(queued/generating/completed/failed/unknown) 에서는 locked=true
-// 로 잠기며 내용은 계속 읽을 수 있어야 한다. AI 추천 chip 과 최근 사용
-// Dropdown 은 disabled 처리 (숨김 아님 — 이전 조건 확인 가능).
+// 로 잠기며 내용은 계속 읽을 수 있어야 한다. AI 추천 chip / 최근 사용
+// Dropdown / 다양성 슬롯 모두 disabled 처리 (숨김 아님).
 
 import { Lightbulb } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
+import { DiversityPromptList } from '@/features/generation/components/DiversityPromptList';
 import { PresetChips } from '@/features/generation/components/PresetChips';
-import { RecentPromptDropdown } from '@/features/generation-v2/components/RecentPromptDropdown';
 import { usePromptSuggestions } from '@/features/generation/hooks/usePromptSuggestions';
+import { RecentPromptDropdown } from '@/features/generation-v2/components/RecentPromptDropdown';
 import { cn } from '@/lib/utils';
 
 interface PromptStepProps {
@@ -36,6 +41,12 @@ interface PromptStepProps {
   autoFocus?: boolean;
   onChange: (next: string) => void;
   recentPrompts: readonly string[];
+  // 다양성 생성 controlled 전달 — SoT 는 여전히 BlockOptions.
+  diversityEnabled: boolean;
+  onDiversityEnabledChange: (next: boolean) => void;
+  slotPrompts: readonly string[];
+  onSlotPromptsChange: (next: string[]) => void;
+  batchSize: number;
 }
 
 export function PromptStep({
@@ -44,6 +55,11 @@ export function PromptStep({
   autoFocus,
   onChange,
   recentPrompts,
+  diversityEnabled,
+  onDiversityEnabledChange,
+  slotPrompts,
+  onSlotPromptsChange,
+  batchSize,
 }: PromptStepProps) {
   const suggestions = usePromptSuggestions(prompt);
   const hints = suggestions.data?.suggestions ?? [];
@@ -65,7 +81,7 @@ export function PromptStep({
         />
       </header>
 
-      <div className="flex flex-1 flex-col gap-1">
+      <div className="flex flex-col gap-1">
         <Textarea
           value={prompt}
           onChange={(e) => onChange(e.target.value)}
@@ -76,7 +92,7 @@ export function PromptStep({
             '예: 운동장에서 줄넘기하는 초등학생\n봄 햇살이 비치는 날, 밝고 활기찬 분위기'
           }
           className={cn(
-            'min-h-[10rem] w-full flex-1 resize-none',
+            'min-h-[10rem] w-full resize-none',
             locked && 'cursor-not-allowed bg-muted/40 text-foreground/80',
           )}
         />
@@ -100,6 +116,16 @@ export function PromptStep({
           />
         </div>
       </div>
+
+      <DiversityPromptList
+        enabled={diversityEnabled}
+        onEnabledChange={onDiversityEnabledChange}
+        slotPrompts={slotPrompts}
+        onSlotPromptsChange={onSlotPromptsChange}
+        batchSize={batchSize}
+        disabled={locked}
+        variant="compact"
+      />
     </section>
   );
 }
