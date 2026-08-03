@@ -52,13 +52,13 @@ export function HomeStepsSection() {
           </div>
           <p className="flex-1 text-sm text-muted-foreground">
             찾는 이미지가 없다면 AI가 새롭게 만들어 드립니다. 저작권 고민은
-            줄이고, 학교에 맞는 이미지를 만들어 보세요.
+            줄이고, 학교에 맞는 클립아트를 만들어 보세요.
           </p>
           <Link
             href="/generate"
             className={cn(buttonVariants({ size: 'sm' }), 'w-full')}
           >
-            AI로 이미지 만들기
+            AI로 클립아트 만들기
           </Link>
         </CardContent>
       </Card>

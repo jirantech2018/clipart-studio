@@ -87,7 +87,7 @@ export function ConversationSidebar({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-xs text-muted-foreground">
-          <p>프롬프트를 입력하고 옵션을 선택한 뒤 이미지 만들기를 눌러주세요.</p>
+          <p>프롬프트를 입력하고 옵션을 선택한 뒤 클립아트 만들기를 눌러주세요.</p>
           <p>생성이 끝나면 아래로 이어서 새 대화를 계속할 수 있어요.</p>
         </CardContent>
       </Card>

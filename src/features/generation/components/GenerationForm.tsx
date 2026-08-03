@@ -360,7 +360,7 @@ export function GenerationForm({
                   </Button>
                 ) : (
                   <Button type="submit" disabled={disabled} className="min-w-[8rem]">
-                    {insufficient ? '크레딧 부족' : '이미지 만들기'}
+                    {insufficient ? '크레딧 부족' : '클립아트 만들기'}
                   </Button>
                 )}
               </div>
@@ -389,7 +389,7 @@ export function GenerationForm({
               </div>
 
               <div className="space-y-2">
-                <Label>이미지 비율</Label>
+                <Label>클립아트 비율</Label>
                 <AspectRatioSelector
                   value={aspectRatio}
                   onChange={setAspectRatio}

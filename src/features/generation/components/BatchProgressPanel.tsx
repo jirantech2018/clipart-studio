@@ -170,7 +170,7 @@ export function BatchProgressPanel() {
 
         {isIdle && (
           <p className="text-center text-xs text-muted-foreground">
-            좌측에서 &ldquo;이미지 만들기&rdquo; 를 누르면 각 칸이 채워집니다.
+            좌측에서 &ldquo;클립아트 만들기&rdquo; 를 누르면 각 칸이 채워집니다.
           </p>
         )}
       </CardContent>

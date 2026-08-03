@@ -55,7 +55,7 @@ export function PromptStep({
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
             1
           </span>
-          <h3 className="text-base font-semibold">무엇을 만들까요?</h3>
+          <h3 className="text-base font-semibold">어떤 클립아트를 만들까요?</h3>
         </div>
         <RecentPromptDropdown
           prompts={recentPrompts}

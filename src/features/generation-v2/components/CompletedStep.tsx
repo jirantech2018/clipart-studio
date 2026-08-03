@@ -65,8 +65,8 @@ export function CompletedStep({ block }: CompletedStepProps) {
           )}
           <h3 className="text-base font-semibold">
             {allFailed
-              ? '이미지 생성에 실패했어요'
-              : `${succeeded}장의 이미지가 생성되었어요`}
+              ? '클립아트 생성에 실패했어요'
+              : `${succeeded}장의 클립아트가 생성되었어요`}
           </h3>
         </div>
         <div
@@ -119,8 +119,8 @@ export function CompletedStep({ block }: CompletedStepProps) {
                   type="button"
                   onClick={() => handleDownload(img.imageId)}
                   disabled={isPending}
-                  aria-label="이미지 다운로드"
-                  title="이미지 다운로드"
+                  aria-label="클립아트 다운로드"
+                  title="클립아트 다운로드"
                   className={cn(
                     'absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/95 text-primary shadow-sm backdrop-blur transition-all duration-200 hover:scale-105 hover:bg-background',
                     isPending && 'cursor-wait opacity-60 hover:scale-100',
@@ -140,14 +140,14 @@ export function CompletedStep({ block }: CompletedStepProps) {
 
       {tab === 'done' && succeeded === 0 && (
         <p className="py-4 text-center text-xs text-muted-foreground">
-          완료된 이미지가 없어요.
+          완료된 클립아트가 없어요.
         </p>
       )}
 
       {tab === 'failed' && (
         <div className="space-y-1 rounded-md bg-background/60 p-3 text-xs">
           {failed === 0 ? (
-            <p className="text-muted-foreground">실패한 이미지가 없어요.</p>
+            <p className="text-muted-foreground">실패한 클립아트가 없어요.</p>
           ) : (
             <>
               <p className="text-muted-foreground">

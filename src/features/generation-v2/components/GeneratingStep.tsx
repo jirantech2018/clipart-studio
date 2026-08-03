@@ -62,7 +62,7 @@ export function GeneratingStep({ block }: GeneratingStepProps) {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
-          <h3 className="text-base font-semibold">이미지를 만들고 있어요</h3>
+          <h3 className="text-base font-semibold">클립아트를 만들고 있어요</h3>
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
           <span>전체 진행률</span>
@@ -110,9 +110,9 @@ export function GeneratingStep({ block }: GeneratingStepProps) {
 
       {visibleSlots.length === 0 ? (
         <p className="py-4 text-center text-xs text-muted-foreground">
-          {tab === 'done' && '아직 완료된 이미지가 없어요.'}
-          {tab === 'failed' && '실패한 이미지가 없어요.'}
-          {tab === 'progress' && '진행 중인 이미지가 없어요.'}
+          {tab === 'done' && '아직 완료된 클립아트가 없어요.'}
+          {tab === 'failed' && '실패한 클립아트가 없어요.'}
+          {tab === 'progress' && '진행 중인 클립아트가 없어요.'}
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">

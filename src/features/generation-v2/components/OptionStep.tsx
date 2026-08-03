@@ -123,7 +123,7 @@ export function OptionStep({
 
       {/* 2. 이미지 비율 */}
       <div className="space-y-2">
-        <Label>이미지 비율</Label>
+        <Label>클립아트 비율</Label>
         <AspectRatioSelector
           value={options.aspectRatio}
           onChange={(next) => onChange({ aspectRatio: next })}
@@ -180,7 +180,7 @@ export function OptionStep({
             className="min-h-[44px] w-full"
           >
             <Sparkles className="mr-1 h-4 w-4" />
-            {submitting ? '이미지 생성 요청 중…' : '이미지 만들기'}
+            {submitting ? '클립아트 생성 요청 중…' : '클립아트 만들기'}
           </Button>
         </div>
       )}

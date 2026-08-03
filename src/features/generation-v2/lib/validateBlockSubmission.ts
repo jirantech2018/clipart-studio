@@ -80,7 +80,7 @@ export function messageForIssue(
     case 'active-job':
       return '현재 이미지 생성이 진행 중입니다.';
     case 'empty-prompt':
-      return '만들고 싶은 이미지를 먼저 입력해주세요.';
+      return '만들고 싶은 클립아트를 먼저 설명해주세요.';
     case 'reference-conflict':
       return '개인 참조 이미지와 학교 참조 이미지는 동시에 사용할 수 없어요.';
     case 'insufficient-credits':

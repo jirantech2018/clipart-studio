@@ -66,7 +66,7 @@ export function DiversityPromptList({
         <span>
           <span className="font-medium">다양성 생성</span>
           <span className="ml-1 text-xs text-muted-foreground">
-            이미지마다 다른 주제·소재를 지정할 수 있어요
+            클립아트마다 다른 주제·소재를 지정할 수 있어요
           </span>
         </span>
       </label>
@@ -90,7 +90,7 @@ export function DiversityPromptList({
                   compact ? 'w-12 text-xs' : 'w-14 text-sm',
                 )}
               >
-                이미지 {i + 1}
+                클립아트 {i + 1}
               </span>
               <input
                 type="text"
