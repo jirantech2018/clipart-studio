@@ -51,15 +51,11 @@ export function OptionReferencePicker({
         />
       </div>
 
-      {orgReferenceActive ? (
+      {orgReferenceActive && (
         <p className="text-xs text-muted-foreground">
           학교 참조 이미지가 적용 중이어서 개인 참조 이미지를 사용할 수 없어요.
         </p>
-      ) : value === null ? (
-        <p className="text-xs text-muted-foreground">
-          개인 참조 이미지를 선택하면 학교 참조 이미지 적용이 해제돼요.
-        </p>
-      ) : null}
+      )}
     </div>
   );
 }

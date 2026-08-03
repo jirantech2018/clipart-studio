@@ -95,7 +95,7 @@ export function OptionSchoolPicker({
         </select>
       </div>
 
-      {selectedOrg ? (
+      {selectedOrg && (
         <div className="space-y-2 rounded-md border bg-muted/30 p-2 text-xs">
           <div className="flex items-center gap-1.5">
             <Building2 className="h-3 w-3 text-primary" aria-hidden="true" />
@@ -162,11 +162,6 @@ export function OptionSchoolPicker({
             </div>
           )}
         </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          학교 설정을 적용하지 않고 생성합니다. 조직을 선택하면 그 조직의 기본
-          프롬프트와 참조 이미지가 함께 적용돼요.
-        </p>
       )}
     </div>
   );

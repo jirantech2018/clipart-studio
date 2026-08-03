@@ -80,7 +80,9 @@ export function messageForIssue(
     case 'active-job':
       return '현재 이미지 생성이 진행 중입니다.';
     case 'empty-prompt':
-      return '만들고 싶은 클립아트를 먼저 설명해주세요.';
+      // 프롬프트 미입력은 사용자가 자명하게 아는 상태이므로 별도 안내
+      // 상자는 표시하지 않는다 (버튼은 여전히 disabled 상태 유지).
+      return null;
     case 'reference-conflict':
       return '개인 참조 이미지와 학교 참조 이미지는 동시에 사용할 수 없어요.';
     case 'insufficient-credits':
