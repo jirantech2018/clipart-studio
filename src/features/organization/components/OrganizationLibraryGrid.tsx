@@ -364,11 +364,11 @@ export function OrganizationLibraryGrid({
       </div>
 
       {isLoading ? (
-        <div className="columns-2 gap-3 sm:columns-3 xl:columns-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="mb-3 aspect-square animate-pulse break-inside-avoid rounded-lg bg-muted"
+              className="aspect-square animate-pulse rounded-lg bg-muted"
               aria-hidden="true"
             />
           ))}
@@ -401,24 +401,24 @@ export function OrganizationLibraryGrid({
         </Card>
       ) : (
         <>
-          <div className="columns-2 gap-3 sm:columns-3 xl:columns-4">
+          {/* CSS Grid — 좌→우, 위→아래 순차 채움 (CommunityGrid 와 동일). */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {images.map((image) => (
-              <div key={image.id} className="mb-3 break-inside-avoid">
-                <OrganizationImageCard
-                  slug={slug}
-                  orgId={orgId}
-                  selectionScope={selectionScope}
-                  image={image}
-                  canUnshare={image.userId === currentUserId || isOrgOwner}
-                  isOrgOwner={isOrgOwner}
-                />
-              </div>
+              <OrganizationImageCard
+                key={image.id}
+                slug={slug}
+                orgId={orgId}
+                selectionScope={selectionScope}
+                image={image}
+                canUnshare={image.userId === currentUserId || isOrgOwner}
+                isOrgOwner={isOrgOwner}
+              />
             ))}
             {isFetchingNextPage &&
               Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={`skeleton-${i}`}
-                  className="mb-3 aspect-square animate-pulse break-inside-avoid rounded-lg bg-muted"
+                  className="aspect-square animate-pulse rounded-lg bg-muted"
                   aria-hidden="true"
                 />
               ))}
