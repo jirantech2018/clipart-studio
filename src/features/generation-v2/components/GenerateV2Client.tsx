@@ -111,13 +111,16 @@ export function GenerateV2Client({ initialCredits }: Props) {
   return (
     <div className="mx-auto flex max-w-7xl gap-6">
       <main className="min-w-0 flex-1 space-y-6">
-        <header className="space-y-1">
+        <header className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            AI와 함께 이미지 만들기
+            학교에 필요한 이미지를 AI와 함께 만들어보세요.
           </h1>
           <p className="text-sm text-muted-foreground">
-            프롬프트와 옵션을 입력하고 이미지 만들기를 누르면 결과가 이어서
-            쌓입니다.
+            학문집, 학급신문, 학사달력부터 독서 행사, 운동회, 졸업식까지.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            수업 자료, 활동지, 포스터, 삽화 등 필요한 내용을 입력하면 AI가
+            학교에 맞는 이미지를 만들어드립니다.
           </p>
         </header>
 
