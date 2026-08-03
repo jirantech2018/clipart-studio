@@ -115,10 +115,14 @@ export function AppHeader({
   return (
     <header
       className={cn(
-        'sticky top-0 z-40 backdrop-blur',
+        'sticky top-0 z-40 backdrop-blur-xl',
         overBanner
-          ? 'border-b border-white/20 bg-white/25 dark:bg-white/10'
-          : 'border-b bg-background/95',
+          // 홈 히어로 위에 얹힌 특수 상태 — 반투명 흰 유지 (기존 톤). border 는
+          // 없애고 배경만 살짝 진하게 해서 아이덴티티 유지.
+          ? 'bg-white/25 dark:bg-white/10'
+          // 일반 페이지 — 배경 gradient 위에 얹히므로 반투명 흰 유리 톤 +
+          // 하단 subtle shadow 로만 경계 표시 (외곽선 없음, glass 계열 통일).
+          : 'bg-white/60 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_4px_16px_rgba(15,23,42,0.05)]',
       )}
     >
       {/* 3분할: 좌(로고) / 중앙(nav) / 우(액션). flex-1 로 세 영역을 균등하게

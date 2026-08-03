@@ -29,7 +29,6 @@ import {
   validateBlockSubmission,
 } from '@/features/generation-v2/lib/validateBlockSubmission';
 import { useConversationStore } from '@/lib/store/conversationStore';
-import { cn } from '@/lib/utils';
 import { createJobSchema } from '@/types/schemas';
 
 import type { Block, BlockOptions } from '@/lib/store/conversationStore';
@@ -87,10 +86,6 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
     }, [conv?.blocks, block.id]);
 
     const isDraft = block.status === 'draft';
-    const isTerminal =
-      block.status === 'completed' ||
-      block.status === 'failed' ||
-      block.status === 'unknown';
     const isInFlight = block.status === 'queued' || block.status === 'generating';
 
     // Block 잠금 조건: draft 가 아니거나, draft 지만 다른 job 이 활성.
@@ -161,10 +156,11 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
     return (
       <article
         ref={ref}
-        className={cn(
-          'space-y-4 rounded-xl border bg-card p-5 animate-fade-in-up',
-          isTerminal && 'bg-muted/10',
-        )}
+        // Card 컴포넌트 없이도 배경 위에 놓이는 top-level wrapper 이므로
+        // globals.css .card (glass) 스타일을 직접 상속시켜 다른 Card 들과
+        // 톤을 통일한다. terminal 상태의 muted 톤은 제거 (glass 반투명
+        // 배경이 상태별 강조 없이도 자연스럽게 보인다).
+        className="space-y-4 p-5 card animate-fade-in-up"
       >
         {/* Draft Block 상단: 좌(Prompt 60%) / 우(Option 40%). md 미만에서는
             자동으로 세로 stack. Prompt 는 textarea 가 자유롭게 늘어나야 해서
