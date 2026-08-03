@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { AspectRatioSelector } from '@/features/generation/components/AspectRatioSelector';
+import { BatchSizeSelector } from '@/features/generation/components/BatchSizeSelector';
 import { CancelDialog } from '@/features/generation/components/CancelDialog';
 import { PresetChips } from '@/features/generation/components/PresetChips';
 import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCreateJob';
@@ -32,18 +34,11 @@ import { useSchoolApplyStore } from '@/lib/store/schoolApplyStore';
 import { cn } from '@/lib/utils';
 
 import type { OrgGenerationContext } from '@/app/(main)/generate/page';
-import {
-  ASPECT_RATIOS,
-  ASPECT_RATIO_DIMENSIONS,
-  ASPECT_RATIO_LABELS,
-  BATCH_SIZE_PRESETS,
-  MAX_BATCH_SIZE,
-  MIN_BATCH_SIZE,
-} from '@/types/domain';
+import { MAX_BATCH_SIZE } from '@/types/domain';
 import { createJobSchema } from '@/types/schemas';
 
 import type { AspectRatio } from '@/types/domain';
-import type { ChangeEvent, FormEvent } from 'react';
+import type { FormEvent } from 'react';
 
 interface ParentInfo {
   id: string;
@@ -379,64 +374,15 @@ export function GenerationForm({
                     사용
                   </span>
                 </div>
-                <div className="grid grid-cols-[repeat(4,1fr)_1.6fr] gap-1.5">
-                  {BATCH_SIZE_PRESETS.map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      disabled={inFlight}
-                      onClick={() => setBatchSize(size)}
-                      className={cn(
-                        'h-9 rounded-md border text-sm font-medium transition-colors',
-                        batchSize === size
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-input bg-background hover:bg-accent',
-                        inFlight && 'cursor-not-allowed opacity-50',
-                      )}
-                    >
-                      {size}장
-                    </button>
-                  ))}
-                  <div className="relative">
-                    <input
-                      id="batchSize"
-                      type="number"
-                      inputMode="numeric"
-                      min={MIN_BATCH_SIZE}
-                      max={MAX_BATCH_SIZE}
-                      step={1}
-                      disabled={inFlight}
-                      value={batchSize}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                        const raw = e.target.value;
-                        if (raw === '') {
-                          setBatchSize(MIN_BATCH_SIZE);
-                          return;
-                        }
-                        const parsed = Number.parseInt(raw, 10);
-                        if (Number.isNaN(parsed)) return;
-                        setBatchSize(
-                          Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, parsed)),
-                        );
-                      }}
-                      className={cn(
-                        'h-9 w-full rounded-md border border-input bg-background px-3 pr-12 text-center text-sm font-medium',
-                        // 브라우저 기본 number spinner 제거
-                        '[appearance:textfield]',
-                        '[&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none',
-                        '[&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none',
-                        'focus:outline-none focus:ring-2 focus:ring-primary/40',
-                        inFlight && 'cursor-not-allowed opacity-50',
-                      )}
-                    />
-                    <span
-                      className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm text-muted-foreground/60"
-                      aria-hidden="true"
-                    >
-                      ~{MAX_BATCH_SIZE}장
-                    </span>
-                  </div>
-                </div>
+                <BatchSizeSelector
+                  value={batchSize}
+                  onChange={setBatchSize}
+                  disabled={inFlight}
+                  inputId="batchSize"
+                />
+                {/* 기존 grid + preset 버튼 + 직접 입력 인라인 UI 는
+                    BatchSizeSelector 로 추출됨 (Commit 1). variant="default"
+                    (미지정) 로 시각 결과는 이전과 동일. */}
                 <p className="text-xs text-muted-foreground">
                   여러 장을 만들수록 원하는 이미지를 찾기 쉬워집니다. 직접 입력해{' '}
                   {MAX_BATCH_SIZE}장까지 만들 수 있어요.
@@ -445,41 +391,11 @@ export function GenerationForm({
 
               <div className="space-y-2">
                 <Label>이미지 비율</Label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {ASPECT_RATIOS.map((r) => {
-                    const dims = ASPECT_RATIO_DIMENSIONS[r];
-                    const previewRatio = `${dims.width} / ${dims.height}`;
-                    const active = aspectRatio === r;
-                    return (
-                      <button
-                        key={r}
-                        type="button"
-                        disabled={inFlight}
-                        onClick={() => setAspectRatio(r)}
-                        aria-pressed={active}
-                        className={cn(
-                          'flex flex-col items-center gap-1 rounded-md border py-2 text-xs font-medium transition-colors',
-                          active
-                            ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-input bg-background text-muted-foreground hover:bg-accent',
-                          inFlight && 'cursor-not-allowed opacity-50',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'w-6 rounded-sm border',
-                            active
-                              ? 'border-primary bg-primary/30'
-                              : 'border-current bg-current/20',
-                          )}
-                          style={{ aspectRatio: previewRatio }}
-                          aria-hidden="true"
-                        />
-                        <span>{ASPECT_RATIO_LABELS[r]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <AspectRatioSelector
+                  value={aspectRatio}
+                  onChange={setAspectRatio}
+                  disabled={inFlight}
+                />
               </div>
             </div>
 

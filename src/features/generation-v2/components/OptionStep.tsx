@@ -1,26 +1,21 @@
 'use client';
 
-// STEP 2 — 생성 옵션.
-//   - 생성 개수 (프리셋 + 직접 입력, 최대 CONVERSATION_MAX_BATCH)
-//   - 이미지 비율 (square / landscape / portrait)
-//   - 학교 설정 적용 (요약 노출; 참조 이미지 picker 는 이번 커밋에서 스코프 외)
-//   - "이미지 만들기" primary CTA — locked 이면 disabled
-// Read-only 모드: 모든 입력이 disabled + 버튼 사라짐.
+// STEP 2 — 생성 옵션 (v2).
+//   - 생성 개수 : 공통 BatchSizeSelector 재사용, visiblePresets=[1,5,10]
+//   - 이미지 비율 : 공통 AspectRatioSelector 재사용
+//   - 학교 설정 요약 (실제 Picker 는 Commit 3)
+//   - "이미지 만들기" primary CTA
+// Read-only 모드: 모든 컨트롤 disabled + CTA 사라짐.
 
 import { Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import {
-  CONVERSATION_BATCH_PRESETS,
-  CONVERSATION_MAX_BATCH,
-  CONVERSATION_MIN_BATCH,
-} from '@/features/generation-v2/config';
-import { cn } from '@/lib/utils';
-import { ASPECT_RATIOS, ASPECT_RATIO_DIMENSIONS, ASPECT_RATIO_LABELS } from '@/types/domain';
+import { AspectRatioSelector } from '@/features/generation/components/AspectRatioSelector';
+import { BatchSizeSelector } from '@/features/generation/components/BatchSizeSelector';
+import { BATCH_SIZE_PRESETS } from '@/types/domain';
 
 import type { BlockOptions } from '@/lib/store/conversationStore';
-import type { AspectRatio } from '@/types/domain';
 
 interface OptionStepProps {
   options: BlockOptions;
@@ -30,6 +25,13 @@ interface OptionStepProps {
   onChange: (patch: Partial<BlockOptions>) => void;
   onSubmit: () => void;
 }
+
+// v2 시안 노출 프리셋 = 1 / 5 / 10 / 직접 입력. 정책 상수는 재사용하고
+// View 필터만 여기서 적용 (지시서 §Q4). 하드코딩된 리터럴 배열 대신
+// 정책 상수에서 필터해 이후 정책 변경 시 자동 반영.
+const V2_VISIBLE_PRESETS = BATCH_SIZE_PRESETS.filter(
+  (v) => v === 1 || v === 5 || v === 10,
+);
 
 export function OptionStep({
   options,
@@ -59,106 +61,27 @@ export function OptionStep({
             크레딧 사용
           </span>
         </div>
-        <div className="grid grid-cols-[repeat(3,1fr)_1.6fr] gap-1.5">
-          {CONVERSATION_BATCH_PRESETS.map((size) => (
-            <button
-              key={size}
-              type="button"
-              disabled={disabled}
-              onClick={() => onChange({ batchSize: size })}
-              className={cn(
-                'h-9 rounded-md border text-sm font-medium transition-colors',
-                options.batchSize === size
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-background hover:bg-accent',
-                disabled && 'cursor-not-allowed opacity-60',
-              )}
-            >
-              {size}장
-            </button>
-          ))}
-          <div className="relative">
-            <input
-              type="number"
-              inputMode="numeric"
-              min={CONVERSATION_MIN_BATCH}
-              max={CONVERSATION_MAX_BATCH}
-              step={1}
-              value={options.batchSize}
-              disabled={disabled}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === '') {
-                  onChange({ batchSize: CONVERSATION_MIN_BATCH });
-                  return;
-                }
-                const parsed = Number.parseInt(raw, 10);
-                if (Number.isNaN(parsed)) return;
-                onChange({
-                  batchSize: Math.min(
-                    CONVERSATION_MAX_BATCH,
-                    Math.max(CONVERSATION_MIN_BATCH, parsed),
-                  ),
-                });
-              }}
-              className={cn(
-                'h-9 w-full rounded-md border border-input bg-background px-3 pr-12 text-center text-sm font-medium',
-                '[appearance:textfield]',
-                '[&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none',
-                '[&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none',
-                'focus:outline-none focus:ring-2 focus:ring-primary/40',
-                disabled && 'cursor-not-allowed opacity-60',
-              )}
-            />
-            <span
-              className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm text-muted-foreground/60"
-              aria-hidden="true"
-            >
-              ~{CONVERSATION_MAX_BATCH}장
-            </span>
-          </div>
-        </div>
+        <BatchSizeSelector
+          value={options.batchSize}
+          onChange={(next) => onChange({ batchSize: next })}
+          disabled={disabled}
+          variant="compact"
+          visiblePresets={V2_VISIBLE_PRESETS}
+        />
       </div>
 
       {/* 이미지 비율 */}
       <div className="space-y-2">
         <Label>이미지 비율</Label>
-        <div className="grid grid-cols-3 gap-1.5">
-          {ASPECT_RATIOS.map((r) => {
-            const dims = ASPECT_RATIO_DIMENSIONS[r];
-            const previewRatio = `${dims.width} / ${dims.height}`;
-            const active = options.aspectRatio === r;
-            return (
-              <button
-                key={r}
-                type="button"
-                disabled={disabled}
-                onClick={() => onChange({ aspectRatio: r as AspectRatio })}
-                aria-pressed={active}
-                className={cn(
-                  'flex flex-col items-center gap-1 rounded-md border py-2 text-sm font-medium transition-colors',
-                  active
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-input bg-background text-muted-foreground hover:bg-accent',
-                  disabled && 'cursor-not-allowed opacity-60',
-                )}
-              >
-                <span
-                  className={cn(
-                    'w-6 rounded-sm border',
-                    active ? 'border-primary bg-primary/30' : 'border-current',
-                  )}
-                  style={{ aspectRatio: previewRatio }}
-                  aria-hidden="true"
-                />
-                <span>{ASPECT_RATIO_LABELS[r]}</span>
-              </button>
-            );
-          })}
-        </div>
+        <AspectRatioSelector
+          value={options.aspectRatio}
+          onChange={(next) => onChange({ aspectRatio: next })}
+          disabled={disabled}
+          variant="compact"
+        />
       </div>
 
-      {/* 학교 설정 요약 — 참조 이미지 picker 는 다음 phase */}
+      {/* 학교 설정 요약 — 실제 Picker 는 Commit 3 */}
       {options.orgSlug && (
         <div className="rounded-md border bg-background p-3 text-sm">
           <div className="font-medium">학교 설정 적용</div>
