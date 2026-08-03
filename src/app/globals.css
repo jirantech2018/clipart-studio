@@ -65,7 +65,9 @@
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
+    /* Brand primary — #2d2f77 (deep indigo). 버튼, 선택된 border, chip active,
+       focus ring, 강조된 섹션 제목 등 primary 계열 전체가 이 값을 상속. */
+    --primary: 238 45% 32%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
@@ -77,7 +79,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --ring: 238 45% 32%;
     --radius: 0.5rem;
 
     /* Glass background + card tokens.
@@ -113,6 +115,14 @@
 
   * {
     @apply border-border;
+  }
+  /* 섹션 제목/강조된 heading 은 브랜드 primary (#2d2f77) 로 통일.
+     페이지에서 개별로 다른 색을 원하면 className 으로 override 하면 된다. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-primary;
   }
   body {
     @apply text-foreground font-sans;
