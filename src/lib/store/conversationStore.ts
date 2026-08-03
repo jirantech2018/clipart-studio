@@ -15,6 +15,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+import { resizeSlotPrompts } from '@/features/generation/lib/resizeSlotPrompts';
+
 import type { AspectRatio } from '@/types/domain';
 
 // ============ Types ============
@@ -34,6 +36,11 @@ export interface BlockOptions {
   orgReferenceIds: string[];
   schoolProfileApplied: boolean;
   orgSlug: string | null;
+  /** 다양성 생성 ON/OFF. OFF 시 submit payload 는 slotPrompts=null. */
+  diversityCustomOn: boolean;
+  /** 이미지별 추가 프롬프트. 길이는 batchSize 와 정합되어야 하며,
+   *  addBlock / updateOptions / rehydrate 각 지점에서 자동 리사이즈된다. */
+  slotPrompts: string[];
 }
 
 export interface CompletedImage {
@@ -108,13 +115,17 @@ interface ConversationState {
 
 // ============ Helpers ============
 
+const DEFAULT_BATCH_SIZE = 5;
+
 const DEFAULT_OPTIONS: BlockOptions = {
-  batchSize: 5,
+  batchSize: DEFAULT_BATCH_SIZE,
   aspectRatio: 'square',
   personalReferenceIds: [],
   orgReferenceIds: [],
   schoolProfileApplied: false,
   orgSlug: null,
+  diversityCustomOn: false,
+  slotPrompts: Array.from({ length: DEFAULT_BATCH_SIZE }, () => ''),
 };
 
 function uid(): string {
@@ -125,11 +136,15 @@ function uid(): string {
 }
 
 function makeBlock(seed?: Partial<BlockOptions>): Block {
+  const merged: BlockOptions = { ...DEFAULT_OPTIONS, ...(seed ?? {}) };
+  // slotPrompts 길이는 항상 batchSize 와 정합. seed 로 batchSize 만 오는
+  // 일반 경로에서도 default slotPrompts 길이를 새 batchSize 로 맞춘다.
+  merged.slotPrompts = resizeSlotPrompts(merged.slotPrompts, merged.batchSize);
   return {
     id: uid(),
     status: 'draft',
     prompt: '',
-    options: { ...DEFAULT_OPTIONS, ...(seed ?? {}) },
+    options: merged,
     jobId: null,
     succeeded: [],
     failed: [],
@@ -318,6 +333,22 @@ export const useConversationStore = create<ConversationState>()(
           conv.blocks.forEach((b) => {
             if (b.status === 'queued' || b.status === 'generating') {
               b.status = 'unknown';
+            }
+            // 하위호환: 다양성 생성 필드가 없는 예전 payload 보정.
+            // (버전 1 저장본에는 diversityCustomOn / slotPrompts 가 없다)
+            const opts = b.options as Partial<BlockOptions>;
+            if (typeof opts.diversityCustomOn !== 'boolean') {
+              opts.diversityCustomOn = false;
+            }
+            if (!Array.isArray(opts.slotPrompts)) {
+              opts.slotPrompts = [];
+            }
+            const batchSize =
+              typeof opts.batchSize === 'number' && opts.batchSize > 0
+                ? opts.batchSize
+                : DEFAULT_BATCH_SIZE;
+            if (opts.slotPrompts.length !== batchSize) {
+              opts.slotPrompts = resizeSlotPrompts(opts.slotPrompts, batchSize);
             }
           });
         });

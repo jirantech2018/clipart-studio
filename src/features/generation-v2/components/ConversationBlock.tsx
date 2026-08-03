@@ -136,7 +136,9 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           aspectRatio: block.options.aspectRatio,
           orgSlug: block.options.orgSlug,
           orgReferenceId: orgRef,
-          slotPrompts: null,
+          slotPrompts: block.options.diversityCustomOn
+            ? block.options.slotPrompts
+            : null,
         });
         if (!parsed.success) {
           const first = parsed.error.issues[0];

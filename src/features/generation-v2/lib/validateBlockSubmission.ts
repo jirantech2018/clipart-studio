@@ -65,7 +65,7 @@ export function validateBlockSubmission(input: ValidateInput): BlockSubmissionIs
     aspectRatio: options.aspectRatio,
     orgSlug: options.orgSlug,
     orgReferenceId: orgRef,
-    slotPrompts: null,
+    slotPrompts: options.diversityCustomOn ? options.slotPrompts : null,
   });
   if (!parsed.success) return 'invalid-options';
 

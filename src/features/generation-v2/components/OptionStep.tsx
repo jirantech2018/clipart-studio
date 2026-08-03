@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AspectRatioSelector } from '@/features/generation/components/AspectRatioSelector';
 import { BatchSizeSelector } from '@/features/generation/components/BatchSizeSelector';
+import { DiversityPromptList } from '@/features/generation/components/DiversityPromptList';
+import { resizeSlotPrompts } from '@/features/generation/lib/resizeSlotPrompts';
 import { OptionReferencePicker } from '@/features/generation-v2/components/OptionReferencePicker';
 import { OptionSchoolPicker } from '@/features/generation-v2/components/OptionSchoolPicker';
 import { BATCH_SIZE_PRESETS } from '@/types/domain';
@@ -105,7 +107,14 @@ export function OptionStep({
         </div>
         <BatchSizeSelector
           value={options.batchSize}
-          onChange={(next) => onChange({ batchSize: next })}
+          onChange={(nextSize) =>
+            // batchSize 변경 시 slotPrompts 길이도 동시에 정합. OFF 상태여도
+            // 입력값은 보존 (지시 §3).
+            onChange({
+              batchSize: nextSize,
+              slotPrompts: resizeSlotPrompts(options.slotPrompts, nextSize),
+            })
+          }
           disabled={disabled}
           variant="compact"
           visiblePresets={V2_VISIBLE_PRESETS}
@@ -141,7 +150,18 @@ export function OptionStep({
         onOrgReferenceIdChange={handleOrgReferenceIdChange}
       />
 
-      {/* 5 + 6. 하단 안내 + CTA (locked 이면 CTA 숨김) */}
+      {/* 5. 다양성 생성 — /generate 와 공유하는 Controlled 컴포넌트. */}
+      <DiversityPromptList
+        enabled={options.diversityCustomOn}
+        onEnabledChange={(next) => onChange({ diversityCustomOn: next })}
+        slotPrompts={options.slotPrompts}
+        onSlotPromptsChange={(next) => onChange({ slotPrompts: next })}
+        batchSize={options.batchSize}
+        disabled={disabled}
+        variant="compact"
+      />
+
+      {/* 6 + 7. 하단 안내 + CTA (locked 이면 CTA 숨김) */}
       {!locked && (
         <div className="mt-auto space-y-2 pt-1">
           {issueMessage && (
