@@ -33,7 +33,7 @@ export function OptionReferencePicker({
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
           <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
           <span>개인 참조 클립아트</span>
         </div>

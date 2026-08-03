@@ -72,7 +72,7 @@ export function OptionSchoolPicker({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
           <School className="h-3.5 w-3.5" aria-hidden="true" />
           <span>학교별 프롬프트 및 클립아트</span>
         </div>
@@ -99,7 +99,7 @@ export function OptionSchoolPicker({
         <div className="space-y-2 rounded-md border bg-muted/30 p-2 text-xs">
           <div className="flex items-center gap-1.5">
             <Building2 className="h-3 w-3 text-primary" aria-hidden="true" />
-            <span className="font-medium">{selectedOrg.name}</span>
+            <span className="font-medium text-primary">{selectedOrg.name}</span>
             {selectedOrg.schoolLevel && (
               <span className="text-muted-foreground">
                 · {SCHOOL_LEVEL_LABELS[selectedOrg.schoolLevel]}

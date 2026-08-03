@@ -98,9 +98,9 @@ export function OptionStep({
       {/* 1. 생성 개수 */}
       <div className="space-y-2">
         <div className="flex items-baseline justify-between">
-          <Label>생성 개수</Label>
+          <Label className="text-primary">생성 개수</Label>
           <span className="text-xs tabular-nums text-muted-foreground">
-            <span className="font-semibold text-foreground">{options.batchSize}</span>{' '}
+            <span className="font-semibold text-primary">{options.batchSize}</span>{' '}
             크레딧 사용
           </span>
         </div>
@@ -122,7 +122,7 @@ export function OptionStep({
 
       {/* 2. 이미지 비율 */}
       <div className="space-y-2">
-        <Label>클립아트 비율</Label>
+        <Label className="text-primary">클립아트 비율</Label>
         <AspectRatioSelector
           value={options.aspectRatio}
           onChange={(next) => onChange({ aspectRatio: next })}

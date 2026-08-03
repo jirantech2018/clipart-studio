@@ -90,7 +90,7 @@ export function DiversityPromptList({
                   COMPACT_SLOT_HINTS[0]!;
                 return (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="w-16 shrink-0 text-xs font-semibold tabular-nums text-foreground">
+                    <span className="w-16 shrink-0 text-xs font-semibold tabular-nums text-primary">
                       클립아트 {i + 1}
                     </span>
                     <input

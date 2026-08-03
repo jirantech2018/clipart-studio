@@ -78,7 +78,7 @@ export function GeneratingStep({ block }: GeneratingStepProps) {
               style={{ width: `${percent}%` }}
             />
           </div>
-          <span className="font-semibold text-foreground">{percent}%</span>
+          <span className="font-semibold text-primary">{percent}%</span>
         </div>
       </header>
 

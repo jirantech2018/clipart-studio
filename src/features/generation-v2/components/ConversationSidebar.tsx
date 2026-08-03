@@ -100,7 +100,7 @@ export function ConversationSidebar({
           <Row label="보유 크레딧">
             <span className="inline-flex items-center gap-1">
               <Coins className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-              <strong className="tabular-nums text-foreground">{credits}</strong>
+              <strong className="tabular-nums text-primary">{credits}</strong>
             </span>
           </Row>
           <Row label="이번 사용">
@@ -113,7 +113,7 @@ export function ConversationSidebar({
             <strong
               className={cn(
                 'tabular-nums',
-                insufficient ? 'text-destructive' : 'text-foreground',
+                insufficient ? 'text-destructive' : 'text-primary',
               )}
             >
               {projectedRemaining}
@@ -149,7 +149,7 @@ export function ConversationSidebar({
                       className={cn(
                         'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
                         active
-                          ? 'bg-accent font-medium text-foreground'
+                          ? 'bg-accent font-medium text-primary'
                           : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                       )}
                       title={c.title ?? '새로운 대화'}
