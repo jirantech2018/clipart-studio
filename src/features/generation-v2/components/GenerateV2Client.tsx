@@ -121,7 +121,7 @@ export function GenerateV2Client({ initialCredits }: Props) {
           </p>
         </header>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           {blocks.map((b, i) => (
             <ConversationBlock
               key={b.id}

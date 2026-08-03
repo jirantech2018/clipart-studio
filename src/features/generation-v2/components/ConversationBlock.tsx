@@ -160,7 +160,7 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       <article
         ref={ref}
         className={cn(
-          'space-y-4 rounded-xl border bg-card p-4',
+          'space-y-4 rounded-xl border bg-card p-5 animate-fade-in-up',
           isTerminal && 'bg-muted/10',
         )}
       >

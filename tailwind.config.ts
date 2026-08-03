@@ -64,6 +64,22 @@ const config: Config = {
           'sans-serif',
         ],
       },
+      // Conversation Timeline 슬롯/썸네일 등장, 상태 전환용 소프트 fade.
+      // 지시서상 "200~300ms 자연스러운 Transition" 범위에서만 사용.
+      keyframes: {
+        'fade-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        'fade-in-up': {
+          from: { opacity: '0', transform: 'translateY(4px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'fade-in': 'fade-in 250ms ease-out',
+        'fade-in-up': 'fade-in-up 250ms ease-out',
+      },
     },
   },
   plugins: [],
