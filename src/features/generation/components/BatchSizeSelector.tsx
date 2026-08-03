@@ -52,10 +52,12 @@ export function BatchSizeSelector({
   value,
   onChange,
   disabled = false,
+  variant = 'default',
   visiblePresets,
   inputId,
 }: BatchSizeSelectorProps) {
   const presets = sanitizePresets(visiblePresets);
+  const compact = variant === 'compact';
 
   // 프리셋 개수에 따라 컬럼 구성 동적 계산. 기존 GenerationForm 의
   // `grid-cols-[repeat(4,1fr)_1.6fr]` 를 preset 개수에 맞춰 일반화한 것.
@@ -73,7 +75,8 @@ export function BatchSizeSelector({
           disabled={disabled}
           onClick={() => onChange(size)}
           className={cn(
-            'h-9 rounded-md border text-sm font-medium transition-colors',
+            'rounded-md border text-sm font-medium transition-colors',
+            compact ? 'h-8' : 'h-9',
             value === size
               ? 'border-primary bg-primary text-primary-foreground'
               : 'border-input bg-background hover:bg-accent',
@@ -104,7 +107,8 @@ export function BatchSizeSelector({
             onChange(Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, parsed)));
           }}
           className={cn(
-            'h-9 w-full rounded-md border border-input bg-background px-3 pr-12 text-center text-sm font-medium',
+            'w-full rounded-md border border-input bg-background text-center text-sm font-medium',
+            compact ? 'h-8 px-2 pr-9' : 'h-9 px-3 pr-12',
             // 브라우저 기본 number spinner 제거 (기존 GenerationForm 그대로)
             '[appearance:textfield]',
             '[&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none',
@@ -114,10 +118,13 @@ export function BatchSizeSelector({
           )}
         />
         <span
-          className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm text-muted-foreground/60"
+          className={cn(
+            'pointer-events-none absolute inset-y-0 flex items-center text-muted-foreground/60',
+            compact ? 'right-1.5 text-xs' : 'right-2 text-sm',
+          )}
           aria-hidden="true"
         >
-          ~{MAX_BATCH_SIZE}장
+          {compact ? `~${MAX_BATCH_SIZE}` : `~${MAX_BATCH_SIZE}장`}
         </span>
       </div>
     </div>

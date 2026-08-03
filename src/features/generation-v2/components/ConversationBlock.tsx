@@ -23,6 +23,10 @@ import { OptionStep } from '@/features/generation-v2/components/OptionStep';
 import { PromptStep } from '@/features/generation-v2/components/PromptStep';
 import { useConversationJobStream } from '@/features/generation-v2/hooks/useConversationJobStream';
 import { extractRecentPrompts } from '@/features/generation-v2/lib/recentPrompts';
+import {
+  messageForIssue,
+  validateBlockSubmission,
+} from '@/features/generation-v2/lib/validateBlockSubmission';
 import { useConversationStore } from '@/lib/store/conversationStore';
 import { cn } from '@/lib/utils';
 import { createJobSchema } from '@/types/schemas';
@@ -90,7 +94,18 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
 
     // Block 잠금 조건: draft 가 아니거나, draft 지만 다른 job 이 활성.
     const locked = !isDraft || activeJobExists;
-    const insufficient = credits < block.options.batchSize;
+
+    // Validation 은 얇은 adapter 하나로 압축. 실제 정책은 createJobSchema 와
+    // 기존 credits/activeJob 를 그대로 소비.
+    const issue = validateBlockSubmission({
+      prompt: block.prompt,
+      options: block.options,
+      credits,
+      activeJobExists,
+      isDraftBlock: isDraft,
+    });
+    const creditDeficit = Math.max(0, block.options.batchSize - credits);
+    const issueMessage = messageForIssue(issue, { creditDeficit });
 
     // SSE stream 훅. jobId 가 있고 아직 in-flight 이면 열기.
     useConversationJobStream({
@@ -100,25 +115,26 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
     });
 
     async function handleSubmit() {
-      if (submitting || locked || insufficient) return;
-      const trimmed = block.prompt.trim();
-      if (trimmed.length < 2) {
-        toast.error('프롬프트를 2자 이상 입력해주세요');
-        return;
-      }
+      // 이중 방어: UI 는 이미 disable 되지만 빠른 연속 클릭/Enter 반복도 여기서 차단.
+      if (submitting || locked) return;
+      if (issue !== null) return;
+
       setSubmitting(true);
       try {
+        const trimmed = block.prompt.trim();
+        const personalRef = block.options.personalReferenceIds[0] ?? null;
+        const orgRef = block.options.orgReferenceIds[0] ?? null;
         const parsed = createJobSchema.safeParse({
           prompt: trimmed,
           batchSize: block.options.batchSize,
           diversityLevel: 0,
-          referenceImageId: null,
+          referenceImageId: personalRef,
           customReferenceId: null,
           schoolProfileApplied: block.options.schoolProfileApplied,
           generationMode: 'text2img',
           aspectRatio: block.options.aspectRatio,
           orgSlug: block.options.orgSlug,
-          orgReferenceId: null,
+          orgReferenceId: orgRef,
           slotPrompts: null,
         });
         if (!parsed.success) {
@@ -147,10 +163,10 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           isTerminal && 'bg-muted/10',
         )}
       >
-        {/* Draft Block 상단: 좌(Prompt) / 우(Option) 2단. md 미만에서는
+        {/* Draft Block 상단: 좌(Prompt 60%) / 우(Option 40%). md 미만에서는
             자동으로 세로 stack. Prompt 는 textarea 가 자유롭게 늘어나야 해서
             높이 균등을 위해 items-stretch 적용. */}
-        <div className="grid gap-4 md:grid-cols-2 md:items-stretch">
+        <div className="grid gap-4 md:grid-cols-[3fr_2fr] md:items-stretch">
           <PromptStep
             prompt={block.prompt}
             locked={locked}
@@ -163,7 +179,7 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
             options={block.options}
             locked={locked}
             submitting={submitting}
-            insufficient={insufficient}
+            issueMessage={issueMessage}
             onChange={(patch: Partial<BlockOptions>) =>
               updateOptions(convId, block.id, patch)
             }

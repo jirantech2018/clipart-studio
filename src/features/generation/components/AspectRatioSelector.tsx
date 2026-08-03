@@ -24,7 +24,9 @@ export function AspectRatioSelector({
   value,
   onChange,
   disabled = false,
+  variant = 'default',
 }: AspectRatioSelectorProps) {
+  const compact = variant === 'compact';
   return (
     <div className="grid grid-cols-3 gap-1.5">
       {ASPECT_RATIOS.map((r) => {
@@ -39,7 +41,8 @@ export function AspectRatioSelector({
             onClick={() => onChange(r)}
             aria-pressed={active}
             className={cn(
-              'flex flex-col items-center gap-1 rounded-md border py-2 text-xs font-medium transition-colors',
+              'flex flex-col items-center rounded-md border text-xs font-medium transition-colors',
+              compact ? 'gap-0.5 py-1.5' : 'gap-1 py-2',
               active
                 ? 'border-primary bg-primary/5 text-primary'
                 : 'border-input bg-background text-muted-foreground hover:bg-accent',
@@ -48,7 +51,8 @@ export function AspectRatioSelector({
           >
             <span
               className={cn(
-                'w-6 rounded-sm border',
+                'rounded-sm border',
+                compact ? 'w-5' : 'w-6',
                 active
                   ? 'border-primary bg-primary/30'
                   : 'border-current bg-current/20',

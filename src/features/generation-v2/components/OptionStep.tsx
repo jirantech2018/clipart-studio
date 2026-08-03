@@ -1,11 +1,17 @@
 'use client';
 
 // STEP 2 — 생성 옵션 (v2).
-//   - 생성 개수 : 공통 BatchSizeSelector 재사용, visiblePresets=[1,5,10]
-//   - 이미지 비율 : 공통 AspectRatioSelector 재사용
-//   - 학교 설정 요약 (실제 Picker 는 Commit 3)
-//   - "이미지 만들기" primary CTA
-// Read-only 모드: 모든 컨트롤 disabled + CTA 사라짐.
+//
+// 목표 시안의 압축 옵션 패널.
+//   1. 생성 개수      (BatchSizeSelector compact, presets=[1,5,10]+직접입력)
+//   2. 이미지 비율    (AspectRatioSelector compact)
+//   3. 개인 참조 이미지 (OptionReferencePicker → ReferenceLibrarySection compact)
+//   4. 학교 설정      (OptionSchoolPicker → 기존 조직 훅 재사용)
+//   5. Validation 안내 (validateBlockSubmission → messageForIssue)
+//   6. 이미지 만들기 CTA (전체 폭, 문구는 요청 상태에 따라만 변경)
+//
+// 상태 SoT 는 Conversation Block options. 이 컴포넌트는 controlled 로만
+// 동작하며 전역 store 를 참조하지 않는다.
 
 import { Sparkles } from 'lucide-react';
 
@@ -13,6 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AspectRatioSelector } from '@/features/generation/components/AspectRatioSelector';
 import { BatchSizeSelector } from '@/features/generation/components/BatchSizeSelector';
+import { OptionReferencePicker } from '@/features/generation-v2/components/OptionReferencePicker';
+import { OptionSchoolPicker } from '@/features/generation-v2/components/OptionSchoolPicker';
 import { BATCH_SIZE_PRESETS } from '@/types/domain';
 
 import type { BlockOptions } from '@/lib/store/conversationStore';
@@ -21,14 +29,14 @@ interface OptionStepProps {
   options: BlockOptions;
   locked: boolean;
   submitting: boolean;
-  insufficient: boolean;
+  /** 사용자 안내 문구. null 이면 안내 없음 = 생성 가능. */
+  issueMessage: string | null;
   onChange: (patch: Partial<BlockOptions>) => void;
   onSubmit: () => void;
 }
 
-// v2 시안 노출 프리셋 = 1 / 5 / 10 / 직접 입력. 정책 상수는 재사용하고
-// View 필터만 여기서 적용 (지시서 §Q4). 하드코딩된 리터럴 배열 대신
-// 정책 상수에서 필터해 이후 정책 변경 시 자동 반영.
+// v2 노출 프리셋 (지시 §5): 1 / 5 / 10 + 직접입력. 정책 상수 (1/2/5/10) 는
+// 그대로 두고 View 필터만 여기서 적용.
 const V2_VISIBLE_PRESETS = BATCH_SIZE_PRESETS.filter(
   (v) => v === 1 || v === 5 || v === 10,
 );
@@ -37,14 +45,48 @@ export function OptionStep({
   options,
   locked,
   submitting,
-  insufficient,
+  issueMessage,
   onChange,
   onSubmit,
 }: OptionStepProps) {
   const disabled = locked || submitting;
 
+  const personalReferenceId = options.personalReferenceIds[0] ?? null;
+  const orgReferenceId = options.orgReferenceIds[0] ?? null;
+  const personalActive = personalReferenceId !== null;
+  const orgReferenceActive = orgReferenceId !== null;
+
+  function handlePersonalReferenceChange(next: string | null) {
+    if (next === null) {
+      onChange({ personalReferenceIds: [] });
+      return;
+    }
+    // 상호배제 (기존 /generate 정책): 개인 참조 선택 시 조직 참조는 해제.
+    onChange({ personalReferenceIds: [next], orgReferenceIds: [] });
+  }
+
+  function handleOrgReferenceIdChange(next: string | null) {
+    if (next === null) {
+      onChange({ orgReferenceIds: [] });
+      return;
+    }
+    // 상호배제: 조직 참조 선택 시 개인 참조는 해제.
+    onChange({ orgReferenceIds: [next], personalReferenceIds: [] });
+  }
+
+  function handleOrgSlugChange(nextSlug: string | null) {
+    // 조직 선택 자체가 "학교 설정 적용" 을 의미 (기존 SchoolContextCard 정책).
+    onChange({
+      orgSlug: nextSlug,
+      schoolProfileApplied: nextSlug !== null,
+      // 조직이 바뀌면 이전 조직의 참조 이미지 선택은 무효 → 상위에서 이미 null 넘어옴
+    });
+  }
+
+  const canSubmit = !disabled && issueMessage === null;
+
   return (
-    <section className="flex h-full flex-col gap-4 rounded-md border bg-muted/20 p-4">
+    <section className="flex h-full flex-col gap-4 rounded-xl border bg-muted/20 p-5">
       <header className="flex items-center gap-2">
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
           2
@@ -52,11 +94,11 @@ export function OptionStep({
         <h3 className="text-base font-semibold">생성 옵션</h3>
       </header>
 
-      {/* 생성 개수 */}
+      {/* 1. 생성 개수 */}
       <div className="space-y-2">
         <div className="flex items-baseline justify-between">
           <Label>생성 개수</Label>
-          <span className="text-sm tabular-nums text-muted-foreground">
+          <span className="text-xs tabular-nums text-muted-foreground">
             <span className="font-semibold text-foreground">{options.batchSize}</span>{' '}
             크레딧 사용
           </span>
@@ -70,7 +112,7 @@ export function OptionStep({
         />
       </div>
 
-      {/* 이미지 비율 */}
+      {/* 2. 이미지 비율 */}
       <div className="space-y-2">
         <Label>이미지 비율</Label>
         <AspectRatioSelector
@@ -81,32 +123,44 @@ export function OptionStep({
         />
       </div>
 
-      {/* 학교 설정 요약 — 실제 Picker 는 Commit 3 */}
-      {options.orgSlug && (
-        <div className="rounded-md border bg-background p-3 text-sm">
-          <div className="font-medium">학교 설정 적용</div>
-          <div className="mt-0.5 text-muted-foreground">
-            조직 컨텍스트({options.orgSlug}) 의 기본 프롬프트 · 참조 이미지가 자동
-            적용됩니다.
-          </div>
-        </div>
-      )}
+      {/* 3. 개인 참조 이미지 */}
+      <OptionReferencePicker
+        value={personalReferenceId}
+        onChange={handlePersonalReferenceChange}
+        disabled={disabled}
+        orgReferenceActive={orgReferenceActive}
+      />
 
-      {/* 생성 CTA — flex-1 로 위 옵션들을 밀어올린 뒤 하단 우측 정렬 */}
+      {/* 4. 학교 설정 */}
+      <OptionSchoolPicker
+        orgSlug={options.orgSlug}
+        orgReferenceId={orgReferenceId}
+        disabled={disabled}
+        personalReferenceActive={personalActive}
+        onOrgSlugChange={handleOrgSlugChange}
+        onOrgReferenceIdChange={handleOrgReferenceIdChange}
+      />
+
+      {/* 5 + 6. 하단 안내 + CTA (locked 이면 CTA 숨김) */}
       {!locked && (
-        <div className="mt-auto flex items-center justify-end pt-1">
+        <div className="mt-auto space-y-2 pt-1">
+          {issueMessage && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-xs text-amber-900 dark:text-amber-200"
+            >
+              {issueMessage}
+            </p>
+          )}
           <Button
             type="button"
             onClick={onSubmit}
-            disabled={submitting || insufficient}
-            className="min-w-[10rem]"
+            disabled={!canSubmit}
+            className="min-h-[44px] w-full"
           >
             <Sparkles className="mr-1 h-4 w-4" />
-            {submitting
-              ? '요청 중…'
-              : insufficient
-                ? '크레딧 부족'
-                : '이미지 만들기'}
+            {submitting ? '이미지 생성 요청 중…' : '이미지 만들기'}
           </Button>
         </div>
       )}

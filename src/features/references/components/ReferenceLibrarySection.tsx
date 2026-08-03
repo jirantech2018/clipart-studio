@@ -64,6 +64,7 @@ export function ReferenceLibrarySection(props: ReferenceLibrarySectionProps) {
   const inFlight = streamStatus === 'starting' || streamStatus === 'streaming';
   // disabled 우선순위: props.disabled > (controlled ? false : inFlight)
   const disabled = props.disabled ?? (controlled ? false : inFlight);
+  const compact = props.variant === 'compact';
 
   function toggleSelect(id: string) {
     const active = selectedReferenceId === id;
@@ -84,6 +85,63 @@ export function ReferenceLibrarySection(props: ReferenceLibrarySectionProps) {
 
   const slots = data?.slots ?? [];
 
+  const grid = isLoading ? (
+    <div className={cn('grid grid-cols-5', compact ? 'gap-1.5' : 'gap-2')}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="aspect-square animate-pulse rounded-md bg-muted"
+          aria-hidden="true"
+        />
+      ))}
+    </div>
+  ) : slots.length === 0 ? (
+    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
+      저장된 참조 이미지가 없어요.{' '}
+      <Link href="/settings" className="text-primary underline-offset-4 hover:underline">
+        설정에서 추가하기 →
+      </Link>
+    </div>
+  ) : (
+    <div className={cn('grid grid-cols-5', compact ? 'gap-1.5' : 'gap-2')}>
+      {slots.map((slot) => {
+        const active = selectedReferenceId === slot.id;
+        return (
+          <button
+            key={slot.id}
+            type="button"
+            disabled={disabled}
+            onClick={() => toggleSelect(slot.id)}
+            aria-pressed={active}
+            title={slot.filename ?? '참조 이미지'}
+            className={cn(
+              'group relative aspect-square overflow-hidden rounded-md border-2 bg-muted transition-all',
+              active
+                ? 'border-primary ring-2 ring-primary/30'
+                : 'border-transparent hover:border-muted-foreground/40',
+              disabled && 'cursor-not-allowed opacity-50',
+            )}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slot.url}
+              alt={slot.filename ?? '참조 이미지'}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  // compact variant: v2 Option Panel 안에서 재사용될 때는 자체 Card/헤더/안내
+  // 문구를 벗기고 슬롯 그리드만 노출한다. 라벨과 상호배제 안내는 상위
+  // OptionReferencePicker 가 담당.
+  if (compact) {
+    return <div className="space-y-2">{grid}</div>;
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -93,56 +151,7 @@ export function ReferenceLibrarySection(props: ReferenceLibrarySectionProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {isLoading ? (
-          <div className="grid grid-cols-5 gap-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="aspect-square animate-pulse rounded-md bg-muted"
-                aria-hidden="true"
-              />
-            ))}
-          </div>
-        ) : slots.length === 0 ? (
-          <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
-            저장된 참조 이미지가 없어요.{' '}
-            <Link href="/settings" className="text-primary underline-offset-4 hover:underline">
-              설정에서 추가하기 →
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-5 gap-2">
-            {slots.map((slot) => {
-              const active = selectedReferenceId === slot.id;
-              return (
-                <button
-                  key={slot.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => toggleSelect(slot.id)}
-                  aria-pressed={active}
-                  title={slot.filename ?? '참조 이미지'}
-                  className={cn(
-                    'group relative aspect-square overflow-hidden rounded-md border-2 bg-muted transition-all',
-                    active
-                      ? 'border-primary ring-2 ring-primary/30'
-                      : 'border-transparent hover:border-muted-foreground/40',
-                    disabled && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={slot.url}
-                    alt={slot.filename ?? '참조 이미지'}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                </button>
-              );
-            })}
-          </div>
-        )}
-
+        {grid}
         <p className="text-sm text-muted-foreground">
           이미지를 클릭하면 위의 AI 이미지 만들기 폼에 참조 이미지로 지정돼요.{' '}
           <Link href="/profile" className="underline-offset-4 hover:underline">
