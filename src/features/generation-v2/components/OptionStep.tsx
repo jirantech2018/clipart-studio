@@ -42,7 +42,7 @@ export function OptionStep({
   const disabled = locked || submitting;
 
   return (
-    <section className="space-y-4 rounded-md border bg-muted/20 p-4">
+    <section className="flex h-full flex-col gap-4 rounded-md border bg-muted/20 p-4">
       <header className="flex items-center gap-2">
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
           2
@@ -169,9 +169,9 @@ export function OptionStep({
         </div>
       )}
 
-      {/* 생성 CTA */}
+      {/* 생성 CTA — flex-1 로 위 옵션들을 밀어올린 뒤 하단 우측 정렬 */}
       {!locked && (
-        <div className="flex items-center justify-end pt-1">
+        <div className="mt-auto flex items-center justify-end pt-1">
           <Button
             type="button"
             onClick={onSubmit}

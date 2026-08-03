@@ -138,23 +138,28 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           isTerminal && 'bg-muted/10',
         )}
       >
-        <PromptStep
-          prompt={block.prompt}
-          locked={locked}
-          autoFocus={isDraft && isLast && !activeJobExists}
-          onChange={(next) => updatePrompt(convId, block.id, next)}
-        />
+        {/* Draft Block 상단: 좌(Prompt) / 우(Option) 2단. md 미만에서는
+            자동으로 세로 stack. Prompt 는 textarea 가 자유롭게 늘어나야 해서
+            높이 균등을 위해 items-stretch 적용. */}
+        <div className="grid gap-4 md:grid-cols-2 md:items-stretch">
+          <PromptStep
+            prompt={block.prompt}
+            locked={locked}
+            autoFocus={isDraft && isLast && !activeJobExists}
+            onChange={(next) => updatePrompt(convId, block.id, next)}
+          />
 
-        <OptionStep
-          options={block.options}
-          locked={locked}
-          submitting={submitting}
-          insufficient={insufficient}
-          onChange={(patch: Partial<BlockOptions>) =>
-            updateOptions(convId, block.id, patch)
-          }
-          onSubmit={handleSubmit}
-        />
+          <OptionStep
+            options={block.options}
+            locked={locked}
+            submitting={submitting}
+            insufficient={insufficient}
+            onChange={(patch: Partial<BlockOptions>) =>
+              updateOptions(convId, block.id, patch)
+            }
+            onSubmit={handleSubmit}
+          />
+        </div>
 
         {isInFlight && <GeneratingStep block={block} />}
         {block.status === 'completed' && <CompletedStep block={block} />}

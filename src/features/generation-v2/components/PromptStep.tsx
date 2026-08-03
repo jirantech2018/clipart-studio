@@ -17,7 +17,7 @@ interface PromptStepProps {
 
 export function PromptStep({ prompt, locked, autoFocus, onChange }: PromptStepProps) {
   return (
-    <section className="space-y-2">
+    <section className="flex h-full flex-col gap-2 rounded-md border bg-muted/10 p-4">
       <header className="flex items-center gap-2">
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
           1
@@ -29,13 +29,12 @@ export function PromptStep({ prompt, locked, autoFocus, onChange }: PromptStepPr
         onChange={(e) => onChange(e.target.value)}
         readOnly={locked}
         autoFocus={autoFocus}
-        rows={4}
         maxLength={500}
         placeholder={
           '예: 운동장에서 줄넘기하는 초등학생\n봄 햇살이 비치는 날, 밝고 활기찬 분위기'
         }
         className={cn(
-          'w-full resize-y',
+          'min-h-[10rem] w-full flex-1 resize-none',
           locked && 'cursor-not-allowed bg-muted/40 text-foreground/80',
         )}
       />
