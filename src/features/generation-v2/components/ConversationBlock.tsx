@@ -17,6 +17,7 @@ import { AlertTriangle, HelpCircle } from 'lucide-react';
 import { forwardRef, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import { AiResponseBubble } from '@/features/generation-v2/components/AiResponseBubble';
 import { CompletedStep } from '@/features/generation-v2/components/CompletedStep';
 import { GeneratingStep } from '@/features/generation-v2/components/GeneratingStep';
 import { OptionStep } from '@/features/generation-v2/components/OptionStep';
@@ -187,30 +188,45 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           />
         </div>
 
-        {isInFlight && <GeneratingStep block={block} />}
-        {block.status === 'completed' && <CompletedStep block={block} />}
+        {/* AI 응답 계열은 아바타 wrapper 로 감싸 대화 흐름을 시각적으로
+            통일한다. Draft (Prompt+Option) 는 사용자 발화 성격이라 wrapper
+            없이 그대로 유지. */}
+        {isInFlight && (
+          <AiResponseBubble>
+            <GeneratingStep block={block} />
+          </AiResponseBubble>
+        )}
+        {block.status === 'completed' && (
+          <AiResponseBubble>
+            <CompletedStep block={block} />
+          </AiResponseBubble>
+        )}
         {block.status === 'failed' && (
-          <section className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <p className="font-medium">생성에 실패했어요</p>
-              <p className="text-destructive/80">
-                {block.errorMessage ?? '알 수 없는 오류가 발생했어요.'}
-              </p>
-            </div>
-          </section>
+          <AiResponseBubble>
+            <section className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div className="space-y-0.5">
+                <p className="font-medium">생성에 실패했어요</p>
+                <p className="text-destructive/80">
+                  {block.errorMessage ?? '알 수 없는 오류가 발생했어요.'}
+                </p>
+              </div>
+            </section>
+          </AiResponseBubble>
         )}
         {block.status === 'unknown' && (
-          <section className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-900 dark:text-amber-200">
-            <HelpCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <p className="font-medium">생성 상태 확인이 필요합니다</p>
-              <p>
-                새로고침으로 실시간 연결이 끊어졌어요. 실제 생성 결과는 라이브러리에서
-                확인할 수 있어요.
-              </p>
-            </div>
-          </section>
+          <AiResponseBubble>
+            <section className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-900 dark:text-amber-200">
+              <HelpCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div className="space-y-0.5">
+                <p className="font-medium">생성 상태 확인이 필요합니다</p>
+                <p>
+                  새로고침으로 실시간 연결이 끊어졌어요. 실제 생성 결과는 라이브러리에서
+                  확인할 수 있어요.
+                </p>
+              </div>
+            </section>
+          </AiResponseBubble>
         )}
       </article>
     );
