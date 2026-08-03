@@ -156,11 +156,9 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
     return (
       <article
         ref={ref}
-        // Card 컴포넌트 없이도 배경 위에 놓이는 top-level wrapper 이므로
-        // globals.css .card (glass) 스타일을 직접 상속시켜 다른 Card 들과
-        // 톤을 통일한다. terminal 상태의 muted 톤은 제거 (glass 반투명
-        // 배경이 상태별 강조 없이도 자연스럽게 보인다).
-        className="space-y-4 p-5 card animate-fade-in-up"
+        // 외곽 카드 없이 순수 wrapper. Prompt/Option/응답 카드가 각자
+        // 배경 위에 개별 카드로 놓이도록 함 (사용자 요청 반영).
+        className="space-y-4 animate-fade-in-up"
       >
         {/* Draft Block 상단: 좌(Prompt 60%) / 우(Option 40%). md 미만에서는
             자동으로 세로 stack. Prompt 는 textarea 가 자유롭게 늘어나야 해서

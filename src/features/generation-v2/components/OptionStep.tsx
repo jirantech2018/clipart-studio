@@ -87,7 +87,7 @@ export function OptionStep({
   const canSubmit = !disabled && issueMessage === null;
 
   return (
-    <section className="flex h-full flex-col gap-4 rounded-xl border bg-muted/20 p-5">
+    <section className="card flex h-full flex-col gap-4 p-5">
       <header className="flex items-center gap-2">
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
           2

@@ -65,7 +65,7 @@ export function PromptStep({
   const hints = suggestions.data?.suggestions ?? [];
 
   return (
-    <section className="flex h-full flex-col gap-3 rounded-xl border bg-muted/10 p-5">
+    <section className="card flex h-full flex-col gap-3 p-5">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
