@@ -15,6 +15,10 @@ interface PresetChipsProps {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
+  /** v2 확장을 위한 시각 variant. 현재는 default 만 시각 유의미. */
+  variant?: 'default' | 'compact';
+  /** wrapper 에 추가할 className (레이아웃 조정용). */
+  className?: string;
 }
 
 function hasHint(prompt: string, hint: string): boolean {
@@ -38,10 +42,11 @@ export function PresetChips({
   value,
   onChange,
   disabled,
+  className,
 }: PresetChipsProps) {
   if (loading && hints.length === 0) {
     return (
-      <div className="flex flex-wrap gap-1.5">
+      <div className={cn('flex flex-wrap gap-1.5', className)}>
         {Array.from({ length: 5 }).map((_, i) => (
           <span
             key={i}
@@ -54,7 +59,7 @@ export function PresetChips({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
       {hints.map((hint) => {
         const active = hasHint(value, hint);
         return (
