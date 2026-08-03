@@ -147,7 +147,7 @@ export function ReferenceLibrarySection(props: ReferenceLibrarySectionProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <LinkIcon className="h-4 w-4" />
-          개인 참조 이미지 (선택)
+          개인 참조 클립아트 (선택)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

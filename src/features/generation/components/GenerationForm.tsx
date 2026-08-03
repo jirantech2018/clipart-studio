@@ -284,7 +284,7 @@ export function GenerationForm({
               />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium">
-                  {isSelectedFromOrg ? '조직 참조 이미지' : '개인 참조 이미지'}
+                  {isSelectedFromOrg ? '조직 참조 이미지' : '개인 참조 클립아트'}
                 </p>
                 <p
                   className="line-clamp-2 text-xs text-muted-foreground"

@@ -74,7 +74,7 @@ export function OptionSchoolPicker({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-sm font-medium">
           <School className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>학교 설정</span>
+          <span>학교별 프롬프트 및 클립아트</span>
         </div>
         <select
           value={currentValue}
@@ -84,7 +84,7 @@ export function OptionSchoolPicker({
             'h-8 max-w-[10rem] rounded-md border border-input bg-background px-2 text-xs',
             (disabled || orgList.isLoading) && 'cursor-not-allowed opacity-50',
           )}
-          aria-label="학교 설정 소스"
+          aria-label="학교별 프롬프트 및 클립아트 소스"
         >
           <option value={NONE_KEY}>설정 안 함</option>
           {orgs.map((o) => (
@@ -156,7 +156,7 @@ export function OptionSchoolPicker({
               </div>
               {personalReferenceActive && (
                 <p className="text-muted-foreground">
-                  개인 참조 이미지가 적용 중이어서 학교 참조 이미지는 선택할 수 없어요.
+                  개인 참조 클립아트가 적용 중이어서 학교 참조 이미지는 선택할 수 없어요.
                 </p>
               )}
             </div>

@@ -84,7 +84,7 @@ export function messageForIssue(
       // 상자는 표시하지 않는다 (버튼은 여전히 disabled 상태 유지).
       return null;
     case 'reference-conflict':
-      return '개인 참조 이미지와 학교 참조 이미지는 동시에 사용할 수 없어요.';
+      return '개인 참조 클립아트와 학교 참조 이미지는 동시에 사용할 수 없어요.';
     case 'insufficient-credits':
       return args?.creditDeficit && args.creditDeficit > 0
         ? `크레딧이 ${args.creditDeficit}개 부족합니다.`

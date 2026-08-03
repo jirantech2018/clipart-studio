@@ -35,7 +35,7 @@ export function OptionReferencePicker({
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-center gap-1.5 text-sm font-medium">
           <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>개인 참조 이미지</span>
+          <span>개인 참조 클립아트</span>
         </div>
         {value && !orgReferenceActive && (
           <span className="text-xs text-muted-foreground">1장 선택됨</span>
@@ -53,7 +53,7 @@ export function OptionReferencePicker({
 
       {orgReferenceActive && (
         <p className="text-xs text-muted-foreground">
-          학교 참조 이미지가 적용 중이어서 개인 참조 이미지를 사용할 수 없어요.
+          학교 참조 이미지가 적용 중이어서 개인 참조 클립아트를 사용할 수 없어요.
         </p>
       )}
     </div>
