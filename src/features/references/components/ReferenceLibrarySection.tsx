@@ -1,9 +1,19 @@
 'use client';
 
 // /generate 페이지 하단에 놓이는 별도 카드. AI 이미지 만들기 폼과 시각적으로
-// 분리해 저장된 참조 이미지 슬롯을 관리/선택하도록 한다. 선택 상태는
-// referenceStore 를 통해 폼과 공유되며, 선택된 슬롯은 폼 상단에
-// chaining 카드와 동일한 스타일로 노출된다.
+// 분리해 저장된 참조 이미지 슬롯을 관리/선택하도록 한다.
+//
+// Controlled / Uncontrolled 두 모드를 지원한다.
+//   Controlled   : value + onChange 를 부모가 소유. 전역 store 미참조.
+//                  개인/조직 참조의 상호배제는 부모(예: /generate-v2
+//                  Conversation Block) 책임.
+//   Uncontrolled : props 미전달. 기존 /generate 처럼 useReferenceStore /
+//                  useOrgReferenceStore / useGenerationStore.streamStatus 를
+//                  fallback 으로 사용하며, 개인 참조 선택 시 조직 참조를
+//                  자동 해제한다 (기존 동작 보존).
+//
+// TypeScript discriminated union 으로 부분 controlled (value 만 or onChange
+// 만) 는 컴파일 단계에서 차단된다.
 
 import { LinkIcon } from 'lucide-react';
 import Link from 'next/link';
@@ -15,23 +25,61 @@ import { useOrgReferenceStore } from '@/lib/store/orgReferenceStore';
 import { useReferenceStore } from '@/lib/store/referenceStore';
 import { cn } from '@/lib/utils';
 
-export function ReferenceLibrarySection() {
+type ControlledReferenceLibrarySectionProps = {
+  value: string | null;
+  onChange: (nextId: string | null) => void;
+  disabled?: boolean;
+  variant?: 'default' | 'compact';
+};
+
+type UncontrolledReferenceLibrarySectionProps = {
+  value?: never;
+  onChange?: never;
+  disabled?: boolean;
+  variant?: 'default' | 'compact';
+};
+
+export type ReferenceLibrarySectionProps =
+  | ControlledReferenceLibrarySectionProps
+  | UncontrolledReferenceLibrarySectionProps;
+
+function isControlled(
+  p: ReferenceLibrarySectionProps,
+): p is ControlledReferenceLibrarySectionProps {
+  return typeof p.onChange === 'function';
+}
+
+export function ReferenceLibrarySection(props: ReferenceLibrarySectionProps) {
   const { data, isLoading } = useReferenceImages();
-  const selectedReferenceId = useReferenceStore((s) => s.selectedReferenceId);
-  const select = useReferenceStore((s) => s.select);
+
+  // React hooks 규칙상 top-level 무조건 호출. Controlled 모드에서는 아래
+  // 분기에서 값을 사용하지 않는다 (전역 store read/write 없음).
+  const storeSelectedId = useReferenceStore((s) => s.selectedReferenceId);
+  const storeSelect = useReferenceStore((s) => s.select);
   const clearOrgReference = useOrgReferenceStore((s) => s.clear);
   const streamStatus = useGenerationStore((s) => s.streamStatus);
-  const inFlight = streamStatus === 'starting' || streamStatus === 'streaming';
 
-  // 개인 참조를 새로 선택하면 조직 참조는 해제해서 상단에 하나만 뜨도록 한다.
+  const controlled = isControlled(props);
+  const selectedReferenceId = controlled ? props.value : storeSelectedId;
+  const inFlight = streamStatus === 'starting' || streamStatus === 'streaming';
+  // disabled 우선순위: props.disabled > (controlled ? false : inFlight)
+  const disabled = props.disabled ?? (controlled ? false : inFlight);
+
   function toggleSelect(id: string) {
     const active = selectedReferenceId === id;
-    if (active) {
-      select(null);
-    } else {
-      clearOrgReference();
-      select(id);
+    const nextId = active ? null : id;
+
+    if (controlled) {
+      props.onChange(nextId);
+      return;
     }
+
+    // Uncontrolled fallback: 개인 참조 새로 선택 시 조직 참조는 해제해
+    // 상단에 하나만 뜨도록 한다 (기존 /generate 동작 보존).
+    if (nextId !== null) {
+      clearOrgReference();
+    }
+    storeSelect(nextId);
   }
 
   const slots = data?.slots ?? [];
@@ -70,7 +118,7 @@ export function ReferenceLibrarySection() {
                 <button
                   key={slot.id}
                   type="button"
-                  disabled={inFlight}
+                  disabled={disabled}
                   onClick={() => toggleSelect(slot.id)}
                   aria-pressed={active}
                   title={slot.filename ?? '참조 이미지'}
@@ -79,7 +127,7 @@ export function ReferenceLibrarySection() {
                     active
                       ? 'border-primary ring-2 ring-primary/30'
                       : 'border-transparent hover:border-muted-foreground/40',
-                    inFlight && 'cursor-not-allowed opacity-50',
+                    disabled && 'cursor-not-allowed opacity-50',
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
