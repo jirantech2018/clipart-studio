@@ -14,7 +14,7 @@
 //   true 인 draft Block 은 submit 을 disable (동시 Job 1개 제한).
 
 import { AlertTriangle, HelpCircle } from 'lucide-react';
-import { forwardRef, useMemo, useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AiResponseBubble } from '@/features/generation-v2/components/AiResponseBubble';
@@ -23,7 +23,6 @@ import { GeneratingStep } from '@/features/generation-v2/components/GeneratingSt
 import { OptionStep } from '@/features/generation-v2/components/OptionStep';
 import { PromptStep } from '@/features/generation-v2/components/PromptStep';
 import { useConversationJobStream } from '@/features/generation-v2/hooks/useConversationJobStream';
-import { extractRecentPrompts } from '@/features/generation-v2/lib/recentPrompts';
 import {
   messageForIssue,
   validateBlockSubmission,
@@ -75,15 +74,7 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
     const updateOptions = useConversationStore((s) => s.updateBlockOptions);
     const markQueued = useConversationStore((s) => s.markBlockQueued);
     const markFailed = useConversationStore((s) => s.markBlockFailed);
-    const conv = useConversationStore((s) => s.conversations[convId]);
     const [submitting, setSubmitting] = useState(false);
-
-    // 최근 사용 Dropdown 용 — 현재 Block 을 제외한 이전 Block 들에서만 추출.
-    // (draft 인 현재 Block 이 목록에 자기 자신을 노출하는 것은 지시상 불가)
-    const recentPrompts = useMemo(() => {
-      const others = (conv?.blocks ?? []).filter((b) => b.id !== block.id);
-      return extractRecentPrompts(others);
-    }, [conv?.blocks, block.id]);
 
     const isDraft = block.status === 'draft';
     const isInFlight = block.status === 'queued' || block.status === 'generating';
@@ -169,7 +160,6 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
             locked={locked}
             autoFocus={isDraft && isLast && !activeJobExists}
             onChange={(next) => updatePrompt(convId, block.id, next)}
-            recentPrompts={recentPrompts}
             diversityEnabled={block.options.diversityCustomOn}
             onDiversityEnabledChange={(next) =>
               updateOptions(convId, block.id, { diversityCustomOn: next })
