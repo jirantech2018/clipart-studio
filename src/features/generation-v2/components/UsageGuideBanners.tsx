@@ -1,24 +1,38 @@
 'use client';
 
-// 사용 가이드 배너 4단 — /generate-v2 상단 헤더의 "사용 가이드 ▾" 를 펼쳤을 때
-// 노출되는 소개 카드. 정보 표시 전용이며 상태를 소유하지 않는다.
-// 4개 카드 데이터를 하나의 배열에서 정의하고 반응형 grid 로 렌더 (좁은
-// 화면에서는 1~2단, lg 이상에서 4단).
+// 사용 가이드 배너 — /generate-v2 헤더의 "사용 가이드 ▾" 를 펼쳤을 때
+// 노출되는 상단 소개 섹션.
+//
+// 구조 (시안 매칭):
+//   1. 큰 헤더 ("4가지 방법으로 클립아트를 만들어보세요!" + 부제)
+//   2. 4개 카드 grid (1/2/4 반응형)
+//      - 좌상단 번호 뱃지 (톤 색상)
+//      - 중앙 원형 아이콘 박스 (톤 lighter 배경 + 톤 색상 아이콘)
+//      - 제목 (검정 볼드)
+//      - 부제 (카드 톤 색상)
+//      - 설명 (회색)
+//      - 하단 "예시" pill — 시안 스크린샷 이미지 배치 자리
+//   3. 하단 팁 배너 ("💡 다양한 방법을 상황에 맞게 활용해 보세요!")
+//
+// 예시 이미지 파일은 public/generate-v2_intro_0N.png 로 배치되어야 하며,
+// 파일이 아직 없으면 이미지 자리에 빈 슬롯이 표시된다.
 
-import { Files, Gift, ImageIcon, PenLine } from 'lucide-react';
+import { Files, Gift, ImageIcon, Lightbulb, PenLine } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
 import type { LucideIcon } from 'lucide-react';
 
 interface GuideItem {
+  number: number;
   Icon: LucideIcon;
   title: string;
   subtitle: string;
   description: string;
-  example: string;
-  /** Tailwind 톤 매핑 (배경/아이콘/부제) — 카드마다 다른 파스텔 색. */
+  exampleImage: string;
+  /** Tailwind 톤 매핑. */
   tone: {
+    numberBg: string;
     iconBg: string;
     iconColor: string;
     subtitleColor: string;
@@ -29,61 +43,69 @@ interface GuideItem {
 
 const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
   {
+    number: 1,
     Icon: PenLine,
     title: '직접 만들기',
     subtitle: '프롬프트로 클립아트 만들기',
     description:
-      '원하는 내용을 자유롭게 입력하면 AI가 새로운 클립아트를 만들어드립니다.',
-    example: '운동장에서 줄넘기하는 초등학생',
+      '원하는 내용을 자유롭게 입력하면\nAI가 새로운 클립아트를 만들어드립니다.',
+    exampleImage: '/generate-v2_intro_01.png',
     tone: {
-      iconBg: 'bg-purple-100/70',
+      numberBg: 'bg-purple-500',
+      iconBg: 'bg-purple-100',
       iconColor: 'text-purple-600',
-      subtitleColor: 'text-purple-700',
+      subtitleColor: 'text-purple-600',
       exampleBg: 'bg-purple-50/80',
       exampleText: 'text-purple-700',
     },
   },
   {
+    number: 2,
     Icon: ImageIcon,
     title: '참고 이미지 활용하기',
     subtitle: '참조 이미지로 클립아트 만들기',
     description:
-      '내가 등록한 참고 이미지나 학교 기본 이미지를 바탕으로 비슷한 분위기의 클립아트를 생성합니다.',
-    example: '학교 캐릭터 스타일 유지하기',
+      '내가 등록한 참고 이미지나 학교·기관의\n기본 이미지를 바탕으로 비슷한 스타일의\n클립아트를 생성합니다.',
+    exampleImage: '/generate-v2_intro_02.png',
     tone: {
-      iconBg: 'bg-sky-100/70',
-      iconColor: 'text-sky-600',
-      subtitleColor: 'text-sky-700',
-      exampleBg: 'bg-sky-50/80',
-      exampleText: 'text-sky-700',
+      numberBg: 'bg-blue-500',
+      iconBg: 'bg-blue-100',
+      iconColor: 'text-blue-600',
+      subtitleColor: 'text-blue-600',
+      exampleBg: 'bg-blue-50/80',
+      exampleText: 'text-blue-700',
     },
   },
   {
+    number: 3,
     Icon: Files,
     title: '기존 클립아트 활용하기',
     subtitle: '라이브러리 클립아트로 만들기',
     description:
-      '내가 만든 클립아트나 공유 라이브러리의 클립아트를 선택해 새로운 클립아트로 확장합니다.',
-    example: '같은 캐릭터의 다른 포즈 만들기',
+      '내가 만든 클립아트나 공유 라이브러리의\n클립아트를 선택해 새로운 클립아트로\n확장합니다.',
+    exampleImage: '/generate-v2_intro_03.png',
     tone: {
-      iconBg: 'bg-emerald-100/70',
+      numberBg: 'bg-emerald-500',
+      iconBg: 'bg-emerald-100',
       iconColor: 'text-emerald-600',
-      subtitleColor: 'text-emerald-700',
+      subtitleColor: 'text-emerald-600',
       exampleBg: 'bg-emerald-50/80',
       exampleText: 'text-emerald-700',
     },
   },
   {
+    number: 4,
     Icon: Gift,
     title: '테마 패키지 만들기',
-    subtitle: '테마별(목적별) 클립아트 패키지 생성하기',
+    subtitle: '테마별(목적별) 클립아트\n패키지 생성하기',
     description:
-      '행사나 수업 주제를 선택하면 포스터, 아이콘, 삽화 등 필요한 클립아트를 한 번에 생성합니다.',
-    example: '독서 행사 패키지 만들기',
+      '행사나 수업 주제를 선택하면 포스터,\n아이콘, 삽화 등 필요한 클립아트를\n한 번에 생성합니다.',
+    exampleImage: '/generate-v2_intro_04.png',
     tone: {
-      iconBg: 'bg-rose-100/70',
-      iconColor: 'text-rose-600',
-      subtitleColor: 'text-rose-700',
+      numberBg: 'bg-rose-500',
+      iconBg: 'bg-rose-100',
+      iconColor: 'text-rose-500',
+      subtitleColor: 'text-rose-500',
       exampleBg: 'bg-rose-50/80',
       exampleText: 'text-rose-700',
     },
@@ -92,52 +114,108 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
 
 export function UsageGuideBanners() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {GUIDE_ITEMS.map((item) => (
-        <GuideCard key={item.title} item={item} />
-      ))}
+    <div className="space-y-6">
+      <div className="space-y-2 text-center">
+        <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+          4가지 방법으로 클립아트를 만들어보세요!
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          원하는 방식으로 쉽고 빠르게 나만의 클립아트를 생성할 수 있습니다.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {GUIDE_ITEMS.map((item) => (
+          <GuideCard key={item.number} item={item} />
+        ))}
+      </div>
+
+      <div className="flex items-start gap-3 rounded-xl bg-purple-50/60 p-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100">
+          <Lightbulb className="h-4 w-4 text-purple-600" aria-hidden="true" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">
+            다양한 방법을 상황에 맞게 활용해 보세요!
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            처음에는 직접 만들기로 시작하고, 필요할 때마다 다른 방법들을
+            활용하면 더 쉽고 빠르게 원하는 클립아트를 만들 수 있습니다.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
 function GuideCard({ item }: { item: GuideItem }) {
-  const { Icon, title, subtitle, description, example, tone } = item;
+  const { number, Icon, title, subtitle, description, exampleImage, tone } = item;
   return (
-    <div className="card flex flex-col gap-3 p-4">
-      <div className="flex items-start gap-3">
+    <div className="card relative flex flex-col gap-4 p-6">
+      {/* 좌상단 번호 뱃지 */}
+      <div
+        className={cn(
+          'absolute left-4 top-4 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white',
+          tone.numberBg,
+        )}
+      >
+        {number}
+      </div>
+
+      {/* 중앙 원형 아이콘 박스 */}
+      <div className="flex justify-center pt-2">
         <div
           className={cn(
-            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+            'flex h-20 w-20 items-center justify-center rounded-full',
             tone.iconBg,
           )}
         >
-          <Icon className={cn('h-5 w-5', tone.iconColor)} aria-hidden="true" />
-        </div>
-        <div className="min-w-0 space-y-0.5">
-          <div className="text-sm font-semibold text-foreground">{title}</div>
-          <div className={cn('text-xs font-medium', tone.subtitleColor)}>
-            {subtitle}
-          </div>
+          <Icon className={cn('h-9 w-9', tone.iconColor)} aria-hidden="true" />
         </div>
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">
+
+      {/* 제목 + 부제 */}
+      <div className="space-y-1 text-center">
+        <h3 className="text-base font-bold text-foreground">{title}</h3>
+        <p
+          className={cn(
+            'whitespace-pre-line text-sm font-semibold',
+            tone.subtitleColor,
+          )}
+        >
+          {subtitle}
+        </p>
+      </div>
+
+      {/* 설명 */}
+      <p className="whitespace-pre-line text-center text-xs leading-relaxed text-muted-foreground">
         {description}
       </p>
+
+      {/* 하단 예시 pill — 시안 스크린샷 이미지 배치 자리 */}
       <div
         className={cn(
-          'mt-auto flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs',
+          'mt-auto flex items-center gap-3 rounded-lg p-3',
           tone.exampleBg,
         )}
       >
         <span
           className={cn(
-            'shrink-0 rounded-md bg-white/70 px-1.5 py-0.5 text-[11px] font-medium',
+            'shrink-0 rounded-md bg-white/80 px-2 py-0.5 text-[11px] font-semibold',
             tone.exampleText,
           )}
         >
           예시
         </span>
-        <span className="text-muted-foreground">{example}</span>
+        {/* public/generate-v2_intro_0N.png 가 배치되면 자동 표시.
+            파일 미배치 시 브라우저가 broken image 자리를 남긴다. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={exampleImage}
+          alt={`${title} 예시`}
+          className="h-14 w-full min-w-0 flex-1 rounded-md object-contain"
+          loading="lazy"
+        />
       </div>
     </div>
   );
