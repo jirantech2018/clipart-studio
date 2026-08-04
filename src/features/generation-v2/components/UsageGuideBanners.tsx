@@ -77,7 +77,7 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
   {
     Icon: Gift,
     title: '테마 패키지 만들기',
-    subtitle: '테마별(목적별) 클립아트 패키지 생성하기',
+    subtitle: '테마별(목적별) 패키지 생성하기',
     description:
       '행사나 수업 주제를 선택하면 포스터, 아이콘, 삽화 등 필요한 클립아트를 한 번에 생성합니다.',
     exampleImage: '/generate-v2_intro_04.png',
@@ -109,7 +109,7 @@ export function UsageGuideBanners() {
 function GuideCard({ item }: { item: GuideItem }) {
   const { Icon, title, subtitle, description, exampleImage, tone } = item;
   return (
-    <div className="card flex flex-col gap-2 overflow-hidden p-3">
+    <div className="card flex flex-col gap-3 overflow-hidden p-4">
       {/* 중앙 원형 아이콘 박스 */}
       <div className="flex justify-center">
         <div
@@ -137,7 +137,7 @@ function GuideCard({ item }: { item: GuideItem }) {
 
       {/* 하단 예시 이미지 — 카드 좌우/하단 padding 을 negative margin 으로
           상쇄해서 이미지가 카드 하단에 딱 붙게 한다 (위아래 여백 제거). */}
-      <div className="mt-auto -mx-3 -mb-3">
+      <div className="mt-auto -mx-4 -mb-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={exampleImage}
