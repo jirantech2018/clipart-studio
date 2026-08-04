@@ -55,6 +55,9 @@ function jobFromRow(row: Record<string, unknown>): GenerationJob {
     completedAt: (row.completed_at as string) ?? null,
     orgId: (row.org_id as string) ?? null,
     slotPrompts: (row.slot_prompts as string[] | null) ?? null,
+    // Phase 2: kind default 'single' (기존 저장본 호환) + package_plan snapshot.
+    kind: (row.kind as GenerationJob['kind']) ?? 'single',
+    packagePlan: (row.package_plan as GenerationJob['packagePlan']) ?? null,
   };
 }
 

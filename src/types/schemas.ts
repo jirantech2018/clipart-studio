@@ -97,6 +97,85 @@ export const createJobSchema = z
 
 export type CreateJobInput = z.infer<typeof createJobSchema>;
 
+// ============================================================
+// Package job (Phase 2)
+// ============================================================
+
+/** Package job 상한 — DB CHECK(batch_size BETWEEN 1 AND 50) 와 동일. */
+export const PACKAGE_JOB_TOTAL_MAX = 50;
+
+const packageCategorySchema = z.enum([
+  'cover',
+  'poster',
+  'banner',
+  'illustration',
+  'scene',
+  'icon',
+  'decoration',
+  'border',
+  'divider',
+  'background',
+  'monthly_image',
+  'event_asset',
+  'calendar',
+  'certificate',
+  'award',
+  'etc',
+]);
+
+const packageItemInputSchema = z.object({
+  id: z.string().min(1).max(80),
+  category: packageCategorySchema,
+  name: z.string().min(1).max(24),
+  promptHint: z.string().max(120).default(''),
+  aspectRatio: aspectRatioSchema.default('square'),
+  transparentBackground: z.boolean().default(false),
+  /** 개별 항목 수량. 지시서 §2 = 1~50. 총합 제한은 아래 refine 에서 재확인. */
+  quantity: z.number().int().min(1).max(50),
+  /** false 이면 slot 생성 제외. */
+  enabled: z.boolean().default(true),
+});
+
+const packagePlanSnapshotSchema = z.object({
+  purpose: z.string().max(120),
+  topicOrEvent: z.string().max(200).default(''),
+  target: z.string().max(120),
+  styleTone: z.string().max(120),
+  additionalRequest: z.string().max(500).default(''),
+  usageChannels: z.array(z.string().max(40)).max(20).default([]),
+  keywords: z.array(z.string().max(32)).max(20).default([]),
+});
+
+/**
+ * POST /api/jobs 가 body 에 `kind: 'package'` 를 받으면 이 스키마로 파싱한다.
+ * 기존 createJobSchema (single) 는 그대로 유지. 두 스키마는 route 에서 분기.
+ */
+export const createPackageJobSchema = z
+  .object({
+    kind: z.literal('package'),
+    packagePlan: packagePlanSnapshotSchema,
+    items: z.array(packageItemInputSchema).min(1).max(20),
+    /** 조직 컨텍스트 (선택). package 도 학교/조직 base_prompt 를 상속. */
+    orgSlug: z.string().min(1).max(64).nullable().optional(),
+    schoolProfileApplied: z.boolean().default(false),
+  })
+  .refine(
+    (data) => {
+      const total = data.items
+        .filter((it) => it.enabled)
+        .reduce((sum, it) => sum + it.quantity, 0);
+      return total >= 1 && total <= PACKAGE_JOB_TOTAL_MAX;
+    },
+    {
+      message: `패키지 총 이미지 수는 1~${PACKAGE_JOB_TOTAL_MAX}장이어야 해요`,
+      path: ['items'],
+    },
+  );
+
+export type CreatePackageJobInput = z.infer<typeof createPackageJobSchema>;
+export type PackageItemInput = z.infer<typeof packageItemInputSchema>;
+export type PackagePlanSnapshotInput = z.infer<typeof packagePlanSnapshotSchema>;
+
 // Knowledge CMS — admin CRUD 입력 검증.
 export const referenceTypeSchema = z.enum(['positive', 'negative']);
 

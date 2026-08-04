@@ -87,6 +87,13 @@ export type JobStatus =
   | 'done'
   | 'failed'
   | 'canceled';
+export type JobKind = 'single' | 'package';
+export type SlotStatus =
+  | 'pending'
+  | 'running'
+  | 'done'
+  | 'failed'
+  | 'canceled';
 export type ImageModel = 'gpt-image-2' | 'gpt-image-1' | 'flux-schnell';
 
 export interface Profile {
@@ -192,6 +199,42 @@ export interface GenerationJob {
   /** 다양성 생성 (Custom): 슬롯별 추가 프롬프트 (길이 == batchSize). NULL 이면
    *  모든 슬롯이 공통 prompt 만 사용. */
   slotPrompts: string[] | null;
+  /** Phase 2 — 단일 (single) vs 테마별 패키지 (package). */
+  kind: JobKind;
+  /** kind='package' 일 때 원본 스냅샷. UI 가 이후 바뀌어도 이 값이 실행 기준. */
+  packagePlan: PackageJobPlanSnapshot | null;
+}
+
+/** generation_jobs.package_plan JSONB 스냅샷 shape. */
+export interface PackageJobPlanSnapshot {
+  purpose: string;
+  topicOrEvent: string;
+  target: string;
+  styleTone: string;
+  additionalRequest: string;
+  usageChannels: string[];
+  keywords: string[];
+}
+
+/** generation_job_slots row 도메인 표현. */
+export interface PackageJobSlot {
+  id: string;
+  jobId: string;
+  order: number;
+  category: string;
+  name: string;
+  promptHint: string;
+  aspectRatio: AspectRatio;
+  transparentBackground: boolean;
+  status: SlotStatus;
+  imageId: string | null;
+  error: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  refundedAt: string | null;
+  attemptCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ReferenceImageSlot {
