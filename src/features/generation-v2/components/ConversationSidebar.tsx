@@ -69,9 +69,10 @@ export function ConversationSidebar({
       className={cn(
         'hidden w-[280px] shrink-0 flex-col gap-2',
         // 스크롤 시에도 화면 우측에 고정. top 값은 AppHeader (h-14=56px) 아래
-        // + 여백 24px 을 감안해 80px. max-h 로 화면을 벗어나지 않게 하고
-        // overflow-hidden 으로 넘친 히스토리 항목은 그대로 잘려 보이도록 한다.
-        'lg:sticky lg:top-20 lg:flex lg:max-h-[calc(100vh-6rem)] lg:overflow-hidden',
+        // + 여백 24px 을 감안해 80px. max-h 로 화면 밖 침범을 막되 overflow 는
+        // 카드 그림자가 잘리지 않도록 visible 유지. 넘친 히스토리는 아래
+        // 대화 히스토리 카드 내부에서 자체 clip.
+        'lg:sticky lg:top-20 lg:flex lg:max-h-[calc(100vh-6rem)]',
       )}
     >
       <Button
@@ -120,14 +121,17 @@ export function ConversationSidebar({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
+      {/* 대화 히스토리 카드는 남은 세로 공간을 채우고, 넘친 항목은 카드
+          안에서 조용히 잘리도록 min-h-0 + flex-1 + overflow-hidden. 카드
+          바깥 shadow 는 그대로 살아있다. */}
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CardHeader className="shrink-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold">
             <MessageSquare className="h-4 w-4 text-primary" />
             대화 히스토리
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1">
+        <CardContent className="min-h-0 flex-1 space-y-1 overflow-hidden">
           {historyList.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               아직 저장된 대화가 없어요.
