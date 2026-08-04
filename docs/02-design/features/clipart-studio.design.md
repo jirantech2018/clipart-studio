@@ -816,6 +816,18 @@ data: {"code":"UPSTREAM_UNAVAILABLE","order":3,"refundedCredits":1}
 
 **Client**: `event: error` 수신 시 토스트 + Job 진행 계속 (전체 실패 아님)
 
+### 6.3 Known Limitations (Phase 2 시점)
+
+- **Single job SSE 재접속 시 중복 생성 잠재 리스크**
+  `handleSingle` 은 batch 을 chunk 단위로 순차 생성하며 chunk 별 원자적 claim
+  이 없다. 클라이언트가 job 실행 중 새로고침 → 브라우저가 `/api/jobs/:id/stream`
+  에 재접속하면 서버는 남은 chunk 를 다시 시작한다. 완료된 chunk 는 SSE 이벤트
+  로 이미 발행됐지만 아직 실행 중이던 chunk 는 이론상 중복 실행될 수 있다.
+  현실적으로는 (a) 활성 Job 은 사용자당 1개로 제한되고, (b) 새로고침 사이
+  간격이 짧으면 중복 확률이 낮으며, (c) Package job 은 slot 단위 원자 claim
+  으로 이미 해결되어 있어 이번 phase 범위 밖. 후속 phase 에서 single 도 slot
+  claim 패턴으로 통일 예정.
+
 ---
 
 ## 7. Security Considerations
@@ -1209,3 +1221,4 @@ clipart-studio/
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 0.1 | 2026-07-09 | 초안 (Pragmatic 아키텍처 선택, Session Guide 6 모듈 분할) | sbtmxk20 |
+| 0.2 | 2026-08-03 | §6.3 Known Limitations 추가 — Phase 2 package pipeline 착수에 맞춰 single job SSE 재접속 중복 생성 리스크를 후속 정리 대상으로 명시 | sbtmxk20 |
