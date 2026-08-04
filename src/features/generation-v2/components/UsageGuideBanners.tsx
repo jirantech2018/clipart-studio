@@ -159,14 +159,16 @@ function GuideCard({ item }: { item: GuideItem }) {
         {description}
       </p>
 
-      {/* 하단 예시 이미지 — pill/배경 없이 이미지만 표시. */}
-      <div className="mt-auto flex justify-center">
+      {/* 하단 예시 이미지 — pill/배경 없이 이미지만 표시.
+          h-40 로 컨테이너 높이를 명시하고 object-contain 으로 자연 aspect
+          유지. h-auto 방식은 일부 flex 컨텍스트에서 이미지가 렌더되기 전
+          0 높이로 잡히는 케이스가 있어 명시적 높이가 안정적이다. */}
+      <div className="mt-auto flex h-40 items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={exampleImage}
           alt={`${title} 예시`}
-          className="h-auto w-full max-w-full rounded-md object-contain"
-          loading="lazy"
+          className="h-full w-full rounded-md object-contain"
         />
       </div>
     </div>
