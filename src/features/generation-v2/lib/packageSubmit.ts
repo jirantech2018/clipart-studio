@@ -49,6 +49,9 @@ export function buildPackageSubmitPayload(plan: PackagePlanState) {
   return {
     kind: 'package' as const,
     packagePlan: {
+      // 현재 스냅샷 스키마 버전. 서버 Zod 도 default(1) 지만 client 도 명시적
+      // 으로 실어 보내 이후 진화 대응이 쉬워지도록 한다.
+      version: 1,
       purpose: plan.purpose,
       topicOrEvent: plan.topicOrEvent,
       target: plan.target,

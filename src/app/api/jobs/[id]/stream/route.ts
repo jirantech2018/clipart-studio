@@ -251,6 +251,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
                   imageId: result.value.imageId,
                   thumbnailUrl: publicUrl(result.value.r2Key),
                   order,
+                  // Single job 은 job 전체 aspectRatio 가 모든 slot 에 공통 적용.
+                  aspectRatio: job.aspectRatio,
                 }),
               );
             } else {
@@ -495,6 +497,8 @@ function runPackageStream(
                   slotId: r.slotId,
                   category: r.category,
                   name: r.name,
+                  // Package 는 slot 단위 aspectRatio.
+                  aspectRatio: r.aspectRatio,
                 }),
               );
             } else if (r.status === 'failed') {

@@ -279,7 +279,9 @@ async function handlePackage(
   }
 
   // Job insert. 실패 시 크레딧 전량 환불.
+  // version 은 Zod default(1) 가 이미 채워두지만 명시적으로 저장.
   const packagePlanSnapshot = {
+    version: body.packagePlan.version,
     purpose: body.packagePlan.purpose,
     topicOrEvent: body.packagePlan.topicOrEvent,
     target: body.packagePlan.target,
@@ -319,9 +321,13 @@ async function handlePackage(
   const jobId = job.id as string;
 
   // Slot rows — enabled 항목 × quantity 만큼 flat 배열로 생성.
+  // 전역 순서 `order` 는 0..N-1, category 별 순서 `category_order` 는 각
+  // category 안에서 다시 0..M-1. 같은 category 가 여러 item 에 나뉘어도
+  // counter 는 category 별로 이어진다 (예: 포스터 2 + 포스터 3 → 0..4).
   const slotRows: Array<{
     job_id: string;
     order: number;
+    category_order: number;
     category: string;
     name: string;
     prompt_hint: string;
@@ -330,11 +336,14 @@ async function handlePackage(
     status: 'pending';
   }> = [];
   let order = 0;
+  const categoryCounters = new Map<string, number>();
   for (const item of enabledItems) {
     for (let i = 0; i < item.quantity; i += 1) {
+      const categoryOrder = categoryCounters.get(item.category) ?? 0;
       slotRows.push({
         job_id: jobId,
         order,
+        category_order: categoryOrder,
         category: item.category,
         name: item.name,
         prompt_hint: item.promptHint,
@@ -343,6 +352,7 @@ async function handlePackage(
         status: 'pending',
       });
       order += 1;
+      categoryCounters.set(item.category, categoryOrder + 1);
     }
   }
 

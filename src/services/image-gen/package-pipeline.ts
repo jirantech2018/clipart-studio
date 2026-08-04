@@ -37,6 +37,8 @@ export interface PackageSlotResult {
   imageId?: string;
   r2Key?: string;
   error?: string;
+  /** SSE image_ready 에 실을 slot 의 aspect ratio. Phase 3 grid rendering. */
+  aspectRatio?: PackageJobSlot['aspectRatio'];
 }
 
 interface RunPackageSlotParams {
@@ -206,6 +208,17 @@ export async function runPackageSlot({
     orgBasePrompt,
   });
 
+  // 외부 이미지 생성 API 호출 직전에 최종 prompt 를 먼저 저장한다. DB 저장
+  // 실패는 로그만 남기고 계속 진행 (기존 파이프라인의 best-effort 정책과 동일)
+  // — DB 실패가 이미지 중복 생성의 원인이 되면 안 된다.
+  const { error: fpErr } = await service
+    .from('generation_job_slots')
+    .update({ final_prompt: finalPrompt })
+    .eq('id', slot.id);
+  if (fpErr) {
+    console.error('[package-pipeline] final_prompt UPDATE failed', slot.id, fpErr);
+  }
+
   const size = aspectRatioSizeString(slot.aspectRatio);
   const dims = ASPECT_RATIO_DIMENSIONS[slot.aspectRatio];
 
@@ -262,6 +275,7 @@ export async function runPackageSlot({
     status: 'done',
     imageId,
     r2Key,
+    aspectRatio: slot.aspectRatio,
   };
 }
 
