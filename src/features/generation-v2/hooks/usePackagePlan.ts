@@ -42,23 +42,26 @@ async function fetchPlan(
   return json.data;
 }
 
-/** debounce 후 캐시 key. 필드가 하나라도 바뀌면 새 요청. */
+/** debounce 후 캐시 key. 값이 같으면 (trim/재정렬 후) 같은 key → 이전 캐시 재사용. */
 function makeQueryKey(input: UsePackagePlanInput): unknown[] {
   return [
     'package-plan',
-    input.purpose,
-    input.topicOrEvent,
-    input.target,
-    input.styleTone,
-    input.additionalRequest,
-    input.userAddedKeywords.join('|'),
-    input.userRemovedKeywords.join('|'),
+    input.purpose.trim(),
+    input.topicOrEvent.trim(),
+    input.target.trim(),
+    input.styleTone.trim(),
+    input.additionalRequest.trim(),
+    // 순서 무관하게 stable — 사용자가 같은 집합으로 되돌리면 cache hit.
+    [...input.userAddedKeywords].map((k) => k.trim()).sort().join('|'),
+    [...input.userRemovedKeywords].map((k) => k.trim()).sort().join('|'),
   ];
 }
 
 export function usePackagePlan(input: UsePackagePlanInput) {
   const debouncedInput = useDebouncedValue(input, 800);
 
+  // 최소 조건: 목적/대상/스타일. 주제는 optional 이지만 값이 있으면 queryKey
+  // 에 포함되어 자동으로 재추천된다.
   const hasRequired =
     debouncedInput.purpose.trim().length > 0 &&
     debouncedInput.target.trim().length > 0 &&

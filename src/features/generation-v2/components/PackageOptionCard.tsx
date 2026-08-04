@@ -2,16 +2,10 @@
 
 // STEP 2 카드 — 패키지 모드 ON 시 렌더.
 //
-// 목표 UI 매칭:
-//   [2] AI 추천 제작 구성          [자동 추천됨]
-//   설명 문구
-//   ─────────────────────────────────────────────
-//   ☑ 행사 포스터   설명         [-] N [+]
-//   ☑ 가로형 배너   설명         [-] N [+]
-//   ...
-//   ─────────────────────────────────────────────
-//   총 생성 이미지 35장      예상 사용 크레딧 🪙 35
-//   [클립아트 만들기 (disabled — Phase 1 이므로)]
+// 상태는 상위 ConversationBlock 이 BlockOptions.packagePlan 로 관리한다.
+// 이 컴포넌트는 nested 객체를 통째로 받아 itemState / userModifiedItemIds
+// 만 patch 로 돌려준다. CTA 는 Phase 1 동안 disabled 유지 (Phase 2 에서
+// enabled 로만 전환되도록 구조는 유지).
 
 import { Coins, Info, Minus, Plus, Sparkles } from 'lucide-react';
 
@@ -20,19 +14,19 @@ import { selectVisibleItems } from '@/features/generation-v2/lib/mergePackagePla
 import { cn } from '@/lib/utils';
 
 import type {
-  PackageAiItem,
   PackageItemState,
+  PackagePlanState,
 } from '@/features/generation-v2/lib/packagePlanTypes';
 
 interface Props {
   locked: boolean;
-  aiItems: readonly PackageAiItem[];
-  itemState: Record<string, PackageItemState>;
-  userModifiedItemIds: readonly string[];
+  plan: PackagePlanState;
+  onPlanChange: (patch: Partial<PackagePlanState>) => void;
   isRecommendationLoading: boolean;
   isRecommendationAuto: boolean;
-  onItemStateChange: (nextState: Record<string, PackageItemState>) => void;
-  onUserModifiedItemIdsChange: (nextIds: string[]) => void;
+  /** Phase 2 에서 handler 를 넘겨주면 CTA 가 실제로 동작한다.
+   *  Phase 1 은 미전달 → 항상 disabled. */
+  onSubmit?: () => void;
 }
 
 const MIN_QTY = 0;
@@ -40,53 +34,54 @@ const MAX_QTY = 50;
 
 export function PackageOptionCard({
   locked,
-  aiItems,
-  itemState,
-  userModifiedItemIds,
+  plan,
+  onPlanChange,
   isRecommendationLoading,
   isRecommendationAuto,
-  onItemStateChange,
-  onUserModifiedItemIdsChange,
+  onSubmit,
 }: Props) {
-  const visibleItems = selectVisibleItems({
-    packageAiItems: aiItems,
-    packageItemState: itemState,
-    packageUserModifiedItemIds: userModifiedItemIds,
-  });
+  const visibleItems = selectVisibleItems(plan);
 
   const totalImages = visibleItems
     .filter((it) => it.enabled)
     .reduce((sum, it) => sum + it.quantity, 0);
 
-  // 크레딧 정책: 이미지 1장 = 1 크레딧 (기존 batchSize == credits 정책 재사용).
   const expectedCredits = totalImages;
 
-  function markModified(id: string) {
-    if (userModifiedItemIds.includes(id)) return;
-    onUserModifiedItemIdsChange([...userModifiedItemIds, id]);
+  function markModified(id: string, nextState: Record<string, PackageItemState>) {
+    const patch: Partial<PackagePlanState> = { itemState: nextState };
+    if (!plan.userModifiedItemIds.includes(id)) {
+      patch.userModifiedItemIds = [...plan.userModifiedItemIds, id];
+    }
+    onPlanChange(patch);
   }
 
   function toggleEnabled(id: string, next: boolean) {
     if (locked) return;
-    const prev = itemState[id] ?? {
+    const prev = plan.itemState[id] ?? {
       enabled: true,
-      quantity: aiItems.find((i) => i.id === id)?.defaultQuantity ?? 1,
+      quantity: plan.aiItems.find((i) => i.id === id)?.defaultQuantity ?? 1,
     };
-    onItemStateChange({ ...itemState, [id]: { ...prev, enabled: next } });
-    markModified(id);
+    const nextState = { ...plan.itemState, [id]: { ...prev, enabled: next } };
+    markModified(id, nextState);
   }
 
   function changeQuantity(id: string, delta: number) {
     if (locked) return;
-    const prev = itemState[id] ?? {
+    const prev = plan.itemState[id] ?? {
       enabled: true,
-      quantity: aiItems.find((i) => i.id === id)?.defaultQuantity ?? 1,
+      quantity: plan.aiItems.find((i) => i.id === id)?.defaultQuantity ?? 1,
     };
-    const next = Math.max(MIN_QTY, Math.min(MAX_QTY, prev.quantity + delta));
-    if (next === prev.quantity) return;
-    onItemStateChange({ ...itemState, [id]: { ...prev, quantity: next } });
-    markModified(id);
+    const nextQty = Math.max(MIN_QTY, Math.min(MAX_QTY, prev.quantity + delta));
+    if (nextQty === prev.quantity) return;
+    const nextState = {
+      ...plan.itemState,
+      [id]: { ...prev, quantity: nextQty },
+    };
+    markModified(id, nextState);
   }
+
+  const canSubmit = !locked && !!onSubmit && totalImages > 0;
 
   return (
     <section className="card flex h-full flex-col gap-4 p-5">
@@ -177,9 +172,9 @@ export function PackageOptionCard({
 
       <Button
         type="button"
-        // Phase 1 은 실제 생성 파이프라인 없음 → 항상 disabled.
-        disabled
-        title="이 기능은 준비 중입니다"
+        onClick={onSubmit}
+        disabled={!canSubmit}
+        title={onSubmit ? undefined : '이 기능은 준비 중입니다'}
         className="mt-auto min-h-[44px] w-full"
       >
         <Sparkles className="mr-1 h-4 w-4" />

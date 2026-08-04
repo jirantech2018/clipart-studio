@@ -105,14 +105,15 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
     });
 
     // 패키지 모드 AI 추천. usePackagePlan 은 required 필드 없으면 enabled false.
+    const packagePlanState = block.options.packagePlan;
     const plan = usePackagePlan({
-      purpose: block.options.packagePurpose,
-      topicOrEvent: block.options.packageTopic,
-      target: block.options.packageTarget,
-      styleTone: block.options.packageStyleTone,
-      additionalRequest: block.options.packageAdditionalRequest,
-      userAddedKeywords: block.options.packageUserAddedKeywords,
-      userRemovedKeywords: block.options.packageUserRemovedKeywords,
+      purpose: packagePlanState.purpose,
+      topicOrEvent: packagePlanState.topicOrEvent,
+      target: packagePlanState.target,
+      styleTone: packagePlanState.styleTone,
+      additionalRequest: packagePlanState.additionalRequest,
+      userAddedKeywords: packagePlanState.userAddedKeywords,
+      userRemovedKeywords: packagePlanState.userRemovedKeywords,
     });
 
     // AI 응답 도착 시 사용자 편집 보호 병합 후 store 반영.
@@ -121,19 +122,26 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       const data = plan.data;
       if (!data) return;
       if (!block.options.packageMode) return;
-      const merged = mergePackagePlan(block.options, data);
-      // Idempotent: 동일 결과면 patch 안 함.
+      const current = block.options.packagePlan;
+      const merged = mergePackagePlan(current, data);
       const same =
-        JSON.stringify(merged.packageAiKeywords) ===
-          JSON.stringify(block.options.packageAiKeywords) &&
-        JSON.stringify(merged.packageAiItems) ===
-          JSON.stringify(block.options.packageAiItems) &&
-        JSON.stringify(merged.packageItemState) ===
-          JSON.stringify(block.options.packageItemState) &&
-        JSON.stringify(merged.packageUserModifiedItemIds) ===
-          JSON.stringify(block.options.packageUserModifiedItemIds);
+        JSON.stringify(merged.aiKeywords) ===
+          JSON.stringify(current.aiKeywords) &&
+        JSON.stringify(merged.aiItems) === JSON.stringify(current.aiItems) &&
+        JSON.stringify(merged.itemState) ===
+          JSON.stringify(current.itemState) &&
+        JSON.stringify(merged.userModifiedItemIds) ===
+          JSON.stringify(current.userModifiedItemIds);
       if (same) return;
-      updateOptions(convId, block.id, merged);
+      updateOptions(convId, block.id, {
+        packagePlan: {
+          ...current,
+          aiKeywords: merged.aiKeywords,
+          aiItems: merged.aiItems,
+          itemState: merged.itemState,
+          userModifiedItemIds: merged.userModifiedItemIds,
+        },
+      });
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [plan.data]);
 
@@ -200,39 +208,10 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
               onPackageModeChange={(next) =>
                 updateOptions(convId, block.id, { packageMode: next })
               }
-              purpose={block.options.packagePurpose}
-              onPurposeChange={(next) =>
-                updateOptions(convId, block.id, { packagePurpose: next })
-              }
-              topicOrEvent={block.options.packageTopic}
-              onTopicOrEventChange={(next) =>
-                updateOptions(convId, block.id, { packageTopic: next })
-              }
-              target={block.options.packageTarget}
-              onTargetChange={(next) =>
-                updateOptions(convId, block.id, { packageTarget: next })
-              }
-              styleTone={block.options.packageStyleTone}
-              onStyleToneChange={(next) =>
-                updateOptions(convId, block.id, { packageStyleTone: next })
-              }
-              additionalRequest={block.options.packageAdditionalRequest}
-              onAdditionalRequestChange={(next) =>
+              plan={packagePlanState}
+              onPlanChange={(patch) =>
                 updateOptions(convId, block.id, {
-                  packageAdditionalRequest: next,
-                })
-              }
-              aiKeywords={block.options.packageAiKeywords}
-              userAddedKeywords={block.options.packageUserAddedKeywords}
-              userRemovedKeywords={block.options.packageUserRemovedKeywords}
-              onUserAddedKeywordsChange={(next) =>
-                updateOptions(convId, block.id, {
-                  packageUserAddedKeywords: next,
-                })
-              }
-              onUserRemovedKeywordsChange={(next) =>
-                updateOptions(convId, block.id, {
-                  packageUserRemovedKeywords: next,
+                  packagePlan: { ...packagePlanState, ...patch },
                 })
               }
               isRecommendationLoading={plan.isFetching}
@@ -262,19 +241,14 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           {packageMode ? (
             <PackageOptionCard
               locked={locked}
-              aiItems={block.options.packageAiItems}
-              itemState={block.options.packageItemState}
-              userModifiedItemIds={block.options.packageUserModifiedItemIds}
-              isRecommendationLoading={plan.isFetching}
-              isRecommendationAuto={plan.data !== undefined}
-              onItemStateChange={(next) =>
-                updateOptions(convId, block.id, { packageItemState: next })
-              }
-              onUserModifiedItemIdsChange={(next) =>
+              plan={packagePlanState}
+              onPlanChange={(patch) =>
                 updateOptions(convId, block.id, {
-                  packageUserModifiedItemIds: next,
+                  packagePlan: { ...packagePlanState, ...patch },
                 })
               }
+              isRecommendationLoading={plan.isFetching}
+              isRecommendationAuto={plan.data !== undefined}
             />
           ) : (
             <OptionStep

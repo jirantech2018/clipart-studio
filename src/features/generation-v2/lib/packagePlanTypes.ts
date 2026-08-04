@@ -1,24 +1,16 @@
 // /api/package-plan 요청/응답 및 store 상태 공용 타입.
 //
-// Category 는 서버가 canonical whitelist 로 정규화한다. AI 가 아무 카테고리나
-// 반환하지 못하도록 서버에서 매핑 · 병합 · 필터링한 뒤 client 로 내려온다.
+// Category 는 서버가 canonical whitelist 로 정규화한다. 새 목적이 늘어나면
+// PACKAGE_CATEGORIES 배열에 새 카테고리를 추가하는 것만으로 확장 가능한
+// registry 구조를 유지한다 (enum union 이 아니라 array 기반 whitelist).
+//
+// 각 항목은 UI 표시용 name/description 외에 Phase 2 프롬프트 조립에 필요한
+// aspectRatio / transparentBackground / promptHint 를 함께 가지고 다닌다.
+// Phase 1 UI 는 이 세 필드를 표시하지 않지만 응답 · store · 템플릿까지
+// 일관되게 유지해 Phase 2 착수 시 그대로 사용할 수 있게 한다.
 
-export type PackageCategory =
-  | 'cover'
-  | 'poster'
-  | 'banner'
-  | 'illustration'
-  | 'scene'
-  | 'icon'
-  | 'decoration'
-  | 'border'
-  | 'divider'
-  | 'background'
-  | 'monthly_image'
-  | 'event_asset'
-  | 'etc';
-
-export const PACKAGE_CATEGORIES: ReadonlyArray<PackageCategory> = [
+/** 결과물 카테고리 whitelist. 새 카테고리는 이 배열에만 추가하면 된다. */
+export const PACKAGE_CATEGORIES = [
   'cover',
   'poster',
   'banner',
@@ -31,8 +23,22 @@ export const PACKAGE_CATEGORIES: ReadonlyArray<PackageCategory> = [
   'background',
   'monthly_image',
   'event_asset',
+  'calendar',
+  'certificate',
+  'award',
   'etc',
-];
+] as const;
+
+export type PackageCategory = (typeof PACKAGE_CATEGORIES)[number];
+
+/** 결과물 종횡비 힌트. AspectRatio 와 별개로 관리 (패키지 전용 확장 여지). */
+export const PACKAGE_ASPECT_RATIOS = [
+  'square',
+  'landscape',
+  'portrait',
+] as const;
+
+export type PackageAspectRatio = (typeof PACKAGE_ASPECT_RATIOS)[number];
 
 /** AI 추천 항목 원본. 사용자가 편집하지 않은 상태의 recommendation. */
 export interface PackageAiItem {
@@ -42,12 +48,33 @@ export interface PackageAiItem {
   name: string;
   description: string;
   defaultQuantity: number;
+  /** Phase 2 프롬프트 조립용. 결과물 특성상 어울리는 종횡비. */
+  aspectRatio: PackageAspectRatio;
+  /** Phase 2 프롬프트 조립용. 아이콘/장식 등 배경 투명이 자연스러운 항목. */
+  transparentBackground: boolean;
+  /** Phase 2 프롬프트 조립용. 결과물의 성격을 짧게 설명. */
+  promptHint: string;
 }
 
-/** 사용자 로컬 편집 상태 — packageItemState[id] 로 저장. */
+/** 사용자 로컬 편집 상태 — packagePlan.itemState[id] 로 저장. */
 export interface PackageItemState {
   enabled: boolean;
   quantity: number;
+}
+
+/** BlockOptions 안에 nested 로 보관되는 패키지 계획 상태 전체. */
+export interface PackagePlanState {
+  purpose: string;
+  topicOrEvent: string;
+  target: string;
+  styleTone: string;
+  additionalRequest: string;
+  aiKeywords: string[];
+  userAddedKeywords: string[];
+  userRemovedKeywords: string[];
+  aiItems: PackageAiItem[];
+  itemState: Record<string, PackageItemState>;
+  userModifiedItemIds: string[];
 }
 
 /** Client → server 요청 payload. */
@@ -66,4 +93,21 @@ export interface PackagePlanResponse {
   keywords: string[];
   items: PackageAiItem[];
   source: 'ai' | 'template' | 'fallback';
+}
+
+/** PackagePlanState 초기 빈 값. store DEFAULT_OPTIONS 와 rehydrate 에서 재사용. */
+export function emptyPackagePlanState(): PackagePlanState {
+  return {
+    purpose: '',
+    topicOrEvent: '',
+    target: '',
+    styleTone: '',
+    additionalRequest: '',
+    aiKeywords: [],
+    userAddedKeywords: [],
+    userRemovedKeywords: [],
+    aiItems: [],
+    itemState: {},
+    userModifiedItemIds: [],
+  };
 }

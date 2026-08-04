@@ -17,10 +17,11 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 import { resizeSlotPrompts } from '@/features/generation/lib/resizeSlotPrompts';
 
-import type {
-  PackageAiItem,
-  PackageItemState,
+import {
+  emptyPackagePlanState,
+  type PackagePlanState,
 } from '@/features/generation-v2/lib/packagePlanTypes';
+
 import type { AspectRatio } from '@/types/domain';
 
 // ============ Types ============
@@ -52,28 +53,12 @@ export interface BlockOptions {
   parentImagePrompt: string | null;
 
   // ── 테마별(목적별) 패키지 생성 모드 ──
-  // 토글 ON 시 ①/② 카드 UI 를 패키지 전용으로 교체하고, 아래 필드가
-  // conversationStore 에 저장/복원된다. Phase 1 에서는 실제 생성 파이프라인은
-  // 연결하지 않는다 — CTA disabled + /api/jobs 호출 없음.
+  // 토글 (packageMode) 와 계획 상태 (packagePlan) 를 분리. Phase 3 에서
+  // Generating/Completed 를 packagePlan 단위로 다루기 위해 하나의 nested
+  // 객체로 관리한다. Phase 1 에서는 실제 생성 파이프라인이 연결되지
+  // 않으므로 CTA disabled + /api/jobs 호출 없음.
   packageMode: boolean;
-  /** 사용자 입력 5종. */
-  packagePurpose: string;
-  packageTopic: string;
-  packageTarget: string;
-  packageStyleTone: string;
-  packageAdditionalRequest: string;
-  /** AI 추천 원본 (사용자 편집 이전). 재추천 시 이 배열만 갱신. */
-  packageAiKeywords: string[];
-  /** 사용자가 직접 추가한 키워드 (AI 재추천이 침범 금지). */
-  packageUserAddedKeywords: string[];
-  /** 사용자가 AI 추천에서 제거한 키워드 (재추천 시 다시 표시 방지). */
-  packageUserRemovedKeywords: string[];
-  /** AI 추천 항목 원본. */
-  packageAiItems: PackageAiItem[];
-  /** 사용자 편집 상태 (id → enabled/quantity). packageAiItems 와 병합해 표시. */
-  packageItemState: Record<string, PackageItemState>;
-  /** 사용자가 명시적으로 편집한 item id 화이트리스트 (재추천 시 값 보호). */
-  packageUserModifiedItemIds: string[];
+  packagePlan: PackagePlanState;
 }
 
 export interface CompletedImage {
@@ -163,17 +148,7 @@ const DEFAULT_OPTIONS: BlockOptions = {
   parentImageThumbnailUrl: null,
   parentImagePrompt: null,
   packageMode: false,
-  packagePurpose: '',
-  packageTopic: '',
-  packageTarget: '',
-  packageStyleTone: '',
-  packageAdditionalRequest: '',
-  packageAiKeywords: [],
-  packageUserAddedKeywords: [],
-  packageUserRemovedKeywords: [],
-  packageAiItems: [],
-  packageItemState: {},
-  packageUserModifiedItemIds: [],
+  packagePlan: emptyPackagePlanState(),
 };
 
 function uid(): string {
@@ -406,39 +381,115 @@ export const useConversationStore = create<ConversationState>()(
             if (opts.parentImagePrompt === undefined) {
               opts.parentImagePrompt = null;
             }
-            // Package mode 신규 필드 — 예전 저장본에는 없다.
+            // Package mode 필드 — packageMode(flag) + packagePlan(nested).
             if (typeof opts.packageMode !== 'boolean') opts.packageMode = false;
-            if (typeof opts.packagePurpose !== 'string') opts.packagePurpose = '';
-            if (typeof opts.packageTopic !== 'string') opts.packageTopic = '';
-            if (typeof opts.packageTarget !== 'string') opts.packageTarget = '';
-            if (typeof opts.packageStyleTone !== 'string') {
-              opts.packageStyleTone = '';
+
+            // v1 (flat) → v2 (nested) migrate. 예전 저장본에 flat 필드가
+            // 있으면 packagePlan 서브객체로 옮기고, 없으면 빈 값을 채운다.
+            const legacy = opts as unknown as Record<string, unknown>;
+            if (
+              !opts.packagePlan ||
+              typeof opts.packagePlan !== 'object' ||
+              Array.isArray(opts.packagePlan)
+            ) {
+              opts.packagePlan = emptyPackagePlanState();
             }
-            if (typeof opts.packageAdditionalRequest !== 'string') {
-              opts.packageAdditionalRequest = '';
+            const plan = opts.packagePlan;
+
+            function pickString(key: string): string {
+              const v = legacy[key];
+              return typeof v === 'string' ? v : '';
             }
-            if (!Array.isArray(opts.packageAiKeywords)) {
-              opts.packageAiKeywords = [];
+            function pickStrArray(key: string): string[] {
+              const v = legacy[key];
+              return Array.isArray(v)
+                ? v.filter((x) => typeof x === 'string')
+                : [];
             }
-            if (!Array.isArray(opts.packageUserAddedKeywords)) {
-              opts.packageUserAddedKeywords = [];
+
+            if (!plan.purpose) plan.purpose = pickString('packagePurpose');
+            if (!plan.topicOrEvent) plan.topicOrEvent = pickString('packageTopic');
+            if (!plan.target) plan.target = pickString('packageTarget');
+            if (!plan.styleTone) plan.styleTone = pickString('packageStyleTone');
+            if (!plan.additionalRequest) {
+              plan.additionalRequest = pickString('packageAdditionalRequest');
             }
-            if (!Array.isArray(opts.packageUserRemovedKeywords)) {
-              opts.packageUserRemovedKeywords = [];
+            if (!plan.aiKeywords.length) {
+              plan.aiKeywords = pickStrArray('packageAiKeywords');
             }
-            if (!Array.isArray(opts.packageAiItems)) {
-              opts.packageAiItems = [];
+            if (!plan.userAddedKeywords.length) {
+              plan.userAddedKeywords = pickStrArray('packageUserAddedKeywords');
+            }
+            if (!plan.userRemovedKeywords.length) {
+              plan.userRemovedKeywords = pickStrArray(
+                'packageUserRemovedKeywords',
+              );
+            }
+            if (!plan.aiItems.length && Array.isArray(legacy.packageAiItems)) {
+              // 이전 스키마의 item 은 aspectRatio/promptHint/transparentBackground
+              // 필드가 없을 수 있음. sanitize 없이 통째로 옮기고 누락 필드는
+              // 기본값으로 채운다.
+              plan.aiItems = (legacy.packageAiItems as unknown[])
+                .map((raw) => {
+                  if (!raw || typeof raw !== 'object') return null;
+                  const r = raw as Record<string, unknown>;
+                  return {
+                    id: typeof r.id === 'string' ? r.id : '',
+                    category:
+                      typeof r.category === 'string' ? r.category : 'etc',
+                    name: typeof r.name === 'string' ? r.name : '',
+                    description:
+                      typeof r.description === 'string' ? r.description : '',
+                    defaultQuantity:
+                      typeof r.defaultQuantity === 'number'
+                        ? r.defaultQuantity
+                        : 1,
+                    aspectRatio:
+                      typeof r.aspectRatio === 'string' &&
+                      ['square', 'landscape', 'portrait'].includes(r.aspectRatio)
+                        ? r.aspectRatio
+                        : 'square',
+                    transparentBackground:
+                      typeof r.transparentBackground === 'boolean'
+                        ? r.transparentBackground
+                        : false,
+                    promptHint:
+                      typeof r.promptHint === 'string' ? r.promptHint : '',
+                  };
+                })
+                .filter((v): v is NonNullable<typeof v> => v !== null && !!v.id)
+                // 타입 강제 — sanitize 통과했다고 가정하고 as
+                .map((v) => v as (typeof plan.aiItems)[number]);
             }
             if (
-              !opts.packageItemState ||
-              typeof opts.packageItemState !== 'object' ||
-              Array.isArray(opts.packageItemState)
+              !Object.keys(plan.itemState).length &&
+              legacy.packageItemState &&
+              typeof legacy.packageItemState === 'object' &&
+              !Array.isArray(legacy.packageItemState)
             ) {
-              opts.packageItemState = {};
+              plan.itemState = legacy.packageItemState as typeof plan.itemState;
             }
-            if (!Array.isArray(opts.packageUserModifiedItemIds)) {
-              opts.packageUserModifiedItemIds = [];
+            if (
+              !plan.userModifiedItemIds.length &&
+              Array.isArray(legacy.packageUserModifiedItemIds)
+            ) {
+              plan.userModifiedItemIds = (
+                legacy.packageUserModifiedItemIds as unknown[]
+              ).filter((x): x is string => typeof x === 'string');
             }
+
+            // 마지막으로 legacy flat 필드는 제거해 이후 오해 방지.
+            delete legacy.packagePurpose;
+            delete legacy.packageTopic;
+            delete legacy.packageTarget;
+            delete legacy.packageStyleTone;
+            delete legacy.packageAdditionalRequest;
+            delete legacy.packageAiKeywords;
+            delete legacy.packageUserAddedKeywords;
+            delete legacy.packageUserRemovedKeywords;
+            delete legacy.packageAiItems;
+            delete legacy.packageItemState;
+            delete legacy.packageUserModifiedItemIds;
           });
         });
       },

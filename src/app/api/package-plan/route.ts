@@ -19,8 +19,10 @@ import {
   templateKeyForPurpose,
 } from '@/features/generation-v2/lib/packagePlanTemplates';
 import {
+  PACKAGE_ASPECT_RATIOS,
   PACKAGE_CATEGORIES,
   type PackageAiItem,
+  type PackageAspectRatio,
   type PackageCategory,
   type PackagePlanResponse,
 } from '@/features/generation-v2/lib/packagePlanTypes';
@@ -76,13 +78,19 @@ function systemPrompt(): string {
     'return a package plan the user can use to produce a set of related clipart.',
     '',
     'Rules:',
-    '- Korean only for name / description / keywords',
+    '- Korean only for name / description / keywords / promptHint',
     '- Category MUST be one of: ' + PACKAGE_CATEGORIES.join(', '),
     '- Do NOT invent new category names',
     '- Prefer to reuse or adapt the items already provided in the base template',
     '- You may add up to 2 additional items if the request clearly needs them',
     '- Keep item name short (<= 12 characters)',
     '- Keep description short (<= 24 characters)',
+    '- promptHint: short Korean phrase (<= 60 characters) describing what the',
+    '  actual clipart should look like — this feeds later prompt assembly',
+    '- aspectRatio MUST be one of: ' + PACKAGE_ASPECT_RATIOS.join(', '),
+    '- transparentBackground: true for icons / decorations / dividers that',
+    '  overlay on top of other artwork; false for posters / banners /',
+    '  illustrations that stand on their own',
     '- keywords: 4~6 short Korean noun phrases (2~10 chars each)',
     '- Never include duplicate keywords, or keywords the user explicitly removed',
     '- defaultQuantity: integer 1~30 per item',
@@ -90,7 +98,13 @@ function systemPrompt(): string {
     '  {',
     '    "keywords": ["...", ...],',
     '    "items": [',
-    '      { "id": "<slug>", "category": "<category>", "name": "...", "description": "...", "defaultQuantity": <int> }',
+    '      {',
+    '        "id": "<slug>", "category": "<category>", "name": "...",',
+    '        "description": "...", "defaultQuantity": <int>,',
+    '        "aspectRatio": "square|landscape|portrait",',
+    '        "transparentBackground": true|false,',
+    '        "promptHint": "..."',
+    '      }',
     '    ]',
     '  }',
     '- Item id should stay stable — reuse the ids from the base template when the item is kept',
@@ -132,6 +146,16 @@ function isPackageCategory(v: unknown): v is PackageCategory {
   );
 }
 
+function coerceAspectRatio(v: unknown): PackageAspectRatio {
+  if (
+    typeof v === 'string' &&
+    (PACKAGE_ASPECT_RATIOS as ReadonlyArray<string>).includes(v)
+  ) {
+    return v as PackageAspectRatio;
+  }
+  return 'square';
+}
+
 function slugify(v: string): string {
   return (
     v
@@ -155,6 +179,9 @@ function sanitizeItems(raw: unknown): PackageAiItem[] {
     const name = asString(record.name, 24);
     if (!name) continue;
     const description = asString(record.description, 60);
+    const promptHint = asString(record.promptHint, 120);
+    const aspectRatio = coerceAspectRatio(record.aspectRatio);
+    const transparentBackground = record.transparentBackground === true;
     const qtyRaw = record.defaultQuantity;
     const defaultQuantity =
       typeof qtyRaw === 'number' && Number.isFinite(qtyRaw)
@@ -170,7 +197,16 @@ function sanitizeItems(raw: unknown): PackageAiItem[] {
       id = `${slugify(record.id ? String(record.id) : `${category}-${name}`)}-${suffix++}`;
     }
     seenIds.add(id);
-    out.push({ id, category, name, description, defaultQuantity });
+    out.push({
+      id,
+      category,
+      name,
+      description,
+      defaultQuantity,
+      aspectRatio,
+      transparentBackground,
+      promptHint,
+    });
     if (out.length >= 12) break;
   }
   return out;

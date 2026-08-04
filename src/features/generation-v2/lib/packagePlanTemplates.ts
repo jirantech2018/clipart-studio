@@ -3,7 +3,8 @@
 // 전 optimistic UI 로 참조할 수도 있다.
 //
 // 항목 id 는 카테고리 slug 형태로 서버가 소유 (AI 임의 생성 금지).
-// 카테고리 값은 packagePlanTypes.ts 의 PACKAGE_CATEGORIES whitelist.
+// 각 항목은 Phase 2 프롬프트 조립에 필요한 aspectRatio /
+// transparentBackground / promptHint 를 함께 보유한다.
 
 import type { PackageAiItem } from './packagePlanTypes';
 
@@ -20,8 +21,9 @@ export function templateKeyForPurpose(purpose: string): keyof typeof TEMPLATES {
   if (/운동회|체육/.test(trimmed)) return '운동회';
   if (/졸업/.test(trimmed)) return '졸업식';
   if (/입학/.test(trimmed)) return '입학식';
-  if (/학사|달력|월간/.test(trimmed)) return '학사 달력';
+  if (/학사|달력|월간|캘린더/.test(trimmed)) return '학사 달력';
   if (/축제|페스티벌/.test(trimmed)) return '학교 축제';
+  if (/시상|표창|상장/.test(trimmed)) return '시상식';
   return 'default';
 }
 
@@ -35,6 +37,9 @@ export const TEMPLATES = {
         name: '행사 포스터',
         description: '메인 홍보 및 안내용',
         defaultQuantity: 2,
+        aspectRatio: 'portrait',
+        transparentBackground: false,
+        promptHint: '행사를 대표하는 메인 포스터, 여백 있는 세로 구도',
       },
       {
         id: 'reading-banner',
@@ -42,6 +47,9 @@ export const TEMPLATES = {
         name: '가로형 배너',
         description: '홈페이지 · 행사장 안내용',
         defaultQuantity: 3,
+        aspectRatio: 'landscape',
+        transparentBackground: false,
+        promptHint: '가로로 긴 배너 구도, 타이포그래피 공간 확보',
       },
       {
         id: 'reading-illustration',
@@ -49,6 +57,9 @@ export const TEMPLATES = {
         name: '독서 삽화',
         description: '게시물 · 활동지 · 학급자료용',
         defaultQuantity: 12,
+        aspectRatio: 'square',
+        transparentBackground: false,
+        promptHint: '책을 읽는 학생 · 도서관 분위기의 따뜻한 삽화',
       },
       {
         id: 'reading-icon',
@@ -56,6 +67,9 @@ export const TEMPLATES = {
         name: '책 아이콘',
         description: '목차 · 안내 · 제목 장식용',
         defaultQuantity: 8,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '단순한 형태의 작은 클립아트 아이콘',
       },
       {
         id: 'reading-decoration',
@@ -63,6 +77,9 @@ export const TEMPLATES = {
         name: '장식 요소',
         description: '테두리 · 배경 · 코너 장식용',
         defaultQuantity: 10,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '작은 잎사귀 · 꽃 등 자연스러운 코너 장식',
       },
     ],
   },
@@ -75,6 +92,9 @@ export const TEMPLATES = {
         name: '행사 포스터',
         description: '운동회 홍보 및 안내용',
         defaultQuantity: 2,
+        aspectRatio: 'portrait',
+        transparentBackground: false,
+        promptHint: '역동적인 운동회 메인 포스터, 힘 있는 구도',
       },
       {
         id: 'sports-banner',
@@ -82,6 +102,9 @@ export const TEMPLATES = {
         name: '가로형 배너',
         description: '운동장 · 홈페이지 배너',
         defaultQuantity: 4,
+        aspectRatio: 'landscape',
+        transparentBackground: false,
+        promptHint: '가로로 긴 응원 배너, 학생 실루엣과 리본',
       },
       {
         id: 'sports-illustration',
@@ -89,6 +112,9 @@ export const TEMPLATES = {
         name: '경기 장면 삽화',
         description: '프로그램 · 활동지용',
         defaultQuantity: 10,
+        aspectRatio: 'square',
+        transparentBackground: false,
+        promptHint: '경기 중인 초등학생의 밝고 활기찬 삽화',
       },
       {
         id: 'sports-icon',
@@ -96,6 +122,9 @@ export const TEMPLATES = {
         name: '종목 아이콘',
         description: '경기 안내 · 점수판 장식용',
         defaultQuantity: 8,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '단순한 종목 픽토그램 · 심플한 아이콘',
       },
       {
         id: 'sports-decoration',
@@ -103,6 +132,9 @@ export const TEMPLATES = {
         name: '응원 장식',
         description: '테두리 · 코너 · 리본 장식',
         defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '리본 · 별 · 응원 오브젝트의 작은 장식',
       },
     ],
   },
@@ -115,6 +147,9 @@ export const TEMPLATES = {
         name: '졸업식 포스터',
         description: '식장 안내 및 홍보용',
         defaultQuantity: 2,
+        aspectRatio: 'portrait',
+        transparentBackground: false,
+        promptHint: '졸업의 감동과 축하가 담긴 세로 포스터',
       },
       {
         id: 'grad-cover',
@@ -122,6 +157,9 @@ export const TEMPLATES = {
         name: '졸업앨범 표지',
         description: '앨범 · 문집 표지용',
         defaultQuantity: 3,
+        aspectRatio: 'portrait',
+        transparentBackground: false,
+        promptHint: '문집 · 앨범 표지에 어울리는 따뜻한 세로 구도',
       },
       {
         id: 'grad-illustration',
@@ -129,6 +167,9 @@ export const TEMPLATES = {
         name: '졸업 장면 삽화',
         description: '기념자료 · 카드용',
         defaultQuantity: 8,
+        aspectRatio: 'square',
+        transparentBackground: false,
+        promptHint: '졸업 가운 · 꽃다발 · 학교 배경의 따뜻한 삽화',
       },
       {
         id: 'grad-decoration',
@@ -136,6 +177,9 @@ export const TEMPLATES = {
         name: '축하 장식',
         description: '리본 · 꽃 · 별 장식',
         defaultQuantity: 8,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '리본 · 꽃 · 별의 축하 오브젝트 장식',
       },
       {
         id: 'grad-divider',
@@ -143,6 +187,9 @@ export const TEMPLATES = {
         name: '구분선/줄 장식',
         description: '문집 · 프로그램 장식용',
         defaultQuantity: 4,
+        aspectRatio: 'landscape',
+        transparentBackground: true,
+        promptHint: '가로로 긴 잎사귀 · 리본 구분선',
       },
     ],
   },
@@ -155,6 +202,9 @@ export const TEMPLATES = {
         name: '입학식 포스터',
         description: '식장 안내 및 홍보용',
         defaultQuantity: 2,
+        aspectRatio: 'portrait',
+        transparentBackground: false,
+        promptHint: '설레는 첫 입학의 감정을 담은 세로 포스터',
       },
       {
         id: 'entrance-banner',
@@ -162,6 +212,9 @@ export const TEMPLATES = {
         name: '환영 배너',
         description: '교문 · 홈페이지 배너',
         defaultQuantity: 3,
+        aspectRatio: 'landscape',
+        transparentBackground: false,
+        promptHint: '학교 정문에 걸리는 환영 배너, 밝은 구도',
       },
       {
         id: 'entrance-illustration',
@@ -169,6 +222,9 @@ export const TEMPLATES = {
         name: '학교 생활 삽화',
         description: '안내자료 · 게시물용',
         defaultQuantity: 8,
+        aspectRatio: 'square',
+        transparentBackground: false,
+        promptHint: '학교 생활을 소개하는 밝은 삽화',
       },
       {
         id: 'entrance-icon',
@@ -176,6 +232,9 @@ export const TEMPLATES = {
         name: '학용품 아이콘',
         description: '준비물 안내 장식용',
         defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '연필 · 가방 · 노트 등 학용품 픽토그램',
       },
       {
         id: 'entrance-decoration',
@@ -183,6 +242,9 @@ export const TEMPLATES = {
         name: '환영 장식',
         description: '테두리 · 리본 · 코너 장식',
         defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '리본 · 꽃 · 별의 환영 오브젝트',
       },
     ],
   },
@@ -195,6 +257,9 @@ export const TEMPLATES = {
         name: '월간 이미지',
         description: '월별 캘린더 상단 이미지',
         defaultQuantity: 12,
+        aspectRatio: 'landscape',
+        transparentBackground: false,
+        promptHint: '월별 학교 풍경을 담은 가로형 헤더 이미지',
       },
       {
         id: 'calendar-icon',
@@ -202,6 +267,9 @@ export const TEMPLATES = {
         name: '행사 아이콘',
         description: '학사 일정 · 이벤트 아이콘',
         defaultQuantity: 10,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '학사 일정을 표시하는 단순한 픽토그램',
       },
       {
         id: 'calendar-decoration',
@@ -209,6 +277,9 @@ export const TEMPLATES = {
         name: '달력 장식',
         description: '테두리 · 배경 장식용',
         defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '달력에 어울리는 작은 코너/테두리 장식',
       },
       {
         id: 'calendar-divider',
@@ -216,6 +287,9 @@ export const TEMPLATES = {
         name: '구분선',
         description: '주 · 월 구분 장식용',
         defaultQuantity: 4,
+        aspectRatio: 'landscape',
+        transparentBackground: true,
+        promptHint: '가로로 긴 간결한 구분선',
       },
     ],
   },
@@ -228,6 +302,9 @@ export const TEMPLATES = {
         name: '축제 포스터',
         description: '홍보 및 안내용',
         defaultQuantity: 2,
+        aspectRatio: 'portrait',
+        transparentBackground: false,
+        promptHint: '컬러풀하고 활기찬 축제 포스터',
       },
       {
         id: 'festival-banner',
@@ -235,6 +312,9 @@ export const TEMPLATES = {
         name: '가로형 배너',
         description: '홈페이지 · 무대 배너',
         defaultQuantity: 4,
+        aspectRatio: 'landscape',
+        transparentBackground: false,
+        promptHint: '무대 뒤에 걸리는 가로 배너',
       },
       {
         id: 'festival-illustration',
@@ -242,6 +322,9 @@ export const TEMPLATES = {
         name: '축제 장면 삽화',
         description: '프로그램 · 활동지용',
         defaultQuantity: 10,
+        aspectRatio: 'square',
+        transparentBackground: false,
+        promptHint: '학생 참여 · 부스 · 무대 장면 삽화',
       },
       {
         id: 'festival-icon',
@@ -249,6 +332,9 @@ export const TEMPLATES = {
         name: '부스 아이콘',
         description: '동아리 · 부스 안내 장식용',
         defaultQuantity: 8,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '부스 · 동아리를 상징하는 단순 아이콘',
       },
       {
         id: 'festival-decoration',
@@ -256,6 +342,54 @@ export const TEMPLATES = {
         name: '축제 장식',
         description: '리본 · 배경 · 코너 장식',
         defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '풍선 · 리본 · 컬러풀한 오브젝트 장식',
+      },
+    ],
+  },
+  '시상식': {
+    keywords: ['시상', '표창', '축하', '기념', '격려'],
+    items: [
+      {
+        id: 'award-certificate',
+        category: 'certificate',
+        name: '상장 배경',
+        description: '상장 · 표창장 배경 이미지',
+        defaultQuantity: 3,
+        aspectRatio: 'landscape',
+        transparentBackground: false,
+        promptHint: '고급스러운 상장 배경, 여백과 테두리 강조',
+      },
+      {
+        id: 'award-badge',
+        category: 'award',
+        name: '메달/뱃지',
+        description: '메달 · 뱃지 · 리본 배지',
+        defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '메달 · 리본 뱃지 등 축하 오브젝트',
+      },
+      {
+        id: 'award-decoration',
+        category: 'decoration',
+        name: '축하 장식',
+        description: '테두리 · 코너 장식',
+        defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '월계관 · 별 · 축하 오브젝트',
+      },
+      {
+        id: 'award-divider',
+        category: 'divider',
+        name: '구분선',
+        description: '상장 · 프로그램 구분',
+        defaultQuantity: 3,
+        aspectRatio: 'landscape',
+        transparentBackground: true,
+        promptHint: '고급스러운 가로 구분선',
       },
     ],
   },
@@ -268,6 +402,9 @@ export const TEMPLATES = {
         name: '포스터',
         description: '메인 홍보 및 안내용',
         defaultQuantity: 2,
+        aspectRatio: 'portrait',
+        transparentBackground: false,
+        promptHint: '메인 홍보용 세로 포스터',
       },
       {
         id: 'default-illustration',
@@ -275,6 +412,9 @@ export const TEMPLATES = {
         name: '삽화',
         description: '자료 · 활동지 · 게시물용',
         defaultQuantity: 8,
+        aspectRatio: 'square',
+        transparentBackground: false,
+        promptHint: '학교 생활을 담은 따뜻한 삽화',
       },
       {
         id: 'default-icon',
@@ -282,6 +422,9 @@ export const TEMPLATES = {
         name: '아이콘',
         description: '안내 · 제목 · 목록 장식용',
         defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '단순한 형태의 작은 클립아트',
       },
       {
         id: 'default-decoration',
@@ -289,6 +432,9 @@ export const TEMPLATES = {
         name: '장식 요소',
         description: '테두리 · 배경 · 코너 장식용',
         defaultQuantity: 6,
+        aspectRatio: 'square',
+        transparentBackground: true,
+        promptHint: '작은 오브젝트로 구성된 코너 장식',
       },
     ],
   },

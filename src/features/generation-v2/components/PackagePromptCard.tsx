@@ -2,18 +2,8 @@
 
 // STEP 1 카드 — 패키지 모드 ON 시 렌더.
 //
-// 목표 UI 매칭:
-//   [1] 어떤 패키지가 필요하세요?      [테마별(목적별) 패키지 생성 ●]
-//   ┌──────────────────────────────────────────────────────────┐
-//   │ 목적           주제 / 행사                                │
-//   │ [select]       [input]                                    │
-//   │ 대상           스타일 / 톤                                │
-//   │ [select]       [select]                                   │
-//   │ 핵심 키워드                                               │
-//   │ [chip x] [chip x] [chip x] [+ 키워드 추가]                │
-//   │ 추가 요청사항 (선택)                                      │
-//   │ [textarea]                                                │
-//   └──────────────────────────────────────────────────────────┘
+// 상태는 상위 ConversationBlock 이 BlockOptions.packagePlan 로 관리하고,
+// 이 컴포넌트는 그 nested 객체를 통째로 받아 특정 필드만 patch 로 돌려준다.
 
 import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
@@ -25,25 +15,14 @@ import { PackageModeToggle } from '@/features/generation-v2/components/PackageMo
 import { selectVisibleKeywords } from '@/features/generation-v2/lib/mergePackagePlan';
 import { cn } from '@/lib/utils';
 
+import type { PackagePlanState } from '@/features/generation-v2/lib/packagePlanTypes';
+
 interface Props {
   locked: boolean;
   packageMode: boolean;
   onPackageModeChange: (next: boolean) => void;
-  purpose: string;
-  onPurposeChange: (next: string) => void;
-  topicOrEvent: string;
-  onTopicOrEventChange: (next: string) => void;
-  target: string;
-  onTargetChange: (next: string) => void;
-  styleTone: string;
-  onStyleToneChange: (next: string) => void;
-  additionalRequest: string;
-  onAdditionalRequestChange: (next: string) => void;
-  aiKeywords: readonly string[];
-  userAddedKeywords: readonly string[];
-  userRemovedKeywords: readonly string[];
-  onUserAddedKeywordsChange: (next: string[]) => void;
-  onUserRemovedKeywordsChange: (next: string[]) => void;
+  plan: PackagePlanState;
+  onPlanChange: (patch: Partial<PackagePlanState>) => void;
   isRecommendationLoading: boolean;
 }
 
@@ -55,6 +34,7 @@ const PURPOSE_OPTIONS = [
   '입학식',
   '학사 달력',
   '학교 축제',
+  '시상식',
   '수업 자료',
   '기타',
 ];
@@ -85,40 +65,25 @@ export function PackagePromptCard({
   locked,
   packageMode,
   onPackageModeChange,
-  purpose,
-  onPurposeChange,
-  topicOrEvent,
-  onTopicOrEventChange,
-  target,
-  onTargetChange,
-  styleTone,
-  onStyleToneChange,
-  additionalRequest,
-  onAdditionalRequestChange,
-  aiKeywords,
-  userAddedKeywords,
-  userRemovedKeywords,
-  onUserAddedKeywordsChange,
-  onUserRemovedKeywordsChange,
+  plan,
+  onPlanChange,
   isRecommendationLoading,
 }: Props) {
   const [newKeyword, setNewKeyword] = useState('');
-  const visibleKeywords = selectVisibleKeywords({
-    packageAiKeywords: aiKeywords,
-    packageUserAddedKeywords: userAddedKeywords,
-    packageUserRemovedKeywords: userRemovedKeywords,
-  });
+  const visibleKeywords = selectVisibleKeywords(plan);
 
   function removeKeyword(k: string) {
     if (locked) return;
-    // 사용자 추가 키워드면 그 배열에서 제거.
-    if (userAddedKeywords.includes(k)) {
-      onUserAddedKeywordsChange(userAddedKeywords.filter((x) => x !== k));
+    if (plan.userAddedKeywords.includes(k)) {
+      onPlanChange({
+        userAddedKeywords: plan.userAddedKeywords.filter((x) => x !== k),
+      });
       return;
     }
-    // AI 추천 키워드면 removed 배열에 추가.
-    if (!userRemovedKeywords.includes(k)) {
-      onUserRemovedKeywordsChange([...userRemovedKeywords, k]);
+    if (!plan.userRemovedKeywords.includes(k)) {
+      onPlanChange({
+        userRemovedKeywords: [...plan.userRemovedKeywords, k],
+      });
     }
   }
 
@@ -129,13 +94,15 @@ export function PackagePromptCard({
       setNewKeyword('');
       return;
     }
-    onUserAddedKeywordsChange([...userAddedKeywords, trimmed]);
-    // 이전에 제거했던 키워드를 다시 추가하려면 removed 에서도 빼줌.
-    if (userRemovedKeywords.includes(trimmed)) {
-      onUserRemovedKeywordsChange(
-        userRemovedKeywords.filter((x) => x !== trimmed),
+    const patch: Partial<PackagePlanState> = {
+      userAddedKeywords: [...plan.userAddedKeywords, trimmed],
+    };
+    if (plan.userRemovedKeywords.includes(trimmed)) {
+      patch.userRemovedKeywords = plan.userRemovedKeywords.filter(
+        (x) => x !== trimmed,
       );
     }
+    onPlanChange(patch);
     setNewKeyword('');
   }
 
@@ -160,8 +127,8 @@ export function PackagePromptCard({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FieldSelect
           label="목적"
-          value={purpose}
-          onChange={onPurposeChange}
+          value={plan.purpose}
+          onChange={(next) => onPlanChange({ purpose: next })}
           options={PURPOSE_OPTIONS}
           placeholder="선택하세요"
           disabled={locked}
@@ -169,8 +136,8 @@ export function PackagePromptCard({
         <div className="space-y-1">
           <Label className="text-primary">주제 / 행사</Label>
           <Input
-            value={topicOrEvent}
-            onChange={(e) => onTopicOrEventChange(e.target.value)}
+            value={plan.topicOrEvent}
+            onChange={(e) => onPlanChange({ topicOrEvent: e.target.value })}
             placeholder="예: 책과 함께 자라는 우리"
             maxLength={80}
             readOnly={locked}
@@ -179,16 +146,16 @@ export function PackagePromptCard({
         </div>
         <FieldSelect
           label="대상"
-          value={target}
-          onChange={onTargetChange}
+          value={plan.target}
+          onChange={(next) => onPlanChange({ target: next })}
           options={TARGET_OPTIONS}
           placeholder="선택하세요"
           disabled={locked}
         />
         <FieldSelect
           label="스타일 / 톤"
-          value={styleTone}
-          onChange={onStyleToneChange}
+          value={plan.styleTone}
+          onChange={(next) => onPlanChange({ styleTone: next })}
           options={STYLE_OPTIONS}
           placeholder="선택하세요"
           disabled={locked}
@@ -261,8 +228,8 @@ export function PackagePromptCard({
           </span>
         </Label>
         <Textarea
-          value={additionalRequest}
-          onChange={(e) => onAdditionalRequestChange(e.target.value)}
+          value={plan.additionalRequest}
+          onChange={(e) => onPlanChange({ additionalRequest: e.target.value })}
           readOnly={locked}
           maxLength={500}
           placeholder="예: 책과 학교 공간이 중심이 되도록 부탁드려요."
