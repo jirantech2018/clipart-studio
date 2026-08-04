@@ -107,31 +107,26 @@ export function UsageGuideBanners() {
 }
 
 function GuideCard({ item }: { item: GuideItem }) {
-  const { Icon, title, subtitle, description, exampleImage, tone } = item;
+  const { Icon, subtitle, description, exampleImage, title, tone } = item;
   return (
     <div className="card flex flex-col gap-3 overflow-hidden p-4">
-      {/* 중앙 원형 아이콘 박스 */}
-      <div className="flex justify-center">
+      {/* 헤더 = 작은 원형 아이콘 + 부제 (좌측 정렬, 가로 배치) */}
+      <div className="flex items-center gap-2">
         <div
           className={cn(
-            'flex h-16 w-16 items-center justify-center rounded-full',
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
             tone.iconBg,
           )}
         >
-          <Icon className={cn('h-7 w-7', tone.iconColor)} aria-hidden="true" />
+          <Icon className={cn('h-4 w-4', tone.iconColor)} aria-hidden="true" />
         </div>
-      </div>
-
-      {/* 제목 + 부제 */}
-      <div className="space-y-0.5 text-center">
-        <h3 className="text-sm font-bold text-foreground">{title}</h3>
-        <p className={cn('text-xs font-semibold', tone.subtitleColor)}>
+        <p className={cn('text-sm font-semibold', tone.subtitleColor)}>
           {subtitle}
         </p>
       </div>
 
       {/* 설명 — 자연 wrap. */}
-      <p className="text-center text-xs leading-relaxed text-muted-foreground">
+      <p className="text-xs leading-relaxed text-muted-foreground">
         {description}
       </p>
 
