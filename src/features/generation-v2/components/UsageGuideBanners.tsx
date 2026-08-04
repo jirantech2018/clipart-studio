@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
 interface GuideItem {
-  number: number;
   Icon: LucideIcon;
   title: string;
   subtitle: string;
@@ -29,7 +28,6 @@ interface GuideItem {
   exampleImage: string;
   /** Tailwind 톤 매핑. */
   tone: {
-    numberBg: string;
     iconBg: string;
     iconColor: string;
     subtitleColor: string;
@@ -38,7 +36,6 @@ interface GuideItem {
 
 const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
   {
-    number: 1,
     Icon: PenLine,
     title: '직접 만들기',
     subtitle: '프롬프트로 클립아트 만들기',
@@ -46,14 +43,12 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
       '원하는 내용을 자유롭게 입력하면 AI가 새로운 클립아트를 만들어드립니다.',
     exampleImage: '/generate-v2_intro_01.png',
     tone: {
-      numberBg: 'bg-purple-500',
       iconBg: 'bg-purple-100',
       iconColor: 'text-purple-600',
       subtitleColor: 'text-purple-600',
     },
   },
   {
-    number: 2,
     Icon: ImageIcon,
     title: '참고 이미지 활용하기',
     subtitle: '참조 이미지로 클립아트 만들기',
@@ -61,14 +56,12 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
       '내가 등록한 참고 이미지나 학교·기관의 기본 이미지를 바탕으로 비슷한 스타일의 클립아트를 생성합니다.',
     exampleImage: '/generate-v2_intro_02.png',
     tone: {
-      numberBg: 'bg-blue-500',
       iconBg: 'bg-blue-100',
       iconColor: 'text-blue-600',
       subtitleColor: 'text-blue-600',
     },
   },
   {
-    number: 3,
     Icon: Files,
     title: '기존 클립아트 활용하기',
     subtitle: '라이브러리 클립아트로 만들기',
@@ -76,14 +69,12 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
       '내가 만든 클립아트나 공유 라이브러리의 클립아트를 선택해 새로운 클립아트로 확장합니다.',
     exampleImage: '/generate-v2_intro_03.png',
     tone: {
-      numberBg: 'bg-emerald-500',
       iconBg: 'bg-emerald-100',
       iconColor: 'text-emerald-600',
       subtitleColor: 'text-emerald-600',
     },
   },
   {
-    number: 4,
     Icon: Gift,
     title: '테마 패키지 만들기',
     subtitle: '테마별(목적별) 클립아트 패키지 생성하기',
@@ -91,7 +82,6 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
       '행사나 수업 주제를 선택하면 포스터, 아이콘, 삽화 등 필요한 클립아트를 한 번에 생성합니다.',
     exampleImage: '/generate-v2_intro_04.png',
     tone: {
-      numberBg: 'bg-rose-500',
       iconBg: 'bg-rose-100',
       iconColor: 'text-rose-500',
       subtitleColor: 'text-rose-500',
@@ -113,7 +103,7 @@ export function UsageGuideBanners() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {GUIDE_ITEMS.map((item) => (
-          <GuideCard key={item.number} item={item} />
+          <GuideCard key={item.title} item={item} />
         ))}
       </div>
     </div>
@@ -121,54 +111,42 @@ export function UsageGuideBanners() {
 }
 
 function GuideCard({ item }: { item: GuideItem }) {
-  const { number, Icon, title, subtitle, description, exampleImage, tone } = item;
+  const { Icon, title, subtitle, description, exampleImage, tone } = item;
   return (
-    <div className="card relative flex flex-col gap-4 p-6">
-      {/* 좌상단 번호 뱃지 */}
-      <div
-        className={cn(
-          'absolute left-4 top-4 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white',
-          tone.numberBg,
-        )}
-      >
-        {number}
-      </div>
-
+    <div className="card flex flex-col gap-2 overflow-hidden p-3">
       {/* 중앙 원형 아이콘 박스 */}
-      <div className="flex justify-center pt-2">
+      <div className="flex justify-center">
         <div
           className={cn(
-            'flex h-20 w-20 items-center justify-center rounded-full',
+            'flex h-16 w-16 items-center justify-center rounded-full',
             tone.iconBg,
           )}
         >
-          <Icon className={cn('h-9 w-9', tone.iconColor)} aria-hidden="true" />
+          <Icon className={cn('h-7 w-7', tone.iconColor)} aria-hidden="true" />
         </div>
       </div>
 
       {/* 제목 + 부제 */}
-      <div className="space-y-1 text-center">
-        <h3 className="text-base font-bold text-foreground">{title}</h3>
-        <p className={cn('text-sm font-semibold', tone.subtitleColor)}>
+      <div className="space-y-0.5 text-center">
+        <h3 className="text-sm font-bold text-foreground">{title}</h3>
+        <p className={cn('text-xs font-semibold', tone.subtitleColor)}>
           {subtitle}
         </p>
       </div>
 
-      {/* 설명 — 자연 wrap. 내부 개행 없음. */}
+      {/* 설명 — 자연 wrap. */}
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
         {description}
       </p>
 
-      {/* 하단 예시 이미지 — pill/배경 없이 이미지만 표시.
-          h-40 로 컨테이너 높이를 명시하고 object-contain 으로 자연 aspect
-          유지. h-auto 방식은 일부 flex 컨텍스트에서 이미지가 렌더되기 전
-          0 높이로 잡히는 케이스가 있어 명시적 높이가 안정적이다. */}
-      <div className="mt-auto flex h-40 items-center justify-center">
+      {/* 하단 예시 이미지 — 카드 좌우/하단 padding 을 negative margin 으로
+          상쇄해서 이미지가 카드 하단에 딱 붙게 한다 (위아래 여백 제거). */}
+      <div className="mt-auto -mx-3 -mb-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={exampleImage}
           alt={`${title} 예시`}
-          className="h-full w-full rounded-md object-contain"
+          className="block w-full"
         />
       </div>
     </div>
