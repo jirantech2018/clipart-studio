@@ -130,9 +130,11 @@ function GuideCard({ item }: { item: GuideItem }) {
         {description}
       </p>
 
-      {/* 하단 예시 이미지 — 카드 좌우/하단 padding 을 negative margin 으로
-          상쇄해서 이미지가 카드 하단에 딱 붙게 한다 (위아래 여백 제거). */}
-      <div className="mt-auto -mx-4 -mb-4">
+      {/* 하단 예시 이미지 — 카드 좌우/하단 padding + 자식 gap 을 negative
+          margin 으로 상쇄해서 이미지가 설명 바로 아래에 딱 붙고 카드 좌우/
+          하단에도 flush. mt-auto 는 제거 (이미지 위 남는 공간이 여백으로
+          보이던 문제 해결). */}
+      <div className="-mx-4 -mb-4 -mt-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={exampleImage}
