@@ -10,7 +10,7 @@
 //   - 기능 추가 없음, 시각적 밀도/타이포/간격만 정돈
 //   - 크레딧 충전 / 사용 내역 링크는 대응 페이지가 아직 없어 미도입
 
-import { Coins, HelpCircle, MessageSquare, Plus } from 'lucide-react';
+import { Coins, MessageSquare, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,19 +78,6 @@ export function ConversationSidebar({
       >
         <Plus className="mr-1 h-4 w-4" /> 새로운 대화
       </Button>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            <HelpCircle className="h-4 w-4 text-primary" />
-            사용 가이드
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1 text-xs text-muted-foreground">
-          <p>프롬프트를 입력하고 옵션을 선택한 뒤 클립아트 만들기를 눌러주세요.</p>
-          <p>생성이 끝나면 아래로 이어서 새 대화를 계속할 수 있어요.</p>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader className="pb-2">
