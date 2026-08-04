@@ -72,13 +72,24 @@ export function OptionStep({
     ? orgRefs.data?.references.find((r) => r.id === orgReferenceId) ?? null
     : null;
 
+  // 3종 참조 (chaining / 개인 / 학교) 는 상단 카드로 하나만 노출되어야 하므로
+  // 어느 하나를 세팅할 때 나머지 두 종류를 함께 clear 한다.
+  const clearParentPatch = {
+    parentImageId: null,
+    parentImageThumbnailUrl: null,
+    parentImagePrompt: null,
+  } as const;
+
   function handlePersonalReferenceChange(next: string | null) {
     if (next === null) {
       onChange({ personalReferenceIds: [] });
       return;
     }
-    // 상호배제 (기존 /generate 정책): 개인 참조 선택 시 조직 참조는 해제.
-    onChange({ personalReferenceIds: [next], orgReferenceIds: [] });
+    onChange({
+      personalReferenceIds: [next],
+      orgReferenceIds: [],
+      ...clearParentPatch,
+    });
   }
 
   function handleOrgReferenceIdChange(next: string | null) {
@@ -86,8 +97,11 @@ export function OptionStep({
       onChange({ orgReferenceIds: [] });
       return;
     }
-    // 상호배제: 조직 참조 선택 시 개인 참조는 해제.
-    onChange({ orgReferenceIds: [next], personalReferenceIds: [] });
+    onChange({
+      orgReferenceIds: [next],
+      personalReferenceIds: [],
+      ...clearParentPatch,
+    });
   }
 
   function handleOrgSlugChange(nextSlug: string | null) {
@@ -110,9 +124,10 @@ export function OptionStep({
         <h3 className="text-base font-semibold">생성 옵션</h3>
       </header>
 
-      {/* 상단 요약: chaining (이 이미지로 다시 만들기) 이 있으면 최우선.
-          그 외엔 개인 또는 조직 참조 이미지가 선택되어 있으면 카드 UI 로 노출. */}
-      {options.parentImageId && options.parentImageThumbnailUrl && (
+      {/* 상단 요약 — chaining / 개인 참조 / 학교 참조 중 하나만 노출.
+          우선순위: chaining > 개인 참조 > 학교 참조. 데이터 상호배제는 handle
+          함수 / GenerateV2Client 에서 처리되지만 표시 단에서도 방어. */}
+      {options.parentImageId && options.parentImageThumbnailUrl ? (
         <SelectedReferenceCard
           thumbnailUrl={options.parentImageThumbnailUrl}
           label="이 이미지로 다시 만들기"
@@ -128,8 +143,7 @@ export function OptionStep({
           }
           disabled={disabled}
         />
-      )}
-      {selectedPersonalSlot && (
+      ) : selectedPersonalSlot ? (
         <SelectedReferenceCard
           thumbnailUrl={selectedPersonalSlot.url}
           label="개인 참조 클립아트"
@@ -139,8 +153,7 @@ export function OptionStep({
           onClear={() => handlePersonalReferenceChange(null)}
           disabled={disabled}
         />
-      )}
-      {selectedOrgSlot && (
+      ) : selectedOrgSlot ? (
         <SelectedReferenceCard
           thumbnailUrl={selectedOrgSlot.url}
           label="학교 참조 이미지"
@@ -154,7 +167,7 @@ export function OptionStep({
           onClear={() => handleOrgReferenceIdChange(null)}
           disabled={disabled}
         />
-      )}
+      ) : null}
 
       {/* 1. 생성 개수 */}
       <div className="space-y-2">

@@ -112,8 +112,9 @@ export function GenerateV2Client({ initialCredits, parent }: Props) {
         parentImageId: parent.id,
         parentImageThumbnailUrl: parent.thumbnailUrl,
         parentImagePrompt: parent.prompt,
-        // chaining 시 개인 참조는 상호배제 대상 (기존 /generate 정책).
+        // chaining 은 3종 참조 중 최우선. 개인·조직 참조 모두 clear.
         personalReferenceIds: [],
+        orgReferenceIds: [],
       });
     } else {
       addBlock(conv.id, {
@@ -121,6 +122,7 @@ export function GenerateV2Client({ initialCredits, parent }: Props) {
         parentImageThumbnailUrl: parent.thumbnailUrl,
         parentImagePrompt: parent.prompt,
         personalReferenceIds: [],
+        orgReferenceIds: [],
       });
     }
     router.replace('/generate-v2');
