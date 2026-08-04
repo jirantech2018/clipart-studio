@@ -15,7 +15,7 @@ import { createSupabaseBrowserClient } from '@/services/supabase/client';
 // 상단 메뉴. 홈("/") = 공유라이브러리라서 로고 클릭이 진입점이고 nav 에는
 // 굳이 두지 않음. 관리 는 isAdmin 일 때만 렌더.
 const NAV_ITEMS = [
-  { href: '/generate', label: '+클립아트 만들기' },
+  { href: '/generate-v2', label: '+클립아트 만들기' },
   { href: '/library', label: 'MY' },
   { href: '/organizations', label: '우리학교' },
 ] as const;
