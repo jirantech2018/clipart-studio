@@ -17,6 +17,10 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 import { resizeSlotPrompts } from '@/features/generation/lib/resizeSlotPrompts';
 
+import type {
+  PackageAiItem,
+  PackageItemState,
+} from '@/features/generation-v2/lib/packagePlanTypes';
 import type { AspectRatio } from '@/types/domain';
 
 // ============ Types ============
@@ -46,6 +50,30 @@ export interface BlockOptions {
   parentImageId: string | null;
   parentImageThumbnailUrl: string | null;
   parentImagePrompt: string | null;
+
+  // ── 테마별(목적별) 패키지 생성 모드 ──
+  // 토글 ON 시 ①/② 카드 UI 를 패키지 전용으로 교체하고, 아래 필드가
+  // conversationStore 에 저장/복원된다. Phase 1 에서는 실제 생성 파이프라인은
+  // 연결하지 않는다 — CTA disabled + /api/jobs 호출 없음.
+  packageMode: boolean;
+  /** 사용자 입력 5종. */
+  packagePurpose: string;
+  packageTopic: string;
+  packageTarget: string;
+  packageStyleTone: string;
+  packageAdditionalRequest: string;
+  /** AI 추천 원본 (사용자 편집 이전). 재추천 시 이 배열만 갱신. */
+  packageAiKeywords: string[];
+  /** 사용자가 직접 추가한 키워드 (AI 재추천이 침범 금지). */
+  packageUserAddedKeywords: string[];
+  /** 사용자가 AI 추천에서 제거한 키워드 (재추천 시 다시 표시 방지). */
+  packageUserRemovedKeywords: string[];
+  /** AI 추천 항목 원본. */
+  packageAiItems: PackageAiItem[];
+  /** 사용자 편집 상태 (id → enabled/quantity). packageAiItems 와 병합해 표시. */
+  packageItemState: Record<string, PackageItemState>;
+  /** 사용자가 명시적으로 편집한 item id 화이트리스트 (재추천 시 값 보호). */
+  packageUserModifiedItemIds: string[];
 }
 
 export interface CompletedImage {
@@ -134,6 +162,18 @@ const DEFAULT_OPTIONS: BlockOptions = {
   parentImageId: null,
   parentImageThumbnailUrl: null,
   parentImagePrompt: null,
+  packageMode: false,
+  packagePurpose: '',
+  packageTopic: '',
+  packageTarget: '',
+  packageStyleTone: '',
+  packageAdditionalRequest: '',
+  packageAiKeywords: [],
+  packageUserAddedKeywords: [],
+  packageUserRemovedKeywords: [],
+  packageAiItems: [],
+  packageItemState: {},
+  packageUserModifiedItemIds: [],
 };
 
 function uid(): string {
@@ -365,6 +405,39 @@ export const useConversationStore = create<ConversationState>()(
             }
             if (opts.parentImagePrompt === undefined) {
               opts.parentImagePrompt = null;
+            }
+            // Package mode 신규 필드 — 예전 저장본에는 없다.
+            if (typeof opts.packageMode !== 'boolean') opts.packageMode = false;
+            if (typeof opts.packagePurpose !== 'string') opts.packagePurpose = '';
+            if (typeof opts.packageTopic !== 'string') opts.packageTopic = '';
+            if (typeof opts.packageTarget !== 'string') opts.packageTarget = '';
+            if (typeof opts.packageStyleTone !== 'string') {
+              opts.packageStyleTone = '';
+            }
+            if (typeof opts.packageAdditionalRequest !== 'string') {
+              opts.packageAdditionalRequest = '';
+            }
+            if (!Array.isArray(opts.packageAiKeywords)) {
+              opts.packageAiKeywords = [];
+            }
+            if (!Array.isArray(opts.packageUserAddedKeywords)) {
+              opts.packageUserAddedKeywords = [];
+            }
+            if (!Array.isArray(opts.packageUserRemovedKeywords)) {
+              opts.packageUserRemovedKeywords = [];
+            }
+            if (!Array.isArray(opts.packageAiItems)) {
+              opts.packageAiItems = [];
+            }
+            if (
+              !opts.packageItemState ||
+              typeof opts.packageItemState !== 'object' ||
+              Array.isArray(opts.packageItemState)
+            ) {
+              opts.packageItemState = {};
+            }
+            if (!Array.isArray(opts.packageUserModifiedItemIds)) {
+              opts.packageUserModifiedItemIds = [];
             }
           });
         });
