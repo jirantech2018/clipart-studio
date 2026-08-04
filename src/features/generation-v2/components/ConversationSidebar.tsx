@@ -121,52 +121,56 @@ export function ConversationSidebar({
         </CardContent>
       </Card>
 
-      {/* 대화 히스토리 카드는 남은 세로 공간을 채우고, 넘친 항목은 카드
-          안에서 조용히 잘리도록 min-h-0 + flex-1 + overflow-hidden. 카드
-          바깥 shadow 는 그대로 살아있다. */}
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <CardHeader className="shrink-0 pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            대화 히스토리
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 space-y-1 overflow-hidden">
-          {historyList.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              아직 저장된 대화가 없어요.
-            </p>
-          ) : (
-            <ul>
-              {historyList.map((c: Conversation) => {
-                const active = currentId === c.id;
-                return (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      onClick={() => onOpenConversation(c.id)}
-                      className={cn(
-                        'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left transition-colors',
-                        active
-                          ? 'bg-accent font-medium text-primary'
-                          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-                      )}
-                      title={c.title ?? '새로운 대화'}
-                    >
-                      <span className="truncate text-xs">
-                        {c.title ?? '새로운 대화'}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground/80 tabular-nums">
-                        {formatRelativeTime(c.updatedAt)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {/* 대화 히스토리 wrapper — flex-1 로 sidebar 남은 세로 공간을 확보하되
+          카드 자체는 자연 크기(shrink-to-fit) 로 렌더. 컨텐츠가 wrapper 를
+          넘길 때만 max-h-full + overflow-hidden 이 발동해 잘림.
+          이렇게 하면 히스토리 항목이 적을 때 카드가 필요 이상 커지지 않고,
+          가득 찼을 때만 화면 하단에서 잘리게 된다. */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Card className="flex max-h-full flex-col overflow-hidden">
+          <CardHeader className="shrink-0 pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              대화 히스토리
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 space-y-1 overflow-hidden">
+            {historyList.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                아직 저장된 대화가 없어요.
+              </p>
+            ) : (
+              <ul>
+                {historyList.map((c: Conversation) => {
+                  const active = currentId === c.id;
+                  return (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenConversation(c.id)}
+                        className={cn(
+                          'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left transition-colors',
+                          active
+                            ? 'bg-accent font-medium text-primary'
+                            : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                        )}
+                        title={c.title ?? '새로운 대화'}
+                      >
+                        <span className="truncate text-xs">
+                          {c.title ?? '새로운 대화'}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground/80 tabular-nums">
+                          {formatRelativeTime(c.updatedAt)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </aside>
   );
 }
