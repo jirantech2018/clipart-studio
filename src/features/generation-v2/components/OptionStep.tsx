@@ -19,9 +19,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AspectRatioSelector } from '@/features/generation/components/AspectRatioSelector';
 import { BatchSizeSelector } from '@/features/generation/components/BatchSizeSelector';
+import { SelectedReferenceCard } from '@/features/generation/components/SelectedReferenceCard';
 import { resizeSlotPrompts } from '@/features/generation/lib/resizeSlotPrompts';
+import { useOrganizationReferenceImages } from '@/features/organization/hooks/useOrganizationReferenceImages';
 import { OptionReferencePicker } from '@/features/generation-v2/components/OptionReferencePicker';
 import { OptionSchoolPicker } from '@/features/generation-v2/components/OptionSchoolPicker';
+import { useReferenceImages } from '@/features/references/hooks/useReferenceImages';
 import { BATCH_SIZE_PRESETS } from '@/types/domain';
 
 import type { BlockOptions } from '@/lib/store/conversationStore';
@@ -56,6 +59,18 @@ export function OptionStep({
   const orgReferenceId = options.orgReferenceIds[0] ?? null;
   const personalActive = personalReferenceId !== null;
   const orgReferenceActive = orgReferenceId !== null;
+
+  // 선택된 참조 이미지 상단 요약 카드용 slot 정보. 하위 picker 들이 이미
+  // 동일 훅을 호출하므로 React Query dedupe 로 추가 요청 없음.
+  const personalRefs = useReferenceImages();
+  // OptionSchoolPicker 와 동일 인자로 호출 → React Query dedupe 로 중복 요청 없음.
+  const orgRefs = useOrganizationReferenceImages(options.orgSlug);
+  const selectedPersonalSlot = personalReferenceId
+    ? personalRefs.data?.slots.find((s) => s.id === personalReferenceId) ?? null
+    : null;
+  const selectedOrgSlot = orgReferenceId
+    ? orgRefs.data?.references.find((r) => r.id === orgReferenceId) ?? null
+    : null;
 
   function handlePersonalReferenceChange(next: string | null) {
     if (next === null) {
@@ -94,6 +109,35 @@ export function OptionStep({
         </span>
         <h3 className="text-base font-semibold">생성 옵션</h3>
       </header>
+
+      {/* 상단 요약: 개인 또는 조직 참조 이미지가 선택되어 있으면 /generate 와
+          동일한 카드 UI 로 노출. 두 종류는 상호배제라 동시 렌더되지 않음. */}
+      {selectedPersonalSlot && (
+        <SelectedReferenceCard
+          thumbnailUrl={selectedPersonalSlot.url}
+          label="개인 참조 클립아트"
+          description={selectedPersonalSlot.filename ?? '저장된 슬롯 이미지'}
+          linkHref="/profile"
+          linkLabel="슬롯 관리"
+          onClear={() => handlePersonalReferenceChange(null)}
+          disabled={disabled}
+        />
+      )}
+      {selectedOrgSlot && (
+        <SelectedReferenceCard
+          thumbnailUrl={selectedOrgSlot.url}
+          label="학교 참조 이미지"
+          description={selectedOrgSlot.filename ?? '조직 슬롯 이미지'}
+          linkHref={
+            options.orgSlug
+              ? `/organization/${options.orgSlug}/settings`
+              : '/profile'
+          }
+          linkLabel="슬롯 관리"
+          onClear={() => handleOrgReferenceIdChange(null)}
+          disabled={disabled}
+        />
+      )}
 
       {/* 1. 생성 개수 */}
       <div className="space-y-2">

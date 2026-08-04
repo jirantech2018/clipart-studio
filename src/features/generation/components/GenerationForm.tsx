@@ -7,7 +7,7 @@
 //   - PresetChips are rendered
 //   - generationMode = 'img2img', referenceImageId is passed to the job
 
-import { Link as LinkIcon, X } from 'lucide-react';
+import { Link as LinkIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -22,6 +22,7 @@ import { BatchSizeSelector } from '@/features/generation/components/BatchSizeSel
 import { CancelDialog } from '@/features/generation/components/CancelDialog';
 import { DiversityPromptList } from '@/features/generation/components/DiversityPromptList';
 import { PresetChips } from '@/features/generation/components/PresetChips';
+import { SelectedReferenceCard } from '@/features/generation/components/SelectedReferenceCard';
 import { useCreateJob, CreateJobError } from '@/features/generation/hooks/useCreateJob';
 import { usePromptSuggestions } from '@/features/generation/hooks/usePromptSuggestions';
 import { resizeSlotPrompts } from '@/features/generation/lib/resizeSlotPrompts';
@@ -242,78 +243,33 @@ export function GenerationForm({
       <CardContent className={cn(!showCardHeader && 'pt-6')}>
         <form onSubmit={handleFormSubmit} className="space-y-5">
           {chaining && parent && (
-            <div className="flex items-start gap-3 rounded-md border bg-muted/30 p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={parent.thumbnailUrl}
-                alt="참조 이미지"
-                className="h-16 w-16 shrink-0 rounded object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium">참조 이미지</p>
-                <p className="line-clamp-2 text-xs text-muted-foreground" title={parent.prompt}>
-                  {parent.prompt}
-                </p>
-                <Link
-                  href={`/image/${parent.id}`}
-                  className="text-sm text-primary underline-offset-4 hover:underline"
-                >
-                  원본 상세 보기
-                </Link>
-              </div>
-              <button
-                type="button"
-                onClick={clearParent}
-                disabled={inFlight}
-                className="rounded p-1 text-muted-foreground hover:bg-accent"
-                aria-label="참조 이미지 해제"
-                title="참조 이미지 해제"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
+            <SelectedReferenceCard
+              thumbnailUrl={parent.thumbnailUrl}
+              label="참조 이미지"
+              description={parent.prompt}
+              linkHref={`/image/${parent.id}`}
+              linkLabel="원본 상세 보기"
+              onClear={clearParent}
+              disabled={inFlight}
+            />
           )}
 
           {!chaining && selectedReference && (
-            <div className="flex items-start gap-3 rounded-md border bg-muted/30 p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selectedReference.url}
-                alt="참조 이미지"
-                className="h-16 w-16 shrink-0 rounded object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium">
-                  {isSelectedFromOrg ? '조직 참조 이미지' : '개인 참조 클립아트'}
-                </p>
-                <p
-                  className="line-clamp-2 text-xs text-muted-foreground"
-                  title={selectedReference.filename ?? undefined}
-                >
-                  {selectedReference.filename ?? '저장된 슬롯 이미지'}
-                </p>
-                <Link
-                  href={
-                    isSelectedFromOrg && orgContext
-                      ? `/organization/${orgContext.slug}/settings`
-                      : '/profile'
-                  }
-                  className="text-sm text-primary underline-offset-4 hover:underline"
-                >
-                  슬롯 관리
-                </Link>
-              </div>
-              <button
-                type="button"
-                onClick={clearSelectedReference}
-                disabled={inFlight}
-                className="rounded p-1 text-muted-foreground hover:bg-accent"
-                aria-label="참조 이미지 해제"
-                title="참조 이미지 해제"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
+            <SelectedReferenceCard
+              thumbnailUrl={selectedReference.url}
+              label={
+                isSelectedFromOrg ? '조직 참조 이미지' : '개인 참조 클립아트'
+              }
+              description={selectedReference.filename ?? '저장된 슬롯 이미지'}
+              linkHref={
+                isSelectedFromOrg && orgContext
+                  ? `/organization/${orgContext.slug}/settings`
+                  : '/profile'
+              }
+              linkLabel="슬롯 관리"
+              onClear={clearSelectedReference}
+              disabled={inFlight}
+            />
           )}
 
           {insufficient && (
