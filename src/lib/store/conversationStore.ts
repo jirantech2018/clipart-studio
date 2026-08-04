@@ -69,6 +69,10 @@ export interface CompletedImage {
   slotId?: string;
   category?: string;
   name?: string;
+  /** Phase 3 UI 편의를 위해 slot / job 의 aspect ratio 를 함께 저장.
+   *  package 는 slot.aspectRatio, single 은 job.aspectRatio. Legacy 저장본
+   *  은 undefined — 소비 측에서 fallback 필요. */
+  aspectRatio?: AspectRatio;
 }
 
 export interface FailedSlot {

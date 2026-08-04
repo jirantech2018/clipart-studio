@@ -137,6 +137,9 @@ const packageItemInputSchema = z.object({
 });
 
 const packagePlanSnapshotSchema = z.object({
+  // Snapshot schema version. 없거나 낮은 값이면 1 로 처리 (Legacy 하위호환).
+  // 서버는 저장 시 항상 최신 값으로 강제 (createPackageJobSchema 파싱 결과).
+  version: z.number().int().min(1).default(1),
   purpose: z.string().max(120),
   topicOrEvent: z.string().max(200).default(''),
   target: z.string().max(120),

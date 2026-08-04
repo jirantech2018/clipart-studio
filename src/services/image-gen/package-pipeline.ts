@@ -54,6 +54,8 @@ export function slotFromRow(row: Record<string, unknown>): PackageJobSlot {
     id: row.id as string,
     jobId: row.job_id as string,
     order: row.order as number,
+    // Migration 055 이전 row 는 category_order 컬럼이 없거나 backfill 로 0.
+    categoryOrder: (row.category_order as number) ?? 0,
     category: row.category as string,
     name: row.name as string,
     promptHint: (row.prompt_hint as string) ?? '',
@@ -62,6 +64,8 @@ export function slotFromRow(row: Record<string, unknown>): PackageJobSlot {
     status: row.status as PackageJobSlot['status'],
     imageId: (row.image_id as string) ?? null,
     error: (row.error as string) ?? null,
+    // Migration 055 이전 row 는 final_prompt 컬럼 없음 → null.
+    finalPrompt: (row.final_prompt as string) ?? null,
     startedAt: (row.started_at as string) ?? null,
     completedAt: (row.completed_at as string) ?? null,
     refundedAt: (row.refunded_at as string) ?? null,

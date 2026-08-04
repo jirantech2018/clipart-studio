@@ -205,8 +205,11 @@ export interface GenerationJob {
   packagePlan: PackageJobPlanSnapshot | null;
 }
 
-/** generation_jobs.package_plan JSONB 스냅샷 shape. */
+/** generation_jobs.package_plan JSONB 스냅샷 shape.
+ *  version 은 스키마 진화 대응용. 저장 시점에는 항상 1 이 채워지지만,
+ *  Legacy row 에서 undefined 로 읽힐 수 있으므로 소비 측은 `?? 1` 로 fallback. */
 export interface PackageJobPlanSnapshot {
+  version?: number;
   purpose: string;
   topicOrEvent: string;
   target: string;
@@ -220,7 +223,10 @@ export interface PackageJobPlanSnapshot {
 export interface PackageJobSlot {
   id: string;
   jobId: string;
+  /** 패키지 전역 순서 (0..N-1). */
   order: number;
+  /** 동일 category 내부 순서 (0..). Phase 3 그룹 UI 에서 사용. */
+  categoryOrder: number;
   category: string;
   name: string;
   promptHint: string;
@@ -229,6 +235,8 @@ export interface PackageJobSlot {
   status: SlotStatus;
   imageId: string | null;
   error: string | null;
+  /** runPackageSlot 가 외부 API 에 전달한 실제 최종 프롬프트 (nullable — Legacy 는 NULL). */
+  finalPrompt: string | null;
   startedAt: string | null;
   completedAt: string | null;
   refundedAt: string | null;
