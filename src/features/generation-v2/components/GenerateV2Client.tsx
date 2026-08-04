@@ -128,13 +128,13 @@ export function GenerateV2Client({ initialCredits }: Props) {
               onClick={() => setGuideOpen((v) => !v)}
               aria-expanded={guideOpen}
               aria-controls="usage-guide-banners"
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-input bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition-opacity hover:opacity-80"
             >
-              <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
+              <HelpCircle className="h-4 w-4" aria-hidden="true" />
               <span>사용 가이드</span>
               <ChevronDown
                 className={cn(
-                  'h-3.5 w-3.5 transition-transform',
+                  'h-4 w-4 transition-transform',
                   guideOpen && 'rotate-180',
                 )}
                 aria-hidden="true"
