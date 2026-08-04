@@ -116,13 +116,15 @@ export function GenerateV2Client({ initialCredits }: Props) {
   return (
     <div className="mx-auto flex max-w-7xl gap-6">
       <main className="min-w-0 flex-1 space-y-6">
-        <header className="space-y-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                학교에 필요한 클립아트를 AI와 함께 만들어보세요.
-              </h1>
-            </div>
+        <header className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            학교에 필요한 클립아트를 AI와 함께 만들어보세요.
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            수업자료, 학급운영, 학교행사까지 4가지 원하는 방식으로 쉽고 빠르게
+            AI가 학교에 맞는 클립아트를 만들어 드립니다
+          </p>
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={() => setGuideOpen((v) => !v)}
