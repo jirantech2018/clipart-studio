@@ -3,33 +3,23 @@
 // v2 Option Panel 안에서 개인 참조 이미지 슬롯을 노출하는 compact wrapper.
 //
 // 실제 슬롯 조회/렌더/선택 동작은 전부 기존 ReferenceLibrarySection 의
-// Controlled 모드 (variant='compact') 에 위임한다. 이 컴포넌트는
-//   - 라벨과 선택 카운트
-//   - 개인/조직 참조 상호배제 안내
-//   - Conversation Block options 에 값 전달
-// 만 담당한다. 참조 이미지 조회/권한/오류 등을 복제하지 않는다.
+// Controlled 모드 (variant='compact') 에 위임한다.
+//
+// 상호배제 정책은 클릭 시 상위 (OptionStep) 의 handlePersonalReferenceChange
+// 가 조직 참조 / chaining 을 clear 하는 방식으로 처리하므로, 이 컴포넌트에서
+// 는 별도의 disabled/안내 문구 없이 항상 슬롯을 선택 가능한 상태로 노출한다.
 
 import { ImageIcon } from 'lucide-react';
 
 import { ReferenceLibrarySection } from '@/features/references/components/ReferenceLibrarySection';
-import { cn } from '@/lib/utils';
 
 interface Props {
   value: string | null;
   onChange: (next: string | null) => void;
   disabled: boolean;
-  /** 학교(조직) 참조가 이미 적용 중이면 개인 참조는 상호배제로 사용 불가. */
-  orgReferenceActive: boolean;
 }
 
-export function OptionReferencePicker({
-  value,
-  onChange,
-  disabled,
-  orgReferenceActive,
-}: Props) {
-  const effectiveDisabled = disabled || orgReferenceActive;
-
+export function OptionReferencePicker({ value, onChange, disabled }: Props) {
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-2">
@@ -40,25 +30,17 @@ export function OptionReferencePicker({
             (선택)
           </span>
         </div>
-        {value && !orgReferenceActive && (
+        {value && (
           <span className="text-xs text-muted-foreground">1장 선택됨</span>
         )}
       </div>
 
-      <div className={cn(orgReferenceActive && 'opacity-60')}>
-        <ReferenceLibrarySection
-          value={orgReferenceActive ? null : value}
-          onChange={onChange}
-          disabled={effectiveDisabled}
-          variant="compact"
-        />
-      </div>
-
-      {orgReferenceActive && (
-        <p className="text-xs text-muted-foreground">
-          학교 참조 이미지가 적용 중이어서 개인 참조 클립아트를 사용할 수 없어요.
-        </p>
-      )}
+      <ReferenceLibrarySection
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        variant="compact"
+      />
     </div>
   );
 }

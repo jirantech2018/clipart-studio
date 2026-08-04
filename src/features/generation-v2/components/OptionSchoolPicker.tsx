@@ -26,8 +26,6 @@ interface Props {
   orgSlug: string | null;
   orgReferenceId: string | null;
   disabled: boolean;
-  /** 개인 참조가 이미 적용 중이면 조직 참조는 상호배제로 선택 불가. */
-  personalReferenceActive: boolean;
   onOrgSlugChange: (slug: string | null) => void;
   onOrgReferenceIdChange: (id: string | null) => void;
 }
@@ -38,7 +36,6 @@ export function OptionSchoolPicker({
   orgSlug,
   orgReferenceId,
   disabled,
-  personalReferenceActive,
   onOrgSlugChange,
   onOrgReferenceIdChange,
 }: Props) {
@@ -55,7 +52,6 @@ export function OptionSchoolPicker({
   const currentValue = orgSlug ?? NONE_KEY;
   const orgRefList = orgRefs.data?.references ?? [];
   const orgRefCount = orgRefList.length;
-  const orgRefDisabled = disabled || personalReferenceActive;
 
   function handleSlugChange(next: string) {
     if (next === currentValue) return;
@@ -65,7 +61,8 @@ export function OptionSchoolPicker({
   }
 
   function handleOrgRefToggle(id: string) {
-    if (orgRefDisabled) return;
+    if (disabled) return;
+    // 상호배제(개인 참조 / chaining clear) 는 상위 handler 가 처리.
     onOrgReferenceIdChange(orgReferenceId === id ? null : id);
   }
 
@@ -134,7 +131,7 @@ export function OptionSchoolPicker({
                     <button
                       key={ref.id}
                       type="button"
-                      disabled={orgRefDisabled}
+                      disabled={disabled}
                       onClick={() => handleOrgRefToggle(ref.id)}
                       aria-pressed={active}
                       title={ref.filename ?? '조직 참조 이미지'}
@@ -143,7 +140,7 @@ export function OptionSchoolPicker({
                         active
                           ? 'border-primary ring-2 ring-primary/30'
                           : 'border-transparent hover:border-muted-foreground/40',
-                        orgRefDisabled && 'cursor-not-allowed opacity-50',
+                        disabled && 'cursor-not-allowed opacity-50',
                       )}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -157,11 +154,6 @@ export function OptionSchoolPicker({
                   );
                 })}
               </div>
-              {personalReferenceActive && (
-                <p className="text-muted-foreground">
-                  개인 참조 클립아트가 적용 중이어서 학교 참조 이미지는 선택할 수 없어요.
-                </p>
-              )}
             </div>
           )}
         </div>

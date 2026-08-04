@@ -57,8 +57,6 @@ export function OptionStep({
 
   const personalReferenceId = options.personalReferenceIds[0] ?? null;
   const orgReferenceId = options.orgReferenceIds[0] ?? null;
-  const personalActive = personalReferenceId !== null;
-  const orgReferenceActive = orgReferenceId !== null;
 
   // 선택된 참조 이미지 상단 요약 카드용 slot 정보. 하위 picker 들이 이미
   // 동일 훅을 호출하므로 React Query dedupe 로 추가 요청 없음.
@@ -210,7 +208,6 @@ export function OptionStep({
         value={personalReferenceId}
         onChange={handlePersonalReferenceChange}
         disabled={disabled}
-        orgReferenceActive={orgReferenceActive}
       />
 
       {/* 4. 학교 설정 */}
@@ -218,7 +215,6 @@ export function OptionStep({
         orgSlug={options.orgSlug}
         orgReferenceId={orgReferenceId}
         disabled={disabled}
-        personalReferenceActive={personalActive}
         onOrgSlugChange={handleOrgSlugChange}
         onOrgReferenceIdChange={handleOrgReferenceIdChange}
       />
