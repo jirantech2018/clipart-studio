@@ -414,6 +414,9 @@ export const useConversationStore = create<ConversationState>()(
             if (!plan.additionalRequest) {
               plan.additionalRequest = pickString('packageAdditionalRequest');
             }
+            if (!Array.isArray(plan.usageChannels)) {
+              plan.usageChannels = [];
+            }
             if (!plan.aiKeywords.length) {
               plan.aiKeywords = pickStrArray('packageAiKeywords');
             }

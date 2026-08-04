@@ -21,10 +21,12 @@ import {
 import {
   PACKAGE_ASPECT_RATIOS,
   PACKAGE_CATEGORIES,
+  USAGE_CHANNELS,
   type PackageAiItem,
   type PackageAspectRatio,
   type PackageCategory,
   type PackagePlanResponse,
+  type UsageChannel,
 } from '@/features/generation-v2/lib/packagePlanTypes';
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -46,8 +48,24 @@ interface Body {
   target?: unknown;
   styleTone?: unknown;
   additionalRequest?: unknown;
+  usageChannels?: unknown;
   userAddedKeywords?: unknown;
   userRemovedKeywords?: unknown;
+}
+
+function asUsageChannels(v: unknown): UsageChannel[] {
+  if (!Array.isArray(v)) return [];
+  const allowed = new Set<string>(USAGE_CHANNELS as ReadonlyArray<string>);
+  const seen = new Set<string>();
+  const out: UsageChannel[] = [];
+  for (const item of v) {
+    if (typeof item !== 'string') continue;
+    if (!allowed.has(item)) continue;
+    if (seen.has(item)) continue;
+    seen.add(item);
+    out.push(item as UsageChannel);
+  }
+  return out;
 }
 
 function asString(v: unknown, max = 200): string {
@@ -74,15 +92,23 @@ function systemPrompt(): string {
   return [
     'You are a Korean planning assistant for a school-focused AI clipart service.',
     'Given the user context (purpose / topic / target / style / additional request /',
-    'user-added keywords / user-removed keywords) plus a base template of items,',
-    'return a package plan the user can use to produce a set of related clipart.',
+    'usage channels the artwork will be placed on / user-added keywords /',
+    'user-removed keywords) plus a base template of items, return a package plan',
+    'the user can use to produce a set of related clipart.',
     '',
     'Rules:',
     '- Korean only for name / description / keywords / promptHint',
     '- Category MUST be one of: ' + PACKAGE_CATEGORIES.join(', '),
     '- Do NOT invent new category names',
     '- Prefer to reuse or adapt the items already provided in the base template',
-    '- You may add up to 2 additional items if the request clearly needs them',
+    '- Adapt the item list to the selected usage channels — for example, a',
+    '  "SNS" channel implies a square social card, "학교 홈페이지" implies a',
+    '  landscape banner, "포스터" implies a portrait poster, "리플렛" implies',
+    '  panel-style illustrations, "현수막" implies wide banners. Add channel-',
+    '  specific items when clearly needed and reflect the channel in name /',
+    '  aspectRatio / defaultQuantity / promptHint',
+    '- You may add up to 3 additional items when the channels or request',
+    '  clearly need them',
     '- Keep item name short (<= 12 characters)',
     '- Keep description short (<= 24 characters)',
     '- promptHint: short Korean phrase (<= 60 characters) describing what the',
@@ -117,6 +143,7 @@ function userPrompt(input: {
   target: string;
   styleTone: string;
   additionalRequest: string;
+  usageChannels: UsageChannel[];
   userAddedKeywords: string[];
   userRemovedKeywords: string[];
   baseTemplate: { keywords: string[]; items: PackageAiItem[] };
@@ -129,6 +156,7 @@ function userPrompt(input: {
         target: input.target,
         styleTone: input.styleTone,
         additionalRequest: input.additionalRequest,
+        usageChannels: input.usageChannels,
         userAddedKeywords: input.userAddedKeywords,
         userRemovedKeywords: input.userRemovedKeywords,
       },
@@ -266,6 +294,7 @@ export async function POST(request: Request) {
   const styleTone = asString(body.styleTone);
   const topicOrEvent = asString(body.topicOrEvent);
   const additionalRequest = asString(body.additionalRequest, 500);
+  const usageChannels = asUsageChannels(body.usageChannels);
   const userAddedKeywords = asStringArray(body.userAddedKeywords);
   const userRemovedKeywords = asStringArray(body.userRemovedKeywords);
 
@@ -298,6 +327,7 @@ export async function POST(request: Request) {
               target,
               styleTone,
               additionalRequest,
+              usageChannels,
               userAddedKeywords,
               userRemovedKeywords,
               baseTemplate: {

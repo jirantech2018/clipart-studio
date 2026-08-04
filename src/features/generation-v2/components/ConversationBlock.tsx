@@ -112,6 +112,7 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       target: packagePlanState.target,
       styleTone: packagePlanState.styleTone,
       additionalRequest: packagePlanState.additionalRequest,
+      usageChannels: packagePlanState.usageChannels,
       userAddedKeywords: packagePlanState.userAddedKeywords,
       userRemovedKeywords: packagePlanState.userRemovedKeywords,
     });

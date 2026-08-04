@@ -13,9 +13,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { PackageModeToggle } from '@/features/generation-v2/components/PackageModeToggle';
 import { selectVisibleKeywords } from '@/features/generation-v2/lib/mergePackagePlan';
+import {
+  USAGE_CHANNELS,
+  type PackagePlanState,
+  type UsageChannel,
+} from '@/features/generation-v2/lib/packagePlanTypes';
 import { cn } from '@/lib/utils';
-
-import type { PackagePlanState } from '@/features/generation-v2/lib/packagePlanTypes';
 
 interface Props {
   locked: boolean;
@@ -85,6 +88,15 @@ export function PackagePromptCard({
         userRemovedKeywords: [...plan.userRemovedKeywords, k],
       });
     }
+  }
+
+  function toggleUsageChannel(channel: UsageChannel) {
+    if (locked) return;
+    const has = plan.usageChannels.includes(channel);
+    const next = has
+      ? plan.usageChannels.filter((c) => c !== channel)
+      : [...plan.usageChannels, channel];
+    onPlanChange({ usageChannels: next });
   }
 
   function addKeyword() {
@@ -160,6 +172,38 @@ export function PackagePromptCard({
           placeholder="선택하세요"
           disabled={locked}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-primary">
+          활용 목적
+          <span className="ml-1 text-xs font-normal text-muted-foreground">
+            (복수 선택)
+          </span>
+        </Label>
+        <div className="flex flex-wrap gap-1.5">
+          {USAGE_CHANNELS.map((channel) => {
+            const active = plan.usageChannels.includes(channel);
+            return (
+              <button
+                key={channel}
+                type="button"
+                onClick={() => toggleUsageChannel(channel)}
+                disabled={locked}
+                aria-pressed={active}
+                className={cn(
+                  'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                  active
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground',
+                  locked && 'cursor-not-allowed opacity-50',
+                )}
+              >
+                {channel}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-2">
