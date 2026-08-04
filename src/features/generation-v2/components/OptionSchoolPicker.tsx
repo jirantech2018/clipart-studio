@@ -75,6 +75,9 @@ export function OptionSchoolPicker({
         <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
           <School className="h-3.5 w-3.5" aria-hidden="true" />
           <span>학교별 프롬프트 및 클립아트</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            (선택)
+          </span>
         </div>
         <select
           value={currentValue}

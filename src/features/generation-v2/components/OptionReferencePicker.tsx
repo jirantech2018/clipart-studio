@@ -36,6 +36,9 @@ export function OptionReferencePicker({
         <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
           <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
           <span>개인 참조 클립아트</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            (선택)
+          </span>
         </div>
         {value && !orgReferenceActive && (
           <span className="text-xs text-muted-foreground">1장 선택됨</span>

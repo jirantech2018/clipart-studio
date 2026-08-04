@@ -74,6 +74,9 @@ export function DiversityPromptList({
           <div className="space-y-0.5">
             <div className="text-sm font-semibold text-primary">
               클립아트마다 다르게 만들기
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                (선택)
+              </span>
             </div>
             <div className="text-xs text-muted-foreground">
               여러 장을 만들 때, 각 클립아트의 주제나 내용을 다르게 지정할 수 있어요.

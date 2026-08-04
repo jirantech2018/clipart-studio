@@ -115,9 +115,6 @@ export function ConversationSidebar({
               {projectedRemaining}
             </strong>
           </Row>
-          <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
-            실제 잔여는 생성이 완료된 후 서버 값으로 갱신돼요.
-          </p>
         </CardContent>
       </Card>
 
