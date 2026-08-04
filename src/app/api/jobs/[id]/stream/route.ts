@@ -7,6 +7,13 @@ export const runtime = 'nodejs';
 
 import { publicUrl } from '@/services/r2/upload';
 import { fetchReferenceImage, fetchReferenceImageByKey, runOne } from '@/services/image-gen/pipeline';
+import {
+  cancelPendingSlot,
+  claimSlot,
+  markSlotFailedAndRefund,
+  runPackageSlot,
+  slotFromRow,
+} from '@/services/image-gen/package-pipeline';
 import { refundCredits } from '@/services/credit';
 import {
   composeKnowledgePrompt,
@@ -18,7 +25,7 @@ import { createSupabaseServerClient, createSupabaseServiceClient } from '@/servi
 import type { ReferenceImage } from '@/services/image-gen';
 import type { KnowledgeMatch } from '@/services/knowledge';
 import type { StructuredPrompt } from '@/services/prompt-structuring';
-import type { GenerationJob, SchoolProfile } from '@/types/domain';
+import type { GenerationJob, PackageJobSlot, SchoolProfile } from '@/types/domain';
 
 const CHUNK_SIZE = 5;
 // Chunk 병렬 처리 중에는 image_ready 이벤트가 안 나가므로, 그 사이 프록시가
@@ -133,6 +140,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .from('generation_jobs')
     .update({ status: 'running' })
     .eq('id', job.id);
+
+  if (job.kind === 'package') {
+    return runPackageStream(job, schoolProfile, orgBasePrompt, service);
+  }
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -335,6 +346,246 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           controller.close();
         } catch {
           // Client already disconnected — ignore enqueue/close errors
+        }
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
+
+// ============================================================
+// Package stream — kind='package' 분기.
+// ============================================================
+function runPackageStream(
+  job: GenerationJob,
+  schoolProfile: SchoolProfile | null,
+  orgBasePrompt: string | null,
+  service: ReturnType<typeof createSupabaseServiceClient>,
+): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let succeeded = 0;
+      let failed = 0;
+      let fatal: Error | null = null;
+      const totalsByCategory: Record<string, { done: number; failed: number }> = {};
+
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(sseComment('keepalive'));
+        } catch {
+          // ignore
+        }
+      }, HEARTBEAT_INTERVAL_MS);
+
+      function bumpTotals(category: string, kind: 'done' | 'failed') {
+        const row = totalsByCategory[category] ?? { done: 0, failed: 0 };
+        row[kind] += 1;
+        totalsByCategory[category] = row;
+      }
+
+      try {
+        // Slot 목록 로드 — SSE 재접속 시에도 pending/running 만 남아 있음.
+        // 실제 실행 대상은 pending 만 (claim 성공 시). running/done/failed/canceled 는 skip.
+        const { data: slotRows, error: slotsErr } = await service
+          .from('generation_job_slots')
+          .select('*')
+          .eq('job_id', job.id)
+          .order('order', { ascending: true });
+        if (slotsErr || !slotRows) throw new Error('slot fetch failed');
+        const allSlots: PackageJobSlot[] = (slotRows as Record<string, unknown>[]).map(
+          slotFromRow,
+        );
+
+        // 재접속 시 이미 done 인 것들의 succeeded 카운트 복원 (통계 정확도).
+        for (const s of allSlots) {
+          if (s.status === 'done') {
+            succeeded += 1;
+            bumpTotals(s.category, 'done');
+          } else if (s.status === 'failed' || s.status === 'canceled') {
+            failed += 1;
+            bumpTotals(s.category, 'failed');
+          }
+        }
+
+        const CHUNK = 5;
+        const claimable = allSlots.filter((s) => s.status === 'pending');
+        const chunkCount = Math.ceil(claimable.length / CHUNK);
+
+        for (let chunk = 0; chunk < chunkCount; chunk += 1) {
+          // 취소 감지.
+          const { data: statusRow } = await service
+            .from('generation_jobs')
+            .select('status')
+            .eq('id', job.id)
+            .single();
+          if ((statusRow as { status: string } | null)?.status === 'canceled') {
+            break;
+          }
+
+          const chunkStart = chunk * CHUNK;
+          const chunkEnd = Math.min(chunkStart + CHUNK, claimable.length);
+          const chunkSlots = claimable.slice(chunkStart, chunkEnd);
+
+          // 각 slot 원자적 claim 후 병렬 실행.
+          const results = await Promise.allSettled(
+            chunkSlots.map(async (slotHint) => {
+              const claimed = await claimSlot(slotHint.id);
+              if (!claimed) {
+                return {
+                  slotId: slotHint.id,
+                  order: slotHint.order,
+                  category: slotHint.category,
+                  name: slotHint.name,
+                  skipped: true as const,
+                };
+              }
+              try {
+                const result = await runPackageSlot({
+                  job,
+                  slot: claimed,
+                  schoolProfile,
+                  orgBasePrompt,
+                });
+                return { ...result, skipped: false as const };
+              } catch (err) {
+                const message =
+                  err instanceof Error ? err.message : 'unknown error';
+                await markSlotFailedAndRefund(claimed, job.userId, message);
+                return {
+                  slotId: claimed.id,
+                  order: claimed.order,
+                  category: claimed.category,
+                  name: claimed.name,
+                  status: 'failed' as const,
+                  error: message,
+                  skipped: false as const,
+                };
+              }
+            }),
+          );
+
+          for (const settled of results) {
+            if (settled.status !== 'fulfilled') {
+              // 이 브랜치는 markSlotFailedAndRefund 도 실패한 극단 케이스.
+              const err = settled.reason as Error;
+              console.error(
+                `[package-stream/${job.id}] settled rejected:`,
+                err?.stack ?? err,
+              );
+              continue;
+            }
+            const r = settled.value;
+            if (r.skipped) continue;
+            if (r.status === 'done' && r.imageId && r.r2Key) {
+              succeeded += 1;
+              bumpTotals(r.category, 'done');
+              controller.enqueue(
+                sseEvent('image_ready', {
+                  imageId: r.imageId,
+                  thumbnailUrl: publicUrl(r.r2Key),
+                  order: r.order,
+                  slotId: r.slotId,
+                  category: r.category,
+                  name: r.name,
+                }),
+              );
+            } else if (r.status === 'failed') {
+              failed += 1;
+              bumpTotals(r.category, 'failed');
+              controller.enqueue(
+                sseEvent('chunk_failed', {
+                  order: r.order,
+                  error: r.error ?? 'unknown',
+                  refundedCredits: 1,
+                  slotId: r.slotId,
+                  category: r.category,
+                  name: r.name,
+                }),
+              );
+            }
+          }
+        }
+      } catch (err) {
+        fatal = err as Error;
+        console.error(`[package-stream/${job.id}] fatal error:`, fatal?.stack ?? fatal);
+      } finally {
+        clearInterval(heartbeat);
+
+        // 남은 pending slot 은 canceled 로 마킹 + 환불 (fatal 이든 정상 종료든).
+        const { data: pendingRows } = await service
+          .from('generation_job_slots')
+          .select('id')
+          .eq('job_id', job.id)
+          .eq('status', 'pending');
+        if (pendingRows) {
+          for (const row of pendingRows as { id: string }[]) {
+            const { canceled } = await cancelPendingSlot(row.id, job.userId);
+            if (canceled) {
+              failed += 1;
+            }
+          }
+        }
+
+        // 최종 job status 결정.
+        const { data: preStatusRow } = await service
+          .from('generation_jobs')
+          .select('status')
+          .eq('id', job.id)
+          .single();
+        const wasCanceled =
+          (preStatusRow as { status: string } | null)?.status === 'canceled';
+
+        const finalStatus = wasCanceled
+          ? 'canceled'
+          : fatal
+            ? 'failed'
+            : failed === 0
+              ? 'done'
+              : succeeded === 0
+                ? 'failed'
+                : 'partial';
+
+        const { data: finalProfile } = await service
+          .from('profiles')
+          .select('credits')
+          .eq('id', job.userId)
+          .single();
+
+        await service
+          .from('generation_jobs')
+          .update({
+            status: finalStatus,
+            refunded_credits: failed,
+            error: fatal?.message ?? null,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
+
+        try {
+          controller.enqueue(
+            sseEvent('done', {
+              jobId: job.id,
+              completed: succeeded,
+              failed,
+              refundedCredits: failed,
+              finalRemainingCredits: finalProfile?.credits ?? null,
+              canceled: wasCanceled,
+              kind: 'package' as const,
+              totals: { byCategory: totalsByCategory },
+            }),
+          );
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          controller.close();
+        } catch {
+          // client disconnected
         }
       }
     },
