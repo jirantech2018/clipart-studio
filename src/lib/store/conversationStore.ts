@@ -115,7 +115,7 @@ interface ConversationState {
 
 // ============ Helpers ============
 
-const DEFAULT_BATCH_SIZE = 5;
+const DEFAULT_BATCH_SIZE = 1;
 
 const DEFAULT_OPTIONS: BlockOptions = {
   batchSize: DEFAULT_BATCH_SIZE,

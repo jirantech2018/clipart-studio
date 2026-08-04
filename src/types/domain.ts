@@ -256,7 +256,7 @@ export type AspectRatio = 'square' | 'landscape' | 'portrait';
 export const ASPECT_RATIOS = ['square', 'landscape', 'portrait'] as const;
 
 export const ASPECT_RATIO_LABELS: Record<AspectRatio, string> = {
-  square: '정사각',
+  square: '정사각형',
   landscape: '가로형',
   portrait: '세로형',
 };
