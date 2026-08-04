@@ -25,6 +25,7 @@ import { PackageOptionCard } from '@/features/generation-v2/components/PackageOp
 import { PackagePromptCard } from '@/features/generation-v2/components/PackagePromptCard';
 import { PromptStep } from '@/features/generation-v2/components/PromptStep';
 import { useConversationJobStream } from '@/features/generation-v2/hooks/useConversationJobStream';
+import { usePackageJobRehydrate } from '@/features/generation-v2/hooks/usePackageJobRehydrate';
 import { usePackagePlan } from '@/features/generation-v2/hooks/usePackagePlan';
 import { mergePackagePlan } from '@/features/generation-v2/lib/mergePackagePlan';
 import {
@@ -109,6 +110,18 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       convId,
       blockId: block.id,
       jobId: isInFlight ? block.jobId : null,
+    });
+
+    // Package Job 재진입 복구. Mount 시 packageMode 이면서 status 가
+    // unknown/queued/generating 이면 서버에 실제 Job + Slot 상태를 1회 조회.
+    // Fetch 결과가 queued/running 이면 위의 SSE 훅이 이어서 실시간을 담당.
+    // Single Job 은 packageMode=false 이므로 훅 내부에서 no-op.
+    usePackageJobRehydrate({
+      convId,
+      blockId: block.id,
+      jobId: block.jobId,
+      packageMode: block.options.packageMode,
+      currentStatus: block.status,
     });
 
     // 패키지 모드 AI 추천. usePackagePlan 은 required 필드 없으면 enabled false.

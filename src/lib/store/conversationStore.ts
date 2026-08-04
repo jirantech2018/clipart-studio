@@ -136,6 +136,21 @@ interface ConversationState {
   markBlockCompleted: (convId: string, blockId: string) => void;
   markBlockFailed: (convId: string, blockId: string, message: string) => void;
 
+  /** 서버 재조회 결과로 Block 상태 · 이미지 목록을 통째로 대체. Package job
+   *  재진입 복구에서 사용. SSE 가 이미 진행 중인 상태와 충돌하지 않도록
+   *  호출자 (hook) 가 status 판단을 완료한 뒤 넘겨준다. */
+  applyServerJobState: (
+    convId: string,
+    blockId: string,
+    payload: {
+      status: BlockStatus;
+      jobId: string | null;
+      succeeded: CompletedImage[];
+      failed: FailedSlot[];
+      errorMessage: string | null;
+    },
+  ) => void;
+
   reset: () => void;
 }
 
@@ -347,6 +362,18 @@ export const useConversationStore = create<ConversationState>()(
             ...b,
             status: 'failed',
             errorMessage: message,
+          })),
+        ),
+
+      applyServerJobState: (convId, blockId, payload) =>
+        set((state) =>
+          patchBlock(state, convId, blockId, (b) => ({
+            ...b,
+            status: payload.status,
+            jobId: payload.jobId,
+            succeeded: payload.succeeded,
+            failed: payload.failed,
+            errorMessage: payload.errorMessage,
           })),
         ),
 
