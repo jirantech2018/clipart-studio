@@ -38,7 +38,7 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
   {
     Icon: PenLine,
     title: '직접 만들기',
-    subtitle: '프롬프트로 클립아트 만들기',
+    subtitle: '직접 글로 적어서 만들기',
     description:
       '원하는 내용을 자유롭게 입력하면 AI가 새로운 클립아트를 만들어드립니다.',
     exampleImage: '/generate-v2_intro_01.png',
@@ -51,7 +51,7 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
   {
     Icon: ImageIcon,
     title: '참고 이미지 활용하기',
-    subtitle: '참조 이미지로 클립아트 만들기',
+    subtitle: '참조 이미지 이용하여 만들기',
     description:
       '내가 등록한 참고 이미지나 학교·기관의 기본 이미지를 바탕으로 비슷한 스타일의 클립아트를 생성합니다.',
     exampleImage: '/generate-v2_intro_02.png',
@@ -64,7 +64,7 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
   {
     Icon: Files,
     title: '기존 클립아트 활용하기',
-    subtitle: '라이브러리 클립아트로 만들기',
+    subtitle: '라이브러리 이용하여 만들기',
     description:
       '내가 만든 클립아트나 공유 라이브러리의 클립아트를 선택해 새로운 클립아트로 확장합니다.',
     exampleImage: '/generate-v2_intro_03.png',
@@ -77,7 +77,7 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
   {
     Icon: Gift,
     title: '테마 패키지 만들기',
-    subtitle: '테마별(목적별) 패키지 생성하기',
+    subtitle: '테마별(목적별) 패키지 생성',
     description:
       '행사나 수업 주제를 선택하면 포스터, 아이콘, 삽화 등 필요한 클립아트를 한 번에 생성합니다.',
     exampleImage: '/generate-v2_intro_04.png',
