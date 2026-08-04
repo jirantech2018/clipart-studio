@@ -65,7 +65,15 @@ export function ConversationSidebar({
   const insufficient = credits < currentDraftBatchSize;
 
   return (
-    <aside className="hidden w-[280px] shrink-0 flex-col gap-3 lg:flex">
+    <aside
+      className={cn(
+        'hidden w-[280px] shrink-0 flex-col gap-2',
+        // 스크롤 시에도 화면 우측에 고정. top 값은 AppHeader (h-14=56px) 아래
+        // + 여백 24px 을 감안해 80px. max-h 로 화면을 벗어나지 않게 하고
+        // overflow-hidden 으로 넘친 히스토리 항목은 그대로 잘려 보이도록 한다.
+        'lg:sticky lg:top-20 lg:flex lg:max-h-[calc(100vh-6rem)] lg:overflow-hidden',
+      )}
+    >
       <Button
         type="button"
         onClick={onNewConversation}
@@ -125,7 +133,7 @@ export function ConversationSidebar({
               아직 저장된 대화가 없어요.
             </p>
           ) : (
-            <ul className="space-y-0.5">
+            <ul>
               {historyList.map((c: Conversation) => {
                 const active = currentId === c.id;
                 return (
@@ -134,7 +142,7 @@ export function ConversationSidebar({
                       type="button"
                       onClick={() => onOpenConversation(c.id)}
                       className={cn(
-                        'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+                        'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left transition-colors',
                         active
                           ? 'bg-accent font-medium text-primary'
                           : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
