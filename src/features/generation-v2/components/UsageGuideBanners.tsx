@@ -92,14 +92,10 @@ const GUIDE_ITEMS: ReadonlyArray<GuideItem> = [
 export function UsageGuideBanners() {
   return (
     <div className="space-y-6">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-semibold text-foreground">
-          4가지 방법으로 클립아트를 만들어보세요!
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          원하는 방식으로 쉽고 빠르게 나만의 클립아트를 생성할 수 있습니다.
-        </p>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        수업자료, 학급운영, 학교행사까지 4가지 원하는 방식으로 쉽고 빠르게 AI가
+        학교에 맞는 클립아트를 만들어 드립니다
+      </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {GUIDE_ITEMS.map((item) => (
