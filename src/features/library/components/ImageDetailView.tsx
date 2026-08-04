@@ -296,7 +296,7 @@ export function ImageDetailView({ id }: { id: string }) {
 
           <div className="space-y-2 pt-2">
             <Link
-              href={`/generate?parent=${image.id}`}
+              href={`/generate-v2?parent=${image.id}`}
               className={cn(buttonVariants({ size: 'default' }), 'w-full')}
             >
               <Sparkles className="mr-1 h-4 w-4" />이 이미지로 다시 만들기

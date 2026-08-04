@@ -110,8 +110,25 @@ export function OptionStep({
         <h3 className="text-base font-semibold">생성 옵션</h3>
       </header>
 
-      {/* 상단 요약: 개인 또는 조직 참조 이미지가 선택되어 있으면 /generate 와
-          동일한 카드 UI 로 노출. 두 종류는 상호배제라 동시 렌더되지 않음. */}
+      {/* 상단 요약: chaining (이 이미지로 다시 만들기) 이 있으면 최우선.
+          그 외엔 개인 또는 조직 참조 이미지가 선택되어 있으면 카드 UI 로 노출. */}
+      {options.parentImageId && options.parentImageThumbnailUrl && (
+        <SelectedReferenceCard
+          thumbnailUrl={options.parentImageThumbnailUrl}
+          label="이 이미지로 다시 만들기"
+          description={options.parentImagePrompt}
+          linkHref={`/image/${options.parentImageId}`}
+          linkLabel="원본 상세 보기"
+          onClear={() =>
+            onChange({
+              parentImageId: null,
+              parentImageThumbnailUrl: null,
+              parentImagePrompt: null,
+            })
+          }
+          disabled={disabled}
+        />
+      )}
       {selectedPersonalSlot && (
         <SelectedReferenceCard
           thumbnailUrl={selectedPersonalSlot.url}

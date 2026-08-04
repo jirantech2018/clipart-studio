@@ -109,16 +109,19 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       setSubmitting(true);
       try {
         const trimmed = block.prompt.trim();
+        const parentRef = block.options.parentImageId;
         const personalRef = block.options.personalReferenceIds[0] ?? null;
         const orgRef = block.options.orgReferenceIds[0] ?? null;
         const parsed = createJobSchema.safeParse({
           prompt: trimmed,
           batchSize: block.options.batchSize,
           diversityLevel: 0,
-          referenceImageId: personalRef,
+          // chaining 진입 (parent) 이 있으면 그 이미지를 참조로. 아니면 개인
+          // 참조 slot 사용.
+          referenceImageId: parentRef ?? personalRef,
           customReferenceId: null,
           schoolProfileApplied: block.options.schoolProfileApplied,
-          generationMode: 'text2img',
+          generationMode: parentRef || personalRef || orgRef ? 'img2img' : 'text2img',
           aspectRatio: block.options.aspectRatio,
           orgSlug: block.options.orgSlug,
           orgReferenceId: orgRef,

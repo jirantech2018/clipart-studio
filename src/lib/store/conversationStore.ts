@@ -41,6 +41,11 @@ export interface BlockOptions {
   /** 이미지별 추가 프롬프트. 길이는 batchSize 와 정합되어야 하며,
    *  addBlock / updateOptions / rehydrate 각 지점에서 자동 리사이즈된다. */
   slotPrompts: string[];
+  /** Chaining (이미지→이미지) — 이 이미지로 다시 만들기 진입 시 세팅.
+   *  세 필드 모두 함께 세팅되거나 함께 null. */
+  parentImageId: string | null;
+  parentImageThumbnailUrl: string | null;
+  parentImagePrompt: string | null;
 }
 
 export interface CompletedImage {
@@ -126,6 +131,9 @@ const DEFAULT_OPTIONS: BlockOptions = {
   orgSlug: null,
   diversityCustomOn: false,
   slotPrompts: Array.from({ length: DEFAULT_BATCH_SIZE }, () => ''),
+  parentImageId: null,
+  parentImageThumbnailUrl: null,
+  parentImagePrompt: null,
 };
 
 function uid(): string {
@@ -349,6 +357,14 @@ export const useConversationStore = create<ConversationState>()(
                 : DEFAULT_BATCH_SIZE;
             if (opts.slotPrompts.length !== batchSize) {
               opts.slotPrompts = resizeSlotPrompts(opts.slotPrompts, batchSize);
+            }
+            // Chaining 신규 필드 — 예전 저장본에는 없다.
+            if (opts.parentImageId === undefined) opts.parentImageId = null;
+            if (opts.parentImageThumbnailUrl === undefined) {
+              opts.parentImageThumbnailUrl = null;
+            }
+            if (opts.parentImagePrompt === undefined) {
+              opts.parentImagePrompt = null;
             }
           });
         });

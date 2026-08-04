@@ -18,6 +18,7 @@
 //   4) 첫 실제 생성 시점에 conversation title 확정
 
 import { ChevronDown, HelpCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ConversationBlock } from '@/features/generation-v2/components/ConversationBlock';
@@ -27,11 +28,19 @@ import { useAuthStore } from '@/lib/store/authStore';
 import { useConversationStore } from '@/lib/store/conversationStore';
 import { cn } from '@/lib/utils';
 
-interface Props {
-  initialCredits: number;
+interface ParentImage {
+  id: string;
+  prompt: string;
+  thumbnailUrl: string;
 }
 
-export function GenerateV2Client({ initialCredits }: Props) {
+interface Props {
+  initialCredits: number;
+  parent?: ParentImage | null;
+}
+
+export function GenerateV2Client({ initialCredits, parent }: Props) {
+  const router = useRouter();
   const currentId = useConversationStore((s) => s.currentId);
   const conversations = useConversationStore((s) => s.conversations);
   const createConversation = useConversationStore((s) => s.createConversation);
@@ -40,6 +49,7 @@ export function GenerateV2Client({ initialCredits }: Props) {
   );
   const removeEmpty = useConversationStore((s) => s.removeEmptyConversation);
   const addBlock = useConversationStore((s) => s.addBlock);
+  const updateOptions = useConversationStore((s) => s.updateBlockOptions);
   const confirmTitle = useConversationStore((s) => s.confirmConversationTitle);
 
   const storeCredits = useAuthStore((s) => s.profile?.credits);
@@ -87,6 +97,37 @@ export function GenerateV2Client({ initialCredits }: Props) {
     if (!lastBlock || lastBlock.status !== 'draft') return;
     lastRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [lastBlock?.id, lastBlock?.status]);
+
+  // ?parent=<image_id> 로 진입 시 (이 이미지로 다시 만들기) chaining 정보를
+  // 현재 활성 draft 에 세팅한다. draft 가 없거나 잠긴 상태면 새 draft 를
+  // seed 로 추가. 세팅 후에는 URL 을 비워 중복 적용을 막는다.
+  useEffect(() => {
+    if (!parent || !conv) return;
+    const targetBlock =
+      lastBlock && lastBlock.status === 'draft' && !activeJobExists
+        ? lastBlock
+        : null;
+    if (targetBlock) {
+      updateOptions(conv.id, targetBlock.id, {
+        parentImageId: parent.id,
+        parentImageThumbnailUrl: parent.thumbnailUrl,
+        parentImagePrompt: parent.prompt,
+        // chaining 시 개인 참조는 상호배제 대상 (기존 /generate 정책).
+        personalReferenceIds: [],
+      });
+    } else {
+      addBlock(conv.id, {
+        parentImageId: parent.id,
+        parentImageThumbnailUrl: parent.thumbnailUrl,
+        parentImagePrompt: parent.prompt,
+        personalReferenceIds: [],
+      });
+    }
+    router.replace('/generate-v2');
+    // parent 는 URL 진입 시 한 번만 적용. conv/lastBlock 변경에 재발화하면
+    // replace 로 인한 재-render 루프 발생 가능 → parent.id 만 dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parent?.id]);
 
   function handleNewConversation() {
     if (activeJobExists) {
