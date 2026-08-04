@@ -8,9 +8,10 @@
 //   queued/generating             → GeneratingStep (AI 응답 카드)
 //   completed / failed / unknown  → 각 응답 카드
 //
-// Phase 1: 패키지 모드는 실제 생성 파이프라인이 없다. PackageOptionCard 의
-// CTA 는 항상 disabled 이며 /api/jobs 호출 없음. handleSubmit 도 packageMode
-// 진입 시 early return.
+// Phase 2: packageMode 도 실제 파이프라인에 연결됨. PackageOptionCard 의 CTA
+// 는 canSubmitPackage + credit 여유 + activeJob 없음을 만족하면 submitPackage
+// 로 /api/jobs (kind='package') 호출 후 useConversationJobStream 이 SSE 를
+// 구독한다.
 
 import { AlertTriangle, HelpCircle } from 'lucide-react';
 import { forwardRef, useEffect, useState } from 'react';
@@ -26,6 +27,12 @@ import { PromptStep } from '@/features/generation-v2/components/PromptStep';
 import { useConversationJobStream } from '@/features/generation-v2/hooks/useConversationJobStream';
 import { usePackagePlan } from '@/features/generation-v2/hooks/usePackagePlan';
 import { mergePackagePlan } from '@/features/generation-v2/lib/mergePackagePlan';
+import {
+  PackageSubmitError,
+  canSubmitPackage,
+  computePackageTotalSlots,
+  submitPackage,
+} from '@/features/generation-v2/lib/packageSubmit';
 import {
   messageForIssue,
   validateBlockSubmission,
@@ -150,7 +157,7 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       // 이중 방어: UI 는 이미 disable 되지만 빠른 연속 클릭/Enter 반복도 여기서 차단.
       if (submitting || locked) return;
       if (issue !== null) return;
-      // Phase 1 안전 장치: packageMode 인 draft 는 절대 /api/jobs 호출 X.
+      // packageMode 는 별도 handler.
       if (block.options.packageMode) return;
 
       setSubmitting(true);
@@ -185,6 +192,46 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
         onFirstGenerationStart(trimmed);
       } catch (err) {
         const message = err instanceof Error ? err.message : '생성 요청 실패';
+        toast.error(message);
+        markFailed(convId, block.id, message);
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
+    async function handlePackageSubmit() {
+      if (submitting || locked) return;
+      if (!canSubmitPackage(packagePlanState)) {
+        toast.error('목적·대상·스타일과 최소 1장을 입력해주세요.');
+        return;
+      }
+      const totalSlots = computePackageTotalSlots(packagePlanState);
+      if (credits < totalSlots) {
+        toast.error(
+          `크레딧이 부족해요. (필요: ${totalSlots}, 보유: ${credits})`,
+        );
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const result = await submitPackage(packagePlanState);
+        markQueued(convId, block.id, result.jobId);
+        // 대화 제목은 목적 + 주제 조합. 주제가 없으면 목적만.
+        const titleSeed =
+          [
+            packagePlanState.purpose.trim(),
+            packagePlanState.topicOrEvent.trim(),
+          ]
+            .filter(Boolean)
+            .join(' · ') || '패키지 생성';
+        onFirstGenerationStart(titleSeed);
+      } catch (err) {
+        const message =
+          err instanceof PackageSubmitError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : '패키지 생성 요청 실패';
         toast.error(message);
         markFailed(convId, block.id, message);
       } finally {
@@ -250,6 +297,7 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
               }
               isRecommendationLoading={plan.isFetching}
               isRecommendationAuto={plan.data !== undefined}
+              onSubmit={handlePackageSubmit}
             />
           ) : (
             <OptionStep

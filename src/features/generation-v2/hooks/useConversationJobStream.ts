@@ -16,12 +16,19 @@ interface ImageReadyEvent {
   imageId: string;
   thumbnailUrl: string;
   order: number;
+  // Phase 2 — package job 에서만 채워지는 optional slot metadata.
+  slotId?: string;
+  category?: string;
+  name?: string;
 }
 
 interface ChunkFailedEvent {
   order: number;
   error: string;
   refundedCredits: number;
+  slotId?: string;
+  category?: string;
+  name?: string;
 }
 
 interface DoneEvent {
@@ -31,6 +38,10 @@ interface DoneEvent {
   refundedCredits: number;
   finalRemainingCredits: number | null;
   canceled?: boolean;
+  kind?: 'single' | 'package';
+  totals?: {
+    byCategory: Record<string, { done: number; failed: number }>;
+  };
 }
 
 interface Params {
@@ -62,6 +73,9 @@ export function useConversationJobStream({ convId, blockId, jobId }: Params) {
         imageId: data.imageId,
         thumbnailUrl: data.thumbnailUrl,
         order: data.order,
+        slotId: data.slotId,
+        category: data.category,
+        name: data.name,
       });
     });
 

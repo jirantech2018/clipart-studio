@@ -65,6 +65,10 @@ export interface CompletedImage {
   imageId: string;
   order: number;
   thumbnailUrl: string;
+  // Phase 2 — package job 에서만 채워진다. single job 은 undefined.
+  slotId?: string;
+  category?: string;
+  name?: string;
 }
 
 export interface FailedSlot {
