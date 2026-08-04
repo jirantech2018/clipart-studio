@@ -10,6 +10,7 @@
 // 는 별도의 disabled/안내 문구 없이 항상 슬롯을 선택 가능한 상태로 노출한다.
 
 import { ImageIcon } from 'lucide-react';
+import Link from 'next/link';
 
 import { ReferenceLibrarySection } from '@/features/references/components/ReferenceLibrarySection';
 
@@ -22,7 +23,7 @@ interface Props {
 export function OptionReferencePicker({ value, onChange, disabled }: Props) {
   return (
     <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
           <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
           <span>개인 참조 클립아트</span>
@@ -30,9 +31,12 @@ export function OptionReferencePicker({ value, onChange, disabled }: Props) {
             (선택)
           </span>
         </div>
-        {value && (
-          <span className="text-xs text-muted-foreground">1장 선택됨</span>
-        )}
+        <Link
+          href="/profile"
+          className="text-xs text-primary underline-offset-4 hover:underline"
+        >
+          개인 설정 →
+        </Link>
       </div>
 
       <ReferenceLibrarySection
