@@ -120,17 +120,20 @@ export function GenerateV2Client({ initialCredits }: Props) {
           <h1 className="text-2xl font-semibold tracking-tight">
             학교에 필요한 클립아트를 AI와 함께 만들어보세요.
           </h1>
-          <p className="text-xs text-muted-foreground">
-            수업자료, 학급운영, 학교행사까지 4가지 원하는 방식으로 쉽고 빠르게
-            AI가 학교에 맞는 클립아트를 만들어 드립니다
-          </p>
-          <div className="flex justify-end">
+          {/* 부제 + 사용 가이드 버튼:
+              - 모바일 (default): 세로 스택. 부제 위, 버튼은 self-end 로 우측
+              - PC (sm+): 가로 한 줄. 부제 좌측, 버튼 우측 (justify-between) */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <p className="text-xs text-muted-foreground">
+              수업자료, 학급운영, 학교행사까지 4가지 원하는 방식으로 쉽고 빠르게
+              AI가 학교에 맞는 클립아트를 만들어 드립니다
+            </p>
             <button
               type="button"
               onClick={() => setGuideOpen((v) => !v)}
               aria-expanded={guideOpen}
               aria-controls="usage-guide-banners"
-              className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition-opacity hover:opacity-80"
+              className="inline-flex shrink-0 items-center gap-1 self-end text-sm font-medium text-primary transition-opacity hover:opacity-80 sm:self-auto"
             >
               <HelpCircle className="h-4 w-4" aria-hidden="true" />
               <span>사용 가이드</span>
