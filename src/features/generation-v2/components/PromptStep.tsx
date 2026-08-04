@@ -31,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DiversityPromptList } from '@/features/generation/components/DiversityPromptList';
 import { PresetChips } from '@/features/generation/components/PresetChips';
 import { usePromptSuggestions } from '@/features/generation/hooks/usePromptSuggestions';
+import { PackageModeToggle } from '@/features/generation-v2/components/PackageModeToggle';
 import { cn } from '@/lib/utils';
 
 interface PromptStepProps {
@@ -44,6 +45,9 @@ interface PromptStepProps {
   slotPrompts: readonly string[];
   onSlotPromptsChange: (next: string[]) => void;
   batchSize: number;
+  // 패키지 모드 토글 (헤더 우측 배치).
+  packageMode: boolean;
+  onPackageModeChange: (next: boolean) => void;
 }
 
 export function PromptStep({
@@ -56,17 +60,26 @@ export function PromptStep({
   slotPrompts,
   onSlotPromptsChange,
   batchSize,
+  packageMode,
+  onPackageModeChange,
 }: PromptStepProps) {
   const suggestions = usePromptSuggestions(prompt);
   const hints = suggestions.data?.suggestions ?? [];
 
   return (
     <section className="card flex h-full flex-col gap-3 p-5">
-      <header className="flex items-center gap-2">
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-          1
-        </span>
-        <h3 className="text-base font-semibold">어떤 클립아트를 만들까요?</h3>
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            1
+          </span>
+          <h3 className="text-base font-semibold">어떤 클립아트를 만들까요?</h3>
+        </div>
+        <PackageModeToggle
+          checked={packageMode}
+          onChange={onPackageModeChange}
+          disabled={locked}
+        />
       </header>
 
       <div className="flex flex-col gap-1">

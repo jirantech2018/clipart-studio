@@ -1,28 +1,31 @@
 'use client';
 
 // Conversation 안의 개별 Block 오케스트레이터.
-// 상태(status) 에 따라 4개 Step 을 조합해 렌더한다.
+// 상태(status) + packageMode 조합에 따라 상단 카드 두 장을 조합해 렌더한다.
 //
-//   draft      → PromptStep(edit) + OptionStep(edit + submit)
-//   queued     → PromptStep(ro)   + OptionStep(ro) + GeneratingStep
-//   generating → PromptStep(ro)   + OptionStep(ro) + GeneratingStep
-//   completed  → PromptStep(ro)   + OptionStep(ro) + CompletedStep
-//   failed     → PromptStep(ro)   + OptionStep(ro) + Failure banner
-//   unknown    → PromptStep(ro)   + OptionStep(ro) + "상태 확인 필요" 안내
+//   packageMode=false, draft      → PromptStep + OptionStep
+//   packageMode=true,  draft      → PackagePromptCard + PackageOptionCard
+//   queued/generating             → GeneratingStep (AI 응답 카드)
+//   completed / failed / unknown  → 각 응답 카드
 //
-// activeJobExists = 이 conversation 내 다른 Block 이 실행 중.
-//   true 인 draft Block 은 submit 을 disable (동시 Job 1개 제한).
+// Phase 1: 패키지 모드는 실제 생성 파이프라인이 없다. PackageOptionCard 의
+// CTA 는 항상 disabled 이며 /api/jobs 호출 없음. handleSubmit 도 packageMode
+// 진입 시 early return.
 
 import { AlertTriangle, HelpCircle } from 'lucide-react';
-import { forwardRef, useState } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AiResponseBubble } from '@/features/generation-v2/components/AiResponseBubble';
 import { CompletedStep } from '@/features/generation-v2/components/CompletedStep';
 import { GeneratingStep } from '@/features/generation-v2/components/GeneratingStep';
 import { OptionStep } from '@/features/generation-v2/components/OptionStep';
+import { PackageOptionCard } from '@/features/generation-v2/components/PackageOptionCard';
+import { PackagePromptCard } from '@/features/generation-v2/components/PackagePromptCard';
 import { PromptStep } from '@/features/generation-v2/components/PromptStep';
 import { useConversationJobStream } from '@/features/generation-v2/hooks/useConversationJobStream';
+import { usePackagePlan } from '@/features/generation-v2/hooks/usePackagePlan';
+import { mergePackagePlan } from '@/features/generation-v2/lib/mergePackagePlan';
 import {
   messageForIssue,
   validateBlockSubmission,
@@ -101,10 +104,45 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       jobId: isInFlight ? block.jobId : null,
     });
 
+    // 패키지 모드 AI 추천. usePackagePlan 은 required 필드 없으면 enabled false.
+    const plan = usePackagePlan({
+      purpose: block.options.packagePurpose,
+      topicOrEvent: block.options.packageTopic,
+      target: block.options.packageTarget,
+      styleTone: block.options.packageStyleTone,
+      additionalRequest: block.options.packageAdditionalRequest,
+      userAddedKeywords: block.options.packageUserAddedKeywords,
+      userRemovedKeywords: block.options.packageUserRemovedKeywords,
+    });
+
+    // AI 응답 도착 시 사용자 편집 보호 병합 후 store 반영.
+    // dependency 는 plan.data 참조만 — react-query 가 dedupe 하므로 무한 루프 X.
+    useEffect(() => {
+      const data = plan.data;
+      if (!data) return;
+      if (!block.options.packageMode) return;
+      const merged = mergePackagePlan(block.options, data);
+      // Idempotent: 동일 결과면 patch 안 함.
+      const same =
+        JSON.stringify(merged.packageAiKeywords) ===
+          JSON.stringify(block.options.packageAiKeywords) &&
+        JSON.stringify(merged.packageAiItems) ===
+          JSON.stringify(block.options.packageAiItems) &&
+        JSON.stringify(merged.packageItemState) ===
+          JSON.stringify(block.options.packageItemState) &&
+        JSON.stringify(merged.packageUserModifiedItemIds) ===
+          JSON.stringify(block.options.packageUserModifiedItemIds);
+      if (same) return;
+      updateOptions(convId, block.id, merged);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [plan.data]);
+
     async function handleSubmit() {
       // 이중 방어: UI 는 이미 disable 되지만 빠른 연속 클릭/Enter 반복도 여기서 차단.
       if (submitting || locked) return;
       if (issue !== null) return;
+      // Phase 1 안전 장치: packageMode 인 draft 는 절대 /api/jobs 호출 X.
+      if (block.options.packageMode) return;
 
       setSubmitting(true);
       try {
@@ -116,8 +154,6 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           prompt: trimmed,
           batchSize: block.options.batchSize,
           diversityLevel: 0,
-          // chaining 진입 (parent) 이 있으면 그 이미지를 참조로. 아니면 개인
-          // 참조 slot 사용.
           referenceImageId: parentRef ?? personalRef,
           customReferenceId: null,
           schoolProfileApplied: block.options.schoolProfileApplied,
@@ -147,6 +183,8 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       }
     }
 
+    const packageMode = block.options.packageMode;
+
     return (
       <article
         ref={ref}
@@ -154,41 +192,104 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
         // 배경 위에 개별 카드로 놓이도록 함 (사용자 요청 반영).
         className="space-y-4 animate-fade-in-up"
       >
-        {/* Draft Block 상단: 좌(Prompt 60%) / 우(Option 40%). md 미만에서는
-            자동으로 세로 stack. Prompt 는 textarea 가 자유롭게 늘어나야 해서
-            높이 균등을 위해 items-stretch 적용. */}
         <div className="grid gap-4 md:grid-cols-[3fr_2fr] md:items-stretch">
-          <PromptStep
-            prompt={block.prompt}
-            locked={locked}
-            autoFocus={isDraft && isLast && !activeJobExists}
-            onChange={(next) => updatePrompt(convId, block.id, next)}
-            diversityEnabled={block.options.diversityCustomOn}
-            onDiversityEnabledChange={(next) =>
-              updateOptions(convId, block.id, { diversityCustomOn: next })
-            }
-            slotPrompts={block.options.slotPrompts}
-            onSlotPromptsChange={(next) =>
-              updateOptions(convId, block.id, { slotPrompts: next })
-            }
-            batchSize={block.options.batchSize}
-          />
+          {packageMode ? (
+            <PackagePromptCard
+              locked={locked}
+              packageMode
+              onPackageModeChange={(next) =>
+                updateOptions(convId, block.id, { packageMode: next })
+              }
+              purpose={block.options.packagePurpose}
+              onPurposeChange={(next) =>
+                updateOptions(convId, block.id, { packagePurpose: next })
+              }
+              topicOrEvent={block.options.packageTopic}
+              onTopicOrEventChange={(next) =>
+                updateOptions(convId, block.id, { packageTopic: next })
+              }
+              target={block.options.packageTarget}
+              onTargetChange={(next) =>
+                updateOptions(convId, block.id, { packageTarget: next })
+              }
+              styleTone={block.options.packageStyleTone}
+              onStyleToneChange={(next) =>
+                updateOptions(convId, block.id, { packageStyleTone: next })
+              }
+              additionalRequest={block.options.packageAdditionalRequest}
+              onAdditionalRequestChange={(next) =>
+                updateOptions(convId, block.id, {
+                  packageAdditionalRequest: next,
+                })
+              }
+              aiKeywords={block.options.packageAiKeywords}
+              userAddedKeywords={block.options.packageUserAddedKeywords}
+              userRemovedKeywords={block.options.packageUserRemovedKeywords}
+              onUserAddedKeywordsChange={(next) =>
+                updateOptions(convId, block.id, {
+                  packageUserAddedKeywords: next,
+                })
+              }
+              onUserRemovedKeywordsChange={(next) =>
+                updateOptions(convId, block.id, {
+                  packageUserRemovedKeywords: next,
+                })
+              }
+              isRecommendationLoading={plan.isFetching}
+            />
+          ) : (
+            <PromptStep
+              prompt={block.prompt}
+              locked={locked}
+              autoFocus={isDraft && isLast && !activeJobExists}
+              onChange={(next) => updatePrompt(convId, block.id, next)}
+              diversityEnabled={block.options.diversityCustomOn}
+              onDiversityEnabledChange={(next) =>
+                updateOptions(convId, block.id, { diversityCustomOn: next })
+              }
+              slotPrompts={block.options.slotPrompts}
+              onSlotPromptsChange={(next) =>
+                updateOptions(convId, block.id, { slotPrompts: next })
+              }
+              batchSize={block.options.batchSize}
+              packageMode={packageMode}
+              onPackageModeChange={(next) =>
+                updateOptions(convId, block.id, { packageMode: next })
+              }
+            />
+          )}
 
-          <OptionStep
-            options={block.options}
-            locked={locked}
-            submitting={submitting}
-            issueMessage={issueMessage}
-            onChange={(patch: Partial<BlockOptions>) =>
-              updateOptions(convId, block.id, patch)
-            }
-            onSubmit={handleSubmit}
-          />
+          {packageMode ? (
+            <PackageOptionCard
+              locked={locked}
+              aiItems={block.options.packageAiItems}
+              itemState={block.options.packageItemState}
+              userModifiedItemIds={block.options.packageUserModifiedItemIds}
+              isRecommendationLoading={plan.isFetching}
+              isRecommendationAuto={plan.data !== undefined}
+              onItemStateChange={(next) =>
+                updateOptions(convId, block.id, { packageItemState: next })
+              }
+              onUserModifiedItemIdsChange={(next) =>
+                updateOptions(convId, block.id, {
+                  packageUserModifiedItemIds: next,
+                })
+              }
+            />
+          ) : (
+            <OptionStep
+              options={block.options}
+              locked={locked}
+              submitting={submitting}
+              issueMessage={issueMessage}
+              onChange={(patch: Partial<BlockOptions>) =>
+                updateOptions(convId, block.id, patch)
+              }
+              onSubmit={handleSubmit}
+            />
+          )}
         </div>
 
-        {/* AI 응답 계열은 아바타 wrapper 로 감싸 대화 흐름을 시각적으로
-            통일한다. Draft (Prompt+Option) 는 사용자 발화 성격이라 wrapper
-            없이 그대로 유지. */}
         {isInFlight && (
           <AiResponseBubble>
             <GeneratingStep block={block} />
