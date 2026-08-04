@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useConversationStore } from '@/lib/store/conversationStore';
 
+import type { AspectRatio } from '@/types/domain';
+
 interface ImageReadyEvent {
   imageId: string;
   thumbnailUrl: string;
@@ -20,6 +22,9 @@ interface ImageReadyEvent {
   slotId?: string;
   category?: string;
   name?: string;
+  // Phase 3 grid rendering 편의: single 은 job.aspectRatio, package 는 slot.aspectRatio.
+  // Legacy 서버는 미전송 — 소비 측에서 undefined 로 관대하게 처리한다.
+  aspectRatio?: AspectRatio;
 }
 
 interface ChunkFailedEvent {
@@ -76,6 +81,7 @@ export function useConversationJobStream({ convId, blockId, jobId }: Params) {
         slotId: data.slotId,
         category: data.category,
         name: data.name,
+        aspectRatio: data.aspectRatio,
       });
     });
 
