@@ -45,7 +45,7 @@ export function GenerateV2Client({ initialCredits }: Props) {
   const storeCredits = useAuthStore((s) => s.profile?.credits);
   const credits = storeCredits ?? initialCredits;
 
-  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(true);
 
   // 유효한 currentId 없으면 새 conversation 만들기.
   useEffect(() => {
@@ -122,13 +122,6 @@ export function GenerateV2Client({ initialCredits }: Props) {
               <h1 className="text-2xl font-semibold tracking-tight">
                 학교에 필요한 클립아트를 AI와 함께 만들어보세요.
               </h1>
-              <p className="text-sm text-muted-foreground">
-                학문집, 학급신문, 학사달력부터 독서 행사, 운동회, 졸업식까지.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                수업 자료, 활동지, 포스터, 삽화 등 필요한 내용을 입력하면 AI가
-                학교에 맞는 클립아트를 만들어드립니다.
-              </p>
             </div>
             <button
               type="button"

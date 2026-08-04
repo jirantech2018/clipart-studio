@@ -14,7 +14,7 @@
 //      - 하단에 예시 스크린샷 이미지 (별도 pill wrapper 없이 이미지만)
 //   3. 하단 팁 배너 ("💡 다양한 방법을 상황에 맞게 활용해 보세요!")
 
-import { Files, Gift, ImageIcon, Lightbulb, PenLine } from 'lucide-react';
+import { Files, Gift, ImageIcon, PenLine } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -115,21 +115,6 @@ export function UsageGuideBanners() {
         {GUIDE_ITEMS.map((item) => (
           <GuideCard key={item.number} item={item} />
         ))}
-      </div>
-
-      <div className="flex items-start gap-3 rounded-xl bg-purple-50/60 p-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100">
-          <Lightbulb className="h-4 w-4 text-purple-600" aria-hidden="true" />
-        </div>
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">
-            다양한 방법을 상황에 맞게 활용해 보세요!
-          </p>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            처음에는 직접 만들기로 시작하고, 필요할 때마다 다른 방법들을
-            활용하면 더 쉽고 빠르게 원하는 클립아트를 만들 수 있습니다.
-          </p>
-        </div>
       </div>
     </div>
   );
