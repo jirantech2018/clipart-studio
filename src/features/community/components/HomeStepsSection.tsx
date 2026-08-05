@@ -3,7 +3,7 @@
 // 홈 히어로 바로 아래에 4-Step 기능 카드를 가로로 나열하고 사이에 화살표를
 // 넣어 사용 흐름을 안내한다.
 //   1. 먼저 검색하세요        (SearchBar + 인기 검색 chip)
-//   2. AI 생성                (→ /generate)
+//   2. AI 생성                (→ /generate-v2)
 //   3. 내 라이브러리           (→ /library)
 //   4. 스타일 이어 만들기       (안내 카드, 이미지 상세에서 진입)
 //
@@ -55,7 +55,7 @@ export function HomeStepsSection() {
             줄이고, 학교에 맞는 클립아트를 만들어 보세요.
           </p>
           <Link
-            href="/generate"
+            href="/generate-v2"
             className={cn(buttonVariants({ size: 'sm' }), 'w-full')}
           >
             AI로 클립아트 만들기
