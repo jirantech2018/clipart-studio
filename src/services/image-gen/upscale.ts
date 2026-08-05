@@ -59,17 +59,34 @@ interface Prediction {
   urls: { get: string };
 }
 
+/**
+ * 시작과 끝이 같은 종류의 따옴표로 감싸진 경우에만 그 한 쌍을 제거.
+ * mismatched 인 경우 (예: "abc') 는 손대지 않는다. 토큰 내부 문자열도
+ * 절대 변경하지 않는다 (Replicate 토큰 자체는 " · ' 를 포함하지 않지만,
+ * 방어적 코딩으로 안전 확보).
+ */
+function stripMatchingWrappingQuotes(s: string): string {
+  if (s.length < 2) return s;
+  const first = s[0];
+  const last = s[s.length - 1];
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
 function token(): string {
   const raw = process.env.REPLICATE_API_TOKEN;
   if (!raw) {
     throw new UpscaleUpstreamError('REPLICATE_API_TOKEN missing', 'unconfigured');
   }
-  // 환경변수 UI 에서 흔히 섞여 들어가는 공백 · 따옴표 · 줄바꿈 제거.
-  const trimmed = raw.trim().replace(/^["']|["']$/g, '');
-  if (!trimmed) {
+  // Railway Variables UI 에 값을 붙여넣을 때 흔히 섞이는 앞뒤 공백 · 줄바꿈
+  // · 감싼 따옴표를 제거한다. 안쪽 문자열은 절대 건드리지 않는다.
+  const cleaned = stripMatchingWrappingQuotes(raw.trim());
+  if (!cleaned) {
     throw new UpscaleUpstreamError('REPLICATE_API_TOKEN empty', 'unconfigured');
   }
-  return trimmed;
+  return cleaned;
 }
 
 function categoryFromStatus(status: number): UpscaleUpstreamCategory {
