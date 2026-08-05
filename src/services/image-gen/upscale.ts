@@ -5,6 +5,16 @@
 // 실패는 UpscaleUpstreamError 로 감싼다. caller (route) 는 category 로 분기해
 // 안전한 error code 를 클라이언트에 반환하고, 서버 로그에는 원본 status /
 // body 를 그대로 남긴다.
+//
+// 토큰 정규화는 services/replicate/token 을 공유해 flux 와 완전히 동일한
+// 문자열이 두 경로에 흐르도록 한다. 첫 호출 시 fingerprint 를 로그해 두
+// 경로가 같은 토큰을 쓰는지 서버 로그에서 육안 비교 가능.
+
+import {
+  ReplicateTokenMissingError,
+  replicateToken,
+  replicateTokenFingerprint,
+} from '@/services/replicate/token';
 
 const REPLICATE_URL = 'https://api.replicate.com/v1/predictions';
 // nightmareai/real-esrgan — 오랜기간 안정적으로 유지되는 4x 슈퍼 리솔루션 모델.
@@ -59,34 +69,27 @@ interface Prediction {
   urls: { get: string };
 }
 
-/**
- * 시작과 끝이 같은 종류의 따옴표로 감싸진 경우에만 그 한 쌍을 제거.
- * mismatched 인 경우 (예: "abc') 는 손대지 않는다. 토큰 내부 문자열도
- * 절대 변경하지 않는다 (Replicate 토큰 자체는 " · ' 를 포함하지 않지만,
- * 방어적 코딩으로 안전 확보).
- */
-function stripMatchingWrappingQuotes(s: string): string {
-  if (s.length < 2) return s;
-  const first = s[0];
-  const last = s[s.length - 1];
-  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-    return s.slice(1, -1);
-  }
-  return s;
-}
+// 프로세스당 1회만 fingerprint 를 로그. flux · upscale 두 경로가 완전히
+// 같은 토큰을 사용하는지 서버 로그로 검증하기 위한 것.
+let fingerprintLogged = false;
 
 function token(): string {
-  const raw = process.env.REPLICATE_API_TOKEN;
-  if (!raw) {
-    throw new UpscaleUpstreamError('REPLICATE_API_TOKEN missing', 'unconfigured');
+  try {
+    const t = replicateToken();
+    if (!fingerprintLogged) {
+      fingerprintLogged = true;
+      console.log(
+        '[replicate/upscale] token fingerprint',
+        replicateTokenFingerprint(t),
+      );
+    }
+    return t;
+  } catch (err) {
+    if (err instanceof ReplicateTokenMissingError) {
+      throw new UpscaleUpstreamError(err.message, 'unconfigured');
+    }
+    throw err;
   }
-  // Railway Variables UI 에 값을 붙여넣을 때 흔히 섞이는 앞뒤 공백 · 줄바꿈
-  // · 감싼 따옴표를 제거한다. 안쪽 문자열은 절대 건드리지 않는다.
-  const cleaned = stripMatchingWrappingQuotes(raw.trim());
-  if (!cleaned) {
-    throw new UpscaleUpstreamError('REPLICATE_API_TOKEN empty', 'unconfigured');
-  }
-  return cleaned;
 }
 
 function categoryFromStatus(status: number): UpscaleUpstreamCategory {

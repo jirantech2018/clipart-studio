@@ -1,16 +1,43 @@
 // Design Ref: §8.1 AI (2순위) FLUX schnell via Replicate — cost fallback
+//
+// 공용 Replicate 토큰 헬퍼 (services/replicate/token) 를 사용해 upscale.ts
+// 와 완전히 동일한 정규화·인증 경로를 공유한다. Authorization 스키마도
+// Replicate 공식 문서에 맞춰 Bearer 로 통일.
 
 import { ImageGenError } from './adapter';
+import {
+  ReplicateTokenMissingError,
+  replicateToken,
+  replicateTokenFingerprint,
+} from '@/services/replicate/token';
 
 import type { GenerateInput, GenerateOutput, ImageGenAdapter } from './adapter';
 
 const REPLICATE_URL = 'https://api.replicate.com/v1/predictions';
 const FLUX_MODEL_VERSION = 'black-forest-labs/flux-schnell';
 
-function token() {
-  const t = process.env.REPLICATE_API_TOKEN;
-  if (!t) throw new ImageGenError('REPLICATE_API_TOKEN missing', false);
-  return t;
+// 프로세스당 1회만 fingerprint 를 로그해서 flux · upscale 의 값을 비교하기
+// 쉽게 한다. 매 요청마다 노이즈를 남기지 않도록 module-level flag.
+let fingerprintLogged = false;
+
+function token(): string {
+  try {
+    const t = replicateToken();
+    if (!fingerprintLogged) {
+      fingerprintLogged = true;
+      console.log(
+        '[replicate/flux] token fingerprint',
+        replicateTokenFingerprint(t),
+      );
+    }
+    return t;
+  } catch (err) {
+    if (err instanceof ReplicateTokenMissingError) {
+      // FLUX caller 는 ImageGenError 로 흐름을 이어받는다 (retryable=false).
+      throw new ImageGenError(err.message, false);
+    }
+    throw err;
+  }
 }
 
 interface Prediction {
@@ -25,7 +52,7 @@ async function startPrediction(input: GenerateInput): Promise<Prediction> {
   const res = await fetch(REPLICATE_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Token ${token()}`,
+      Authorization: `Bearer ${token()}`,
       'Content-Type': 'application/json',
       Prefer: 'wait',
     },
@@ -61,7 +88,7 @@ async function pollUntilDone(pred: Prediction, timeoutMs = 60_000): Promise<Pred
   ) {
     await new Promise((r) => setTimeout(r, 1500));
     const res = await fetch(current.urls.get, {
-      headers: { Authorization: `Token ${token()}` },
+      headers: { Authorization: `Bearer ${token()}` },
     });
     if (!res.ok) throw new ImageGenError(`Replicate poll failed: ${res.status}`, true);
     current = (await res.json()) as Prediction;
