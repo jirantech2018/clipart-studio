@@ -11,6 +11,7 @@ import { Coins, Info, Minus, Plus, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { selectVisibleItems } from '@/features/generation-v2/lib/mergePackagePlan';
+import { computePackageTotalSlots } from '@/features/generation-v2/lib/packageSubmit';
 import { cn } from '@/lib/utils';
 
 import type {
@@ -42,10 +43,9 @@ export function PackageOptionCard({
 }: Props) {
   const visibleItems = selectVisibleItems(plan);
 
-  const totalImages = visibleItems
-    .filter((it) => it.enabled)
-    .reduce((sum, it) => sum + it.quantity, 0);
-
+  // Slot 합계는 CreditBadge · Package Submit · 이 카드 세 곳이 반드시 동일한
+  // 값을 써야 한다. 공통 함수 computePackageTotalSlots 로 통일.
+  const totalImages = computePackageTotalSlots(plan);
   const expectedCredits = totalImages;
 
   function markModified(id: string, nextState: Record<string, PackageItemState>) {

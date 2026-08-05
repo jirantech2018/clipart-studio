@@ -14,7 +14,12 @@ export type ErrorCode =
   | 'ACTIVE_JOB_EXISTS'
   | 'UPSTREAM_UNAVAILABLE'
   | 'RATE_LIMITED'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  // Package job 전용 세분화. 서버 콘솔에는 supabase 상세를 기록하되
+  // 클라이언트에는 아래 안전 코드만 노출한다.
+  | 'PACKAGE_JOB_INSERT_FAILED'
+  | 'PACKAGE_SLOT_INSERT_FAILED'
+  | 'PACKAGE_SCHEMA_NOT_READY';
 
 const STATUS_MAP: Record<ErrorCode, number> = {
   VALIDATION_ERROR: 400,
@@ -27,6 +32,9 @@ const STATUS_MAP: Record<ErrorCode, number> = {
   UPSTREAM_UNAVAILABLE: 503,
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
+  PACKAGE_JOB_INSERT_FAILED: 500,
+  PACKAGE_SLOT_INSERT_FAILED: 500,
+  PACKAGE_SCHEMA_NOT_READY: 503,
 };
 
 export function apiError(

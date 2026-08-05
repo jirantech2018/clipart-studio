@@ -24,6 +24,17 @@ import {
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * PostgreSQL SQLSTATE 로 스키마 미준비 상태를 감지한다.
+ *   42P01 = undefined_table
+ *   42703 = undefined_column
+ * 이 두 코드가 나오면 Migration 052~055 가 아직 DB 에 적용되지 않았다는
+ * 의미. 클라이언트에는 PACKAGE_SCHEMA_NOT_READY 로 응답한다.
+ */
+function isSchemaNotReadyError(code: string | undefined | null): boolean {
+  return code === '42P01' || code === '42703';
+}
+
 export async function POST(request: Request) {
   const supabase = createSupabaseServerClient();
   const {
@@ -314,8 +325,27 @@ async function handlePackage(
     .single();
 
   if (jobError || !job) {
+    // Supabase 원본 오류는 서버 로그로만. Constraint / SQL / 스키마 오류
+    // 모두 여기서 message · code · hint · details 로 남는다.
+    console.error('[jobs POST package] job insert failed', {
+      code: jobError?.code,
+      message: jobError?.message,
+      hint: jobError?.hint,
+      details: jobError?.details,
+    });
     await refundCredits(userId, totalSlots);
-    return apiError('INTERNAL_ERROR', '패키지 Job 생성 실패');
+    // 스키마 미적용 (undefined_table / undefined_column) 은 별도 코드로.
+    // 나머지는 안전한 PACKAGE_JOB_INSERT_FAILED.
+    if (jobError && isSchemaNotReadyError(jobError.code)) {
+      return apiError(
+        'PACKAGE_SCHEMA_NOT_READY',
+        '패키지 생성 기능이 아직 준비되지 않았어요. 관리자에게 문의해주세요.',
+      );
+    }
+    return apiError(
+      'PACKAGE_JOB_INSERT_FAILED',
+      '패키지 생성 요청에 실패했어요. 잠시 후 다시 시도해주세요.',
+    );
   }
 
   const jobId = job.id as string;
@@ -365,8 +395,22 @@ async function handlePackage(
     // CASCADE 로 slots 는 자동 삭제되지만 명시적으로 job 을 지운다.
     await jobService.from('generation_jobs').delete().eq('id', jobId);
     await refundCredits(userId, totalSlots);
-    console.error('[jobs POST package] slot insert failed', slotError);
-    return apiError('INTERNAL_ERROR', 'Slot 생성 실패');
+    console.error('[jobs POST package] slot insert failed', {
+      code: slotError.code,
+      message: slotError.message,
+      hint: slotError.hint,
+      details: slotError.details,
+    });
+    if (isSchemaNotReadyError(slotError.code)) {
+      return apiError(
+        'PACKAGE_SCHEMA_NOT_READY',
+        '패키지 생성 기능이 아직 준비되지 않았어요. 관리자에게 문의해주세요.',
+      );
+    }
+    return apiError(
+      'PACKAGE_SLOT_INSERT_FAILED',
+      '패키지 슬롯 생성에 실패했어요. 잠시 후 다시 시도해주세요.',
+    );
   }
 
   return apiOk(

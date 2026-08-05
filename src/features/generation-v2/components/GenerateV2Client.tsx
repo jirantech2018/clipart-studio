@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConversationBlock } from '@/features/generation-v2/components/ConversationBlock';
 import { ConversationSidebar } from '@/features/generation-v2/components/ConversationSidebar';
 import { UsageGuideBanners } from '@/features/generation-v2/components/UsageGuideBanners';
+import { computePackageTotalSlots } from '@/features/generation-v2/lib/packageSubmit';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useConversationStore } from '@/lib/store/conversationStore';
 import { cn } from '@/lib/utils';
@@ -154,7 +155,17 @@ export function GenerateV2Client({ initialCredits, parent }: Props) {
     setCurrentConversation(id);
   }
 
-  const draftBatchSize = lastBlock?.options.batchSize ?? 0;
+  // Package Mode 인 draft 는 총 Slot 합계를 예상 사용량으로 사용. Single 은
+  // 기존과 동일하게 batchSize 를 사용. 두 경로 모두 사용자에게 "이번에 몇 장
+  // 만들 예정" 을 정확히 알려주기 위한 값. draft 가 없으면 0 (표시상 -0 =
+  // 사용 없음).
+  const draftBatchSize = (() => {
+    if (!lastBlock) return 0;
+    if (lastBlock.options.packageMode) {
+      return computePackageTotalSlots(lastBlock.options.packagePlan);
+    }
+    return lastBlock.options.batchSize;
+  })();
 
   return (
     <div className="mx-auto flex max-w-7xl gap-6">
