@@ -23,7 +23,13 @@ import {
   refundCredits,
   reserveCredits,
 } from '@/services/credit';
-import { upscaleFromUrl, type UpscaleScale } from '@/services/image-gen/upscale';
+import {
+  UpscaleUpstreamError,
+  upscaleFromUrl,
+  type UpscaleScale,
+  type UpscaleUpstreamCategory,
+} from '@/services/image-gen/upscale';
+import type { ErrorCode } from '@/lib/api-error';
 import { deleteObject, publicUrl, putObject } from '@/services/r2/upload';
 import {
   createSupabaseServerClient,
@@ -36,6 +42,19 @@ const bodySchema = z.object({
 
 // scale 별 크레딧 비용. 나중에 조정 편하도록 상수로.
 const CREDIT_COST: Record<UpscaleScale, number> = { 2: 1, 4: 2 };
+
+// 클라이언트에 노출할 공통 안내 메시지. Replicate 인증 문제 · 계정 크레딧
+// 소진 · 모델 스키마 오류 등 내부 원인은 절대 노출하지 않는다.
+const USER_FACING_UPSCALE_MESSAGE =
+  '현재 고화질 변환 서비스를 일시적으로 사용할 수 없습니다. 크레딧은 차감되지 않았어요. 잠시 후 다시 시도해 주세요.';
+
+const UPSCALE_ERROR_CODE_BY_CATEGORY: Record<UpscaleUpstreamCategory, ErrorCode> = {
+  unconfigured: 'UPSCALE_UPSTREAM_UNCONFIGURED',
+  unauthorized: 'UPSCALE_UPSTREAM_UNAUTHORIZED',
+  quota: 'UPSCALE_UPSTREAM_QUOTA',
+  request_invalid: 'UPSCALE_REQUEST_INVALID',
+  failed: 'UPSCALE_UPSTREAM_FAILED',
+};
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createSupabaseServerClient();
@@ -97,9 +116,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
   try {
     upscaled = await upscaleFromUrl(sourceUrl, body.scale);
   } catch (err) {
-    console.error(`[upscale] failed for image ${src.id}`, err);
-    await refundCredits(user.id, cost).catch(() => {});
-    return apiError('UPSTREAM_UNAVAILABLE', '업스케일 처리에 실패했어요');
+    // 서버 로그에는 Replicate 원본 status / message / stack 유지.
+    // 클라이언트에는 category → 안전한 error code + 공통 안내 문구만.
+    console.error(`[upscale] failed for image ${src.id}`, {
+      name: err instanceof Error ? err.name : typeof err,
+      message: err instanceof Error ? err.message : String(err),
+      category: err instanceof UpscaleUpstreamError ? err.category : null,
+      upstreamStatus: err instanceof UpscaleUpstreamError ? err.upstreamStatus : null,
+    });
+    await refundCredits(user.id, cost).catch((refundErr) => {
+      console.error(
+        `[upscale] refund failed after upstream error for image ${src.id}`,
+        refundErr,
+      );
+    });
+    const code: ErrorCode = err instanceof UpscaleUpstreamError
+      ? UPSCALE_ERROR_CODE_BY_CATEGORY[err.category]
+      : 'UPSCALE_UPSTREAM_FAILED';
+    return apiError(code, USER_FACING_UPSCALE_MESSAGE);
   }
 
   // 실측 크기 (sharp 로 metadata 읽음) — Real-ESRGAN 결과 크기 신뢰 확인.
