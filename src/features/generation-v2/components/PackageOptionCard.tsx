@@ -82,6 +82,14 @@ export function PackageOptionCard({
   }
 
   const canSubmit = !locked && !!onSubmit && totalImages > 0;
+  // CTA 가 왜 disabled 인지 hover title 로 그대로 노출. 원인 진단이 빨라진다.
+  const disabledReason: string | null = !onSubmit
+    ? '이 기능은 준비 중입니다'
+    : totalImages === 0
+      ? '1장 이상 선택해주세요'
+      : locked
+        ? '다른 생성이 진행 중이거나 이 블록이 이미 사용됐어요'
+        : null;
 
   return (
     <section className="card flex h-full flex-col gap-4 p-5">
@@ -170,16 +178,23 @@ export function PackageOptionCard({
         </div>
       </div>
 
-      <Button
-        type="button"
-        onClick={onSubmit}
-        disabled={!canSubmit}
-        title={onSubmit ? undefined : '이 기능은 준비 중입니다'}
-        className="mt-auto min-h-[44px] w-full"
-      >
-        <Sparkles className="mr-1 h-4 w-4" />
-        클립아트 만들기
-      </Button>
+      <div className="mt-auto space-y-1.5">
+        <Button
+          type="button"
+          onClick={onSubmit}
+          disabled={!canSubmit}
+          title={disabledReason ?? undefined}
+          className="min-h-[44px] w-full"
+        >
+          <Sparkles className="mr-1 h-4 w-4" />
+          클립아트 만들기
+        </Button>
+        {disabledReason && (
+          <p className="text-center text-xs text-muted-foreground">
+            {disabledReason}
+          </p>
+        )}
+      </div>
     </section>
   );
 }
