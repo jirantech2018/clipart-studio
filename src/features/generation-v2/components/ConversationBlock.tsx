@@ -13,7 +13,7 @@
 // 로 /api/jobs (kind='package') 호출 후 useConversationJobStream 이 SSE 를
 // 구독한다.
 
-import { AlertTriangle, HelpCircle } from 'lucide-react';
+import { AlertTriangle, HelpCircle, Loader2 } from 'lucide-react';
 import { forwardRef, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -362,7 +362,19 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
             </section>
           </AiResponseBubble>
         )}
-        {block.status === 'unknown' && (
+        {block.status === 'unknown' && packageMode && (
+          <AiResponseBubble>
+            <section className="flex items-center gap-2 rounded-xl border bg-background p-5 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+              <span>
+                {rehydrate.isError
+                  ? '생성 상태를 확인할 수 없어요. 새로고침 해주세요.'
+                  : '생성 상태를 확인하는 중…'}
+              </span>
+            </section>
+          </AiResponseBubble>
+        )}
+        {block.status === 'unknown' && !packageMode && (
           <AiResponseBubble>
             <section className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-900 dark:text-amber-200">
               <HelpCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

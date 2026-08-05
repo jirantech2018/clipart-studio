@@ -1235,3 +1235,4 @@ clipart-studio/
 | 0.1 | 2026-07-09 | 초안 (Pragmatic 아키텍처 선택, Session Guide 6 모듈 분할) | sbtmxk20 |
 | 0.2 | 2026-08-03 | §6.3 Known Limitations 추가 — Phase 2 package pipeline 착수에 맞춰 single job SSE 재접속 중복 생성 리스크를 후속 정리 대상으로 명시 | sbtmxk20 |
 | 0.3 | 2026-08-05 | §6.3 을 Known Limitations / Architecture Limitations 로 재분류. Single Job SSE 재접속 중복 생성 가능성은 Architecture Limitation 로 표기. Slot 확장 (final_prompt, category_order) 및 package_plan.version=1 은 Migration 055 로 도입, 코드 반영 완료 | sbtmxk20 |
+| 0.4 | 2026-08-05 | Phase 3 Package UX 반영. `GET /api/jobs/:id` 응답에 kind='package' 일 때 slots 배열 추가 (camelCase). Package 재진입 복구는 useConversationJobStream (SSE 실시간) + usePackageJobRehydrate (서버 재조회) 두 훅의 병합으로 처리. PackageGeneratingStep / PackageCompletedStep 은 실제 slot 상태 기준 progress + category 그룹핑 (categoryOrder 정렬) + 전체 ZIP 다운로드. Fake progress·예상 시간·새 SSE 이벤트 없음 | sbtmxk20 |
