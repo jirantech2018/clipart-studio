@@ -31,6 +31,31 @@ export const PACKAGE_CATEGORIES = [
 
 export type PackageCategory = (typeof PACKAGE_CATEGORIES)[number];
 
+/** 카테고리별 한글 라벨. Generating / Completed UI 에서 그룹 헤더에 사용. */
+export const PACKAGE_CATEGORY_LABELS: Record<PackageCategory, string> = {
+  cover: '표지',
+  poster: '포스터',
+  banner: '배너',
+  illustration: '삽화',
+  scene: '장면 일러스트',
+  icon: '아이콘',
+  decoration: '장식',
+  border: '테두리',
+  divider: '구분선',
+  background: '배경',
+  monthly_image: '이달의 이미지',
+  event_asset: '행사 자료',
+  calendar: '캘린더',
+  certificate: '상장',
+  award: '수상 이미지',
+  etc: '기타',
+};
+
+/** whitelist 밖 카테고리 (Legacy) 는 원본 문자열을 그대로 노출. */
+export function packageCategoryLabel(category: string): string {
+  return (PACKAGE_CATEGORY_LABELS as Record<string, string>)[category] ?? category;
+}
+
 /** 결과물 종횡비 힌트. AspectRatio 와 별개로 관리 (패키지 전용 확장 여지). */
 export const PACKAGE_ASPECT_RATIOS = [
   'square',

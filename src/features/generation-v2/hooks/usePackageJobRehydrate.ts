@@ -216,5 +216,9 @@ export function usePackageJobRehydrate({
     isFetching: query.isFetching,
     isError: query.isError,
     serverStatus: query.data?.status ?? null,
+    /** Fetch 시점의 slot 마스터 목록 (id · order · categoryOrder · category ·
+     *  name · aspectRatio · 초기 status). Generating/Completed UI 는 이 위에
+     *  SSE 로 도착한 succeeded/failed 를 병합해 최종 상태를 렌더한다. */
+    slotMetadata: query.data?.slots ?? null,
   };
 }

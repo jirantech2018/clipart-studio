@@ -21,6 +21,7 @@ import { AiResponseBubble } from '@/features/generation-v2/components/AiResponse
 import { CompletedStep } from '@/features/generation-v2/components/CompletedStep';
 import { GeneratingStep } from '@/features/generation-v2/components/GeneratingStep';
 import { OptionStep } from '@/features/generation-v2/components/OptionStep';
+import { PackageGeneratingStep } from '@/features/generation-v2/components/PackageGeneratingStep';
 import { PackageOptionCard } from '@/features/generation-v2/components/PackageOptionCard';
 import { PackagePromptCard } from '@/features/generation-v2/components/PackagePromptCard';
 import { PromptStep } from '@/features/generation-v2/components/PromptStep';
@@ -116,7 +117,7 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
     // unknown/queued/generating 이면 서버에 실제 Job + Slot 상태를 1회 조회.
     // Fetch 결과가 queued/running 이면 위의 SSE 훅이 이어서 실시간을 담당.
     // Single Job 은 packageMode=false 이므로 훅 내부에서 no-op.
-    usePackageJobRehydrate({
+    const rehydrate = usePackageJobRehydrate({
       convId,
       blockId: block.id,
       jobId: block.jobId,
@@ -328,7 +329,14 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
 
         {isInFlight && (
           <AiResponseBubble>
-            <GeneratingStep block={block} />
+            {packageMode ? (
+              <PackageGeneratingStep
+                block={block}
+                slotMetadata={rehydrate.slotMetadata}
+              />
+            ) : (
+              <GeneratingStep block={block} />
+            )}
           </AiResponseBubble>
         )}
         {block.status === 'completed' && (

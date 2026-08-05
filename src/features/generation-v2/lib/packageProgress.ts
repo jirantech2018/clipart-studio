@@ -10,6 +10,7 @@
 //   Category 그룹 순서 = 해당 category 의 최소 order 오름차순
 //   Category 내부 순서 = categoryOrder 오름차순 (Legacy 는 order fallback)
 
+import type { CompletedImage, FailedSlot } from '@/lib/store/conversationStore';
 import type { AspectRatio } from '@/types/domain';
 
 export type SlotStatus = 'pending' | 'running' | 'done' | 'failed' | 'canceled';
@@ -134,4 +135,52 @@ export function computePackageProgress(
     percent,
     categories,
   };
+}
+
+/**
+ * 재진입 fetch 로 확보한 slot 마스터 목록 위에, 진행 중 SSE 로 수신된
+ * 성공/실패 이벤트를 덮어써 최신 slot 상태를 만든다.
+ *
+ * - master slot 의 metadata (id, order, categoryOrder, category, name,
+ *   aspectRatio) 는 그대로 유지
+ * - block.succeeded[i].slotId 가 master.id 와 매치되면 status='done' 으로
+ *   승격 + imageId/thumbnailUrl 보정 (fetch 시점 이후 도착한 이미지)
+ * - block.failed[i].order 가 master.order 와 매치되면 status='failed' + error
+ *
+ * master 가 null (fetch 아직 미도착) 이면 빈 배열 반환.
+ */
+export function mergeSlotsWithBlockState(
+  masterSlots: PackageJobSlotResponse[] | null,
+  succeeded: CompletedImage[],
+  failed: FailedSlot[],
+): PackageJobSlotResponse[] {
+  if (!masterSlots) return [];
+
+  const succeededById = new Map<string, CompletedImage>();
+  for (const img of succeeded) {
+    if (img.slotId) succeededById.set(img.slotId, img);
+  }
+  const failedByOrder = new Map<number, FailedSlot>();
+  for (const f of failed) failedByOrder.set(f.order, f);
+
+  return masterSlots.map((slot) => {
+    const done = succeededById.get(slot.id);
+    if (done) {
+      return {
+        ...slot,
+        status: 'done' as const,
+        imageId: done.imageId,
+        thumbnailUrl: done.thumbnailUrl,
+      };
+    }
+    const fail = failedByOrder.get(slot.order);
+    if (fail) {
+      return {
+        ...slot,
+        status: 'failed' as const,
+        error: fail.error,
+      };
+    }
+    return slot;
+  });
 }
