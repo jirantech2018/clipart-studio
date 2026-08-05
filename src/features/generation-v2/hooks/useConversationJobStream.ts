@@ -21,6 +21,7 @@ interface ImageReadyEvent {
   // Phase 2 — package job 에서만 채워지는 optional slot metadata.
   slotId?: string;
   category?: string;
+  categoryOrder?: number;
   name?: string;
   // Phase 3 grid rendering 편의: single 은 job.aspectRatio, package 는 slot.aspectRatio.
   // Legacy 서버는 미전송 — 소비 측에서 undefined 로 관대하게 처리한다.
@@ -33,6 +34,7 @@ interface ChunkFailedEvent {
   refundedCredits: number;
   slotId?: string;
   category?: string;
+  categoryOrder?: number;
   name?: string;
 }
 
@@ -80,6 +82,7 @@ export function useConversationJobStream({ convId, blockId, jobId }: Params) {
         order: data.order,
         slotId: data.slotId,
         category: data.category,
+        categoryOrder: data.categoryOrder,
         name: data.name,
         aspectRatio: data.aspectRatio,
       });
@@ -87,7 +90,14 @@ export function useConversationJobStream({ convId, blockId, jobId }: Params) {
 
     source.addEventListener('chunk_failed', (event) => {
       const data = JSON.parse((event as MessageEvent).data) as ChunkFailedEvent;
-      appendFailure(convId, blockId, { order: data.order, error: data.error });
+      appendFailure(convId, blockId, {
+        order: data.order,
+        error: data.error,
+        slotId: data.slotId,
+        category: data.category,
+        categoryOrder: data.categoryOrder,
+        name: data.name,
+      });
       updateStoreCredits(useAuthStore.getState().profile?.credits ?? 0);
       toast.warning(`이미지 ${data.order + 1}번 실패`, {
         description: data.error,

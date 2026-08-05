@@ -21,6 +21,7 @@ import { AiResponseBubble } from '@/features/generation-v2/components/AiResponse
 import { CompletedStep } from '@/features/generation-v2/components/CompletedStep';
 import { GeneratingStep } from '@/features/generation-v2/components/GeneratingStep';
 import { OptionStep } from '@/features/generation-v2/components/OptionStep';
+import { PackageCompletedStep } from '@/features/generation-v2/components/PackageCompletedStep';
 import { PackageGeneratingStep } from '@/features/generation-v2/components/PackageGeneratingStep';
 import { PackageOptionCard } from '@/features/generation-v2/components/PackageOptionCard';
 import { PackagePromptCard } from '@/features/generation-v2/components/PackagePromptCard';
@@ -341,7 +342,11 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
         )}
         {block.status === 'completed' && (
           <AiResponseBubble>
-            <CompletedStep block={block} />
+            {packageMode ? (
+              <PackageCompletedStep block={block} />
+            ) : (
+              <CompletedStep block={block} />
+            )}
           </AiResponseBubble>
         )}
         {block.status === 'failed' && (

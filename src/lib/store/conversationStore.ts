@@ -73,11 +73,19 @@ export interface CompletedImage {
    *  package 는 slot.aspectRatio, single 은 job.aspectRatio. Legacy 저장본
    *  은 undefined — 소비 측에서 fallback 필요. */
   aspectRatio?: AspectRatio;
+  /** 동일 category 내부 순서. Package Completed UI 그룹 내 정렬에 사용.
+   *  Legacy · single 은 undefined → 소비 측이 order 로 fallback. */
+  categoryOrder?: number;
 }
 
 export interface FailedSlot {
   order: number;
   error: string;
+  // Package job 에서만 채워지는 slot metadata (Completed UI 그룹 내 실패 수 표시용).
+  slotId?: string;
+  category?: string;
+  name?: string;
+  categoryOrder?: number;
 }
 
 export interface Block {

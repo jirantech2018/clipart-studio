@@ -444,8 +444,10 @@ function runPackageStream(
                 return {
                   slotId: slotHint.id,
                   order: slotHint.order,
+                  categoryOrder: slotHint.categoryOrder,
                   category: slotHint.category,
                   name: slotHint.name,
+                  aspectRatio: slotHint.aspectRatio,
                   skipped: true as const,
                 };
               }
@@ -464,8 +466,10 @@ function runPackageStream(
                 return {
                   slotId: claimed.id,
                   order: claimed.order,
+                  categoryOrder: claimed.categoryOrder,
                   category: claimed.category,
                   name: claimed.name,
+                  aspectRatio: claimed.aspectRatio,
                   status: 'failed' as const,
                   error: message,
                   skipped: false as const,
@@ -496,6 +500,7 @@ function runPackageStream(
                   order: r.order,
                   slotId: r.slotId,
                   category: r.category,
+                  categoryOrder: r.categoryOrder,
                   name: r.name,
                   // Package 는 slot 단위 aspectRatio.
                   aspectRatio: r.aspectRatio,
@@ -511,6 +516,7 @@ function runPackageStream(
                   refundedCredits: 1,
                   slotId: r.slotId,
                   category: r.category,
+                  categoryOrder: r.categoryOrder,
                   name: r.name,
                 }),
               );

@@ -78,6 +78,7 @@ function mapSlotToCompletedImage(slot: PackageJobSlotResponse): CompletedImage |
     thumbnailUrl: slot.thumbnailUrl,
     slotId: slot.id,
     category: slot.category,
+    categoryOrder: slot.categoryOrder,
     name: slot.name,
     aspectRatio: slot.aspectRatio,
   };
@@ -88,6 +89,10 @@ function mapSlotToFailedSlot(slot: PackageJobSlotResponse): FailedSlot | null {
   return {
     order: slot.order,
     error: slot.error ?? (slot.status === 'canceled' ? '취소됨' : '알 수 없는 오류'),
+    slotId: slot.id,
+    category: slot.category,
+    categoryOrder: slot.categoryOrder,
+    name: slot.name,
   };
 }
 

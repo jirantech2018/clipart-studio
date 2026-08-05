@@ -31,6 +31,7 @@ import type {
 export interface PackageSlotResult {
   slotId: string;
   order: number;
+  categoryOrder: number;
   category: string;
   name: string;
   status: 'done' | 'failed' | 'skipped';
@@ -270,6 +271,7 @@ export async function runPackageSlot({
   return {
     slotId: slot.id,
     order: slot.order,
+    categoryOrder: slot.categoryOrder,
     category: slot.category,
     name: slot.name,
     status: 'done',
