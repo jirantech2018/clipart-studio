@@ -3,7 +3,7 @@
 > **Summary**: Super Admin → Organization → Member 3계층 토큰 관리 SaaS 인프라. 개인 사용도 "1인 Organization (type=personal)" 으로 통일해 모든 워크스페이스를 Organization 하나의 개념으로 관리한다. Ledger 기반 감사(Source of Truth) · Pool 기반 잔액 캐시 · profiles.credits UI 캐시 3-tier 구조.
 >
 > **Project**: ClipArt Studio — Organization Token Management
-> **Version**: 0.2.2 (Plan — M2 에 상단 네비 조정 및 라우트 재구성 포함)
+> **Version**: 0.2.3 (Plan — M2 완료 후 M3 를 Workspace 독립성 중심으로 재구성)
 > **Author**: sbtmxk20
 > **Date**: 2026-08-06
 > **Status**: Draft — 사용자 승인 대기
@@ -155,60 +155,95 @@
 - **기존 개인 이미지 수 · Reference Image 수 · 생성 이력 유지** (`organization_id` 로 재라벨되어 있으나 사용자 조회 결과는 동일)
 - 사용자 테스트 가이드 제공 (§10.2)
 
-### 2.3 Milestone 3 — Credit Service · 호출부 전환 · Write Guard 활성
+### 2.3 Milestone 3 — Workspace 독립성 완성
 
-**포함**
+**목표 (사용자 지시)**: Workspace (내 작업실 및 일반 Organization) 가 서로 완전히 독립적으로 동작한다. 각 Workspace 는 **자기만의 Job · Credit · Conversation · Library · Generate** 를 갖는다. 기술 계층은 이 목표를 달성하기 위한 수단이며, 완료 판정도 Workspace 단위로 이뤄진다.
 
-- [ ] `src/services/credit/` 재작성 (신규 6개 함수 + `pool-router.ts` + `errors.ts` + `types.ts`)
-- [ ] `POST /api/jobs` 신규 `use()` 로 전환 (organization_id 없으면 세션 유저 MY org id 로 라우팅)
-- [ ] `GET /api/jobs/[id]/stream` 실패 환불을 `refund()` 로 전환
-- [ ] `services/image-gen/package-pipeline.markSlotFailedAndRefund` 를 `refund()` 로 전환
-- [ ] `POST /api/images/[id]/upscale` 을 `use()` / `refund()` 로 전환 (기존 Lanczos 0 크레딧 정책 유지)
-- [ ] 기존 `reserveCredits` / `refundCredits` 는 신규 서비스로 위임하는 deprecated wrapper 로 유지 (30일)
-- [ ] Migration 066 — `profiles.credits` Write Guard 트리거 부착 (M1 에서 함수만 정의됨) + 세션 변수 `app.credit_service_active` 기반 판별
-- [ ] Idempotency: `refund()` 는 `job_id + type=REFUND` row 존재 시 skip
-- [ ] `/api/me/tokens` + `/api/me/tokens/history` API 신설 (Member 본인 조회)
+**M3 완료 기준 (Workspace 단위)**
+
+| # | 기준 | 검증 방법 |
+|---|-----|---------|
+| ① | **Workspace 별 Job 저장** — 모든 신규 job 이 요청 시 넘어온 `organization_id` 로 저장 | `SELECT org_id, COUNT(*) FROM generation_jobs WHERE created_at > <M3 배포시각> GROUP BY org_id` — NULL 없음 |
+| ② | **Workspace 별 Conversation** — 조회·Sidebar 모두 현재 organization 필터. 다른 조직의 대화는 UI 에 절대 보이지 않음 | `/organization/my` sidebar 에는 MY 대화만, `/organization/{slug}` sidebar 에는 그 조직 대화만 |
+| ③ | **Workspace 별 Credit** — 현재 Workspace 의 `pool.balance` 를 조직 홈 · Generate Sidebar 에 표시 | MY 에서 표시된 값 ≠ 학교 조직에서 표시된 값 |
+| ④ | **Workspace 별 Token 차감** — 이미지 생성 성공 시 현재 Workspace pool 만 감소, 다른 Workspace pool 은 무변화 | Ledger USE row 의 pool_id = 현재 Workspace pool_id |
+| ⑤ | **Workspace 별 Library** — 현재 Workspace 의 이미지만 조회. 다른 조직 이미지는 안 보임 | 라이브러리 조회 쿼리에 `organization_id = current_workspace` 필터 |
+| ⑥ | **Workspace 별 Generate** — 요청 body 에 `organizationId` 포함, 서버는 요청자가 그 조직 active member 인지 검증 후 job 생성 | 다른 조직 slug 로 요청 시 403 |
+
+**추가 완료 조건 (기존 v0.2.2 M3 에서 유지)**
+
+- `pnpm tsc --noEmit` PASS, `pnpm build` PASS
+- Package Job / Upscale 회귀 정상
+- 생성 실패 → Ledger REFUND row + Pool balance 복구, 중복 환불 방지
+- `profiles.credits` 직접 UPDATE 시도 → 트리거 예외
+- Reconciliation 배치: drift 0
+
+**포함 (구현 항목)**
+
+*Credit Service*
+- [ ] `src/services/credit/` 재작성 (6개 함수 + `organization-pool-resolver.ts` + `errors.ts` + `types.ts`)
+- [ ] Migration 066 — `profiles.credits` Write Guard 트리거 부착
+- [ ] Idempotency: `refund()` 는 `pool + job (+ slot metadata)` 중복 방지
+- [ ] 기존 `reserveCredits` / `refundCredits` 는 deprecated wrapper 로 30일 유지 (관찰 후 별도 Migration 으로 제거)
+
+*Job / Generate 조직 컨텍스트 (기준 ①④⑥)*
+- [ ] `POST /api/jobs` 가 body 로 `organizationId` (또는 orgSlug) 를 받아 검증 후 `org_id` 세팅
+- [ ] `GenerateV2Client` 가 페이지 props 로 orgSlug/orgId 를 받아 submit 시 포함
+- [ ] `/organization/[slug]/generate` · `/organization/my/generate` 서버 컴포넌트가 orgSlug/orgId 를 client 로 전달
+- [ ] Server: 요청자가 해당 조직 active member 가 아니면 403
+- [ ] Job 실행 파이프라인 (single · package · upscale) 은 신규 `use()` / `refund()` 를 호출, poolId 는 `resolveOrganizationPool(organizationId)` 결과
+
+*Conversation 조직별 격리 (기준 ②)*
+- [ ] `conversationStore` 의 `Conversation` 에 `organizationId` 필드 추가
+- [ ] Persist migration (v1 → v2): 기존 대화들을 세션 유저의 MY org id 로 backfill (rehydrate 시 1회)
+- [ ] `ConversationSidebar` · Conversation 조회 로직에 현재 organization 필터 적용
+- [ ] 새 대화 생성 시 현재 페이지의 organizationId 를 seed
+
+*Library 조직별 필터 (기준 ⑤)*
+- [ ] `LibraryGrid` (개인 라이브러리 그리드) 를 organization_id 컨텍스트로 필터. MY 페이지에서는 MY org 만, 학교 조직 페이지에서는 그 조직만
+- [ ] 이미지 조회 API (`/api/images`) 가 `organization_id` 필터 쿼리 파라미터 지원
+
+*Credit 표시 (기준 ③)*
+- [ ] `useOrganization` 응답 또는 별도 `/api/organizations/[slug]/tokens` API 에 `balance` 포함
+- [ ] Organization 홈 헤더 우측에 "이 워크스페이스 크레딧: N" 표시
+- [ ] `GenerateV2Client` sidebar credit badge 가 현재 컨텍스트 pool.balance 기준
+- [ ] `AppHeader` 의 전역 크레딧 표시는 유지 (개인 관점) 또는 hide (조직 컨텍스트) — M3 착수 시 세부 결정
+
+*Admin Allocate API (B-2 — 사용자 승인)*
+- [ ] `POST /api/admin/organizations/[id]/allocate` — Super Admin 이 조직 pool 에 크레딧 지급 (`allocate_tokens(NULL, org_pool, amount, memo, admin)`)
+- [ ] `isAdmin(email)` 검증 후 실행
+- [ ] **API 만 제공, UI 는 M4**. M3 테스트 시 curl / API client 로 학교 조직 pool 에 임시 지급 가능
+
+*조회 API (Member 본인)*
+- [ ] `/api/me/tokens` — 본인의 MY pool 요약 (balance, 최근 사용/지급 요약)
+- [ ] `/api/me/tokens/history` — 본인 ledger 이력
 
 **포함하지 않음**
 
-- Organization Token 설정 UI (M4)
+- Organization Token 설정 UI 상세 (M4 — Summary · Members · Allocate · History)
 - Super Admin Dashboard (M4)
 - 기존 `reserve_credits` / `refund_credits` RPC 삭제 — 관찰 기간 후 별도 Migration
-
-**M3 완료 조건**
-
-- `pnpm tsc --noEmit` PASS
-- `pnpm build` PASS
-- 회귀: Single Job · Package Job · Upscale 이 정상 동작
-- MY 워크스페이스 생성 → MY Pool 소진 + Ledger USE row 확인
-- 학교 조직 컨텍스트 생성 → 학교 Pool 소진, MY Pool 무변화
-- 생성 실패 → Ledger REFUND row + Pool balance 복구
-- 중복 환불 방지 확인
-- `profiles.credits` 직접 UPDATE 시도 (Credit Service 밖) → 트리거 예외
-- Reconciliation 배치 결과: drift = 0
-- 사용자 테스트 가이드 제공 (§10.3)
 
 ### 2.4 Milestone 4 — Organization · Admin UI
 
 **포함**
 
 - [ ] `/organizations` 페이지 완성 (최근 사용 공간 · 내 워크스페이스 · 참여 중 조직 3-그룹 표시)
-- [ ] `/organization/{slug}/library` (기존 `/library` 이관 · MY / 학교 공용)
-- [ ] `/organization/{slug}/generate` (기존 `/generate-v2` 이관)
+- [ ] `/organization/{slug}/library` — M2 에서 최소 진입 완료. M4 는 부가 UI 정리 (필터 · 정렬 등)
+- [ ] `/organization/{slug}/generate` — M2 에서 최소 진입 완료. M4 는 부가 UI 정리
 - [ ] `/organization/{slug}/history` (생성 이력)
 - [ ] `/organization/{slug}/reference-images`
 - [ ] `/organization/{slug}/settings/token` (Org Admin only — Summary · Pool · Members · Allocate · History · Usage)
 - [ ] `POST /api/organizations/{slug}/members/{userId}/allocate` (Org Admin → Member 지급)
 - [ ] `GET /api/organizations/{slug}/tokens` · `/history` · `/members/tokens`
-- [ ] `/admin/token-dashboard` (전체 조직 · 사용자 · 총 지급 · 총 사용 · OpenAI 비용)
-- [ ] `/admin/organizations` (Super Admin → Org 지급 CTA)
+- [ ] `/admin/token-dashboard` (전체 조직 · 사용자 · 총 지급 · 총 사용 · OpenAI 비용) — Admin allocate API 는 M3 에서 배포됨
+- [ ] `/admin/organizations` (Super Admin → Org 지급 CTA — M3 배포된 API 사용)
 - [ ] `/admin/usage` (월별 · 조직별 · 유저별 통계)
 - [ ] `/admin/billing` (OpenAI 실비용 집계)
-- [ ] `POST /api/admin/organizations/{id}/allocate` (Super Admin → Org 지급)
 - [ ] `POST /api/admin/migrate/tokens` (M2 backfill 재실행 트리거 · idempotent)
 - [ ] `GET /api/admin/token-dashboard`
 - [ ] Reconciliation cron 등록 (Supabase pg_cron)
-- [ ] MY 조직에 대해 members / invite / role change / dissolve API 호출 → 403 반환
+- [ ] MY 조직에 대해 members / invite / role change / dissolve API 호출 → 403 반환 (M2 에서 이미 반영)
 
 **M4 완료 조건**
 
@@ -879,3 +914,4 @@ v0.1.0 의 P-1 ~ P-5 는 모두 확정 채택 (§6, §7, §8 에 반영):
 | 0.2.0 | 2026-08-06 | MY Organization Decision Response 반영. Personal Pool 개념 폐기 → 모든 워크스페이스가 organization 으로 통일. `organizations.type` 도입. `/organization/my` URL alias 확정. 4개 사용자 검증 마일스톤으로 재구성. D-3/D-5 폐기, D-open-2/3/4/5 확정, Proposal P-1~P-5 모두 확정 반영. | sbtmxk20 |
 | 0.2.1 | 2026-08-06 | 사용자 M1 착수 전 4개 조정 반영: (1) Migration 순서 재정렬 — `organizations.type` (056) 을 `token_pools` 보다 먼저 배치, 각 Migration `depends_on` 명시. (2) `pool-router.ts` Proposal 수정 — `organization-pool-resolver.ts` 로 이름·책임 축소 (개인/조직 분기 없음). (3) `monthly_credit_reset` D-6 표현 수정 — "personal pool 대상" → "organizations.type='personal' 인 MY Organization Pool 대상", 부족 수량만 ISSUE, 월별 idempotency key 필수. (4) D-open-2 확정 세부 반영 — 사용자당 personal Organization 1개 UNIQUE partial index (Migration 056), 실제 권한 기준은 `owner_id + type='personal'`. | sbtmxk20 |
 | 0.2.2 | 2026-08-06 | M1 승인 · M2 재개 시점. M2 범위를 "데이터 이관 중심" 에서 "**진입 구조 전환 포함**" 으로 확장. 상단 네비 조정 (`+클립아트 만들기` · `MY` 제거, `우리학교` 만 유지), 라우트 재구성 (`/organization/[slug]/{library,generate}` 신규 · 기존 페이지 삭제 후 next.config redirect), MY Organization 의 멤버/초대/해체 UI 및 API 거부를 M2 에 포함. 사용자 지시 M2 완료 기준 7가지 그대로 채택. Redirect 는 오직 기존 링크/북마크 호환용이며 앱 내부 링크는 새 경로만 사용. | sbtmxk20 |
+| 0.2.3 | 2026-08-06 | M2 완료 · M3 착수 준비. M3 의 관점을 "기술 계층 전환" 에서 "**Workspace 독립성 완성**" 으로 재프레임 (사용자 지시). 완료 기준을 Workspace 단위 6가지 (Job/Conversation/Credit 표시/Token 차감/Library/Generate) 로 재정리. Credit Service · Conversation store 조직별 격리 · Library 조직 필터 · Job 조직 라우팅 · 조직 크레딧 표시 UI 를 하나의 M3 스코프로 통합. Admin Allocate API (`POST /api/admin/organizations/[id]/allocate`) 는 M3 에 포함 (B-2), 대응 UI 는 M4 유지. | sbtmxk20 |
