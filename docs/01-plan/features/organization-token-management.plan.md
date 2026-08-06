@@ -3,7 +3,7 @@
 > **Summary**: Super Admin → Organization → Member 3계층 토큰 관리 SaaS 인프라. 개인 사용도 "1인 Organization (type=personal)" 으로 통일해 모든 워크스페이스를 Organization 하나의 개념으로 관리한다. Ledger 기반 감사(Source of Truth) · Pool 기반 잔액 캐시 · profiles.credits UI 캐시 3-tier 구조.
 >
 > **Project**: ClipArt Studio — Organization Token Management
-> **Version**: 0.2.5 (Plan — M3 사용자 검증 단위를 3개 (M3-A/B/C) 로 재조정)
+> **Version**: 0.2.6 (Plan — M3 를 사용자 UX 관점 4개 (생성 → 데이터 → 크레딧 → 운영) 로 재배치)
 > **Author**: sbtmxk20
 > **Date**: 2026-08-06
 > **Status**: Draft — 사용자 승인 대기
@@ -155,16 +155,19 @@
 - **기존 개인 이미지 수 · Reference Image 수 · 생성 이력 유지** (`organization_id` 로 재라벨되어 있으나 사용자 조회 결과는 동일)
 - 사용자 테스트 가이드 제공 (§10.2)
 
-### 2.3 Milestone 3 — Workspace 독립성 완성 (3개 사용자 검증 단위)
+### 2.3 Milestone 3 — Workspace 독립성 완성 (사용자 UX 관점 4개 단위)
 
-**목표 (사용자 지시)**: Workspace (내 작업실 및 일반 Organization) 가 서로 완전히 독립적으로 동작한다. 각 Workspace 는 **자기만의 Job · Credit · Conversation · Library · Generate** 를 갖는다. 기술 계층은 이 목표를 달성하기 위한 수단이며, 완료 판정도 Workspace 단위로 이뤄진다.
+**목표 (사용자 지시)**: Workspace (내 작업실 및 일반 Organization) 가 서로 완전히 독립적으로 동작한다. 각 Workspace 는 **자기만의 Job · Credit · Conversation · Library · Generate** 를 갖는다.
 
-**진행 원칙** (사용자 지시 v0.2.5):
-- M3 의 **기술 범위** 는 v0.2.4 (M3-1~M3-4) 그대로 유지. 누락 없음.
-- **사용자 검증 지점** 은 3개 (M3-A, M3-B, M3-C) 로 통합. 각 지점에서 브라우저·SQL·API 로 end-to-end 테스트 가능.
-- 각 검증 지점 종료 시 `pnpm tsc --noEmit` + `pnpm build` 확인 + 자동 검증 + 사용자 테스트 URL/정상 결과 제공 후 stop.
-- 사용자 승인 없이 다음 검증 단위로 진행하지 않는다.
-- 내부 커밋은 구현 안전성을 위해 자유롭게 세분화. 함수·Migration 하나가 끝날 때마다 승인받지 않음.
+**진행 원칙** (사용자 지시 v0.2.6):
+- **기술 범위 감축 없음.** v0.2.4/v0.2.5 의 모든 항목 그대로 진행.
+- **사용자 검증 단위** 는 4개. 사용자가 실제로 화면에서 기능을 사용하고 피드백할 수 있는 관점으로 분할:
+  - **M3-1 Workspace 생성** — 사용자 관점: "각 조직에서 생성이 되는가"
+  - **M3-2 Workspace 데이터** — 사용자 관점: "각 조직 데이터가 섞이지 않는가"
+  - **M3-3 Workspace Credit** — 사용자 관점: "각 조직 크레딧이 따로 소진되는가"
+  - **M3-4 운영** — 전체 회귀 · Rollback · Reconciliation
+- 각 단위 종료 시 `pnpm tsc --noEmit` + `pnpm build` + 자동 검증 + 사용자 테스트 URL/정상 결과 제공 후 stop.
+- 내부 커밋은 자유롭게 세분화. 함수/Migration 하나 단위로 승인받지 않음.
 
 **M3 최종 완료 기준 (모든 하위 마일스톤 종료 후 성립해야 함)**
 
@@ -185,126 +188,144 @@
 
 ---
 
-#### 2.3.1 M3-A — Workspace 작업 분리 (Generate · Library · Conversation)
+#### 2.3.1 M3-1 — Workspace 생성 (Generate 흐름)
 
-**목표**: 각 조직에서 대화·이미지 생성이 완전히 독립되어 저장되고 서로 섞이지 않는다. 비멤버 조직 접근은 서버에서 거부. 크레딧 소진은 **여전히 legacy `profiles.credits`** (M3-B 에서 조직 pool 로 전환).
+**사용자 관점**: "각 조직에서 클립아트 생성이 정상적으로 되는가?" — 사용자가 생성 흐름만 테스트한다. 데이터 표시 (Library, Sidebar) · 크레딧 표시는 다음 단계.
+
+**포함**
+- [ ] Organization 선택 (`/organizations` 카드 → 조직 홈 → `+ 클립아트 만들기` CTA) 는 M2 에서 이미 완료
+- [ ] `POST /api/jobs` 요청 body 로 `organizationId` (또는 orgSlug) 필수 수신
+- [ ] Server: 요청자가 해당 조직 active member 가 아니면 403 (비멤버 조직 접근 거부)
+- [ ] `GenerateV2Client` 가 페이지 props 로 orgSlug/orgId 를 받아 job submit 시 포함
+- [ ] `/organization/[slug]/generate` · `/organization/my/generate` 서버 컴포넌트가 orgSlug/orgId 를 client 로 전달
+- [ ] Job 저장 시 `org_id = 전달받은 organization id` (Migration 046 컬럼 활용)
+- [ ] 신규 이미지 저장 시 `images.organization_id = job.org_id` (Migration 065 컬럼 활용)
+
+**포함하지 않음**
+- Library 필터 (M3-2)
+- Conversation 격리 (M3-2)
+- Credit Service (M3-3)
+- 크레딧 표시 UI (M3-3)
+
+**M3-1 완료 조건**
+- `pnpm tsc --noEmit` PASS, `pnpm build` PASS
+- 회귀: 기존 크레딧 파이프라인 정상 (legacy `reserveCredits` 그대로)
+
+**사용자 테스트 지점 (생성 흐름만)**
+1. `/organizations` → 내 작업실 카드 → `+ 클립아트 만들기` → 이미지 1장 생성 → 성공
+2. `/organizations` → 학교 조직 카드 → `+ 클립아트 만들기` → 이미지 1장 생성 → 성공
+3. SQL 검증: 두 job 의 `org_id` 가 각각 MY / 학교 organization id 로 저장 · 두 image 도 동일한 organization_id
+4. 비멤버 조직 slug 로 API 직접 호출 (curl) → 403
+
+---
+
+#### 2.3.2 M3-2 — Workspace 데이터 (Library · Conversation · Sidebar · Persist Migration)
+
+**사용자 관점**: "각 조직 데이터가 섞이지 않는가?" — 사용자가 Library 와 Conversation Sidebar 격리만 테스트한다. 크레딧은 다음 단계.
 
 **포함**
 
-*Generate 조직 라우팅 · Membership 검증*
-- [ ] `POST /api/jobs` 요청 body 로 `organizationId` (또는 orgSlug) 필수 수신
-- [ ] Server: 요청자가 해당 조직 active member 가 아니면 403
-- [ ] Job 저장 시 `org_id = 전달받은 organization id` (Migration 046 컬럼 활용)
-- [ ] 신규 이미지 저장 시 `images.organization_id = job.org_id` (Migration 065 컬럼 활용)
-- [ ] `/organization/[slug]/generate` · `/organization/my/generate` 서버 컴포넌트가 orgSlug/orgId 를 `GenerateV2Client` 에 전달
-- [ ] `GenerateV2Client` 가 job submit 시 organizationId 포함
-
 *Library 조직 필터*
-- [ ] `LibraryGrid` 를 organization_id 컨텍스트로 필터 (MY 페이지 = MY org 이미지, 학교 조직 페이지 = 그 조직 이미지)
+- [ ] `LibraryGrid` 를 organization_id 컨텍스트로 필터
 - [ ] `/api/images` 목록 API 가 `organization_id` 필터 지원
 
 *Conversation 격리 · Persist migration*
 - [ ] `conversationStore` 의 `Conversation` 타입에 `organizationId: string` 필드 추가
 - [ ] Persist migration v2: 기존 대화들을 세션 유저의 MY org id 로 backfill (rehydrate 시 1회)
 - [ ] `createConversation` 이 현재 페이지의 organizationId 를 seed
-- [ ] `ConversationSidebar` · Conversation 조회 로직에 현재 organization 필터
-- [ ] 조직 전환 시 sidebar 는 그 조직 대화만 표시 (localStorage 는 유지, UI 만 필터)
-- [ ] `useConversationStore` selector 확장
+- [ ] `ConversationSidebar` 가 현재 organization 의 대화만 리스트
+- [ ] `useConversationStore` selector 확장 (`selectConversationsByOrganization`)
 
-**포함하지 않음** (M3-A 밖)
-- Credit Service 전환 (M3-B)
-- 크레딧 표시 UI (M3-B)
-- Admin Allocate API (M3-B)
-- Member API / Reconciliation (M3-C)
+**포함하지 않음**
+- Credit Service (M3-3)
+- 크레딧 표시 (M3-3)
+- Reconciliation / Member API (M3-4)
 
-**M3-A 완료 조건**
+**M3-2 완료 조건**
 - `pnpm tsc --noEmit` PASS, `pnpm build` PASS
-- 기존 크레딧 파이프라인 정상 (legacy `reserveCredits` 그대로)
 - 기존 저장된 대화가 rehydrate 후 사라지지 않음 (MY 조직으로 이관됨)
 
-**사용자 테스트 지점 (5단계 흐름)**
-1. **내 작업실에서 대화 + 이미지 생성** — `/organization/my/generate` 에서 새 대화 시작 → 이미지 1장 생성 → 성공 확인
-2. **학교 조직에서 대화 + 이미지 생성** — `/organization/{학교}/generate` 로 이동 → 새 대화 시작 → 이미지 1장 생성 → 성공 확인
-3. **두 Workspace 의 대화·Library 격리** — 각 조직 sidebar 에 그 조직 대화만 표시 · 라이브러리에도 그 조직 이미지만 (교차 노출 없음)
-4. **기존 대화 유지** — Migration 배포 전 존재했던 대화들이 `/organization/my/generate` sidebar 에 그대로 (MY 조직으로 이관됨)
-5. **비멤버 조직 접근 거부** — 소속이 아닌 학교 조직 slug 로 URL 접근 시 `/organizations` redirect. API 직접 호출 시 403
+**사용자 테스트 지점 (섞이지 않는지만)**
+1. **기존 대화 유지** — Migration 배포 전 존재했던 대화들이 `/organization/my/generate` sidebar 에 그대로 (MY 로 이관)
+2. **MY 라이브러리 = MY 이미지만** — M3-1 에서 생성한 MY 이미지는 `/organization/my/library` 에 · 학교 이미지는 안 뜸
+3. **학교 라이브러리 = 학교 이미지만** — 학교 이미지는 `/organization/{학교}/library` 에 · MY 이미지는 안 뜸
+4. **MY sidebar = MY 대화만** · **학교 sidebar = 학교 대화만** — 조직 전환 시 sidebar 리스트가 그 조직 것만 표시
+5. **새로고침 후에도 격리 유지** — localStorage rehydrate 후에도 각 조직 sidebar 정상
 
 ---
 
-#### 2.3.2 M3-B — Workspace Credit (Credit Service · 표시 · 지급)
+#### 2.3.3 M3-3 — Workspace Credit (Credit Service · Pool · Ledger · Allocate · Refund · Write Guard)
 
-**목표**: 실제 크레딧 소진이 조직별 Pool 에서 이뤄지고, 각 Workspace 의 잔액이 UI 에 명시적으로 노출된다. Legacy `profiles.credits` 직접 UPDATE 는 완전 차단.
+**사용자 관점**: "각 조직 크레딧이 따로 소진되는가?" — 사용자가 크레딧 흐름만 테스트한다. 조직별 크레딧이 표시되고 각각 소진·환불된다.
 
 **포함**
 
 *Credit Service · 호출부 전환*
 - [ ] `src/services/credit/` 재작성 (신규 6개 함수 + `organization-pool-resolver.ts` + `errors.ts` + `types.ts`)
 - [ ] `POST /api/jobs`, `GET /jobs/[id]/stream`, `package-pipeline`, `upscale` 을 신규 `use()` / `refund()` 로 전환. 대상 pool 은 `resolveOrganizationPool(job.org_id)` 결과
-- [ ] 기존 `reserveCredits` / `refundCredits` 는 신규 서비스로 위임하는 deprecated wrapper 로 유지 (M3-C 관찰 후 제거)
+- [ ] 기존 `reserveCredits` / `refundCredits` 는 신규 서비스로 위임하는 deprecated wrapper 로 유지 (M3-4 관찰 후 제거)
 - [ ] Idempotency: `refund()` 는 `pool + job (+ slot_id metadata)` 중복 방지
 - [ ] 잔액 부족 처리: `INSUFFICIENT_BALANCE` 에러 → 클라이언트에 명확한 안내
 
 *Write Guard 활성 (호출부 전환 완료 검증 후)*
-- [ ] Migration 066 — `profiles.credits` Write Guard 트리거 부착 (M1 에서 함수만 정의됨). 반드시 호출부 전환 완료 후에 부착
+- [ ] Migration 066 — `profiles.credits` Write Guard 트리거 부착 (M1 에서 함수만 정의됨)
 
 *Admin Allocate API (B-2)*
-- [ ] `POST /api/admin/organizations/[id]/allocate` — Super Admin 조직 pool 지급. `isAdmin(email)` 검증 후 `allocate_tokens(NULL, org_pool, amount, memo, admin)`. **API 만, UI 는 M4**
+- [ ] `POST /api/admin/organizations/[id]/allocate` — Super Admin 조직 pool 지급. **API 만, UI 는 M4**
 
 *크레딧 표시 UI (현재 Workspace 기준)*
-- [ ] Organization 홈 헤더에 "이 워크스페이스 크레딧: N" 표시 (`/api/organizations/[slug]/tokens` API 신설 또는 `useOrganization` 응답 확장)
+- [ ] Organization 홈 헤더에 "이 워크스페이스 크레딧: N" 표시 (`useOrganization` 응답 확장 또는 별도 tokens API)
 - [ ] `GenerateV2Client` sidebar credit badge 가 현재 컨텍스트 pool.balance 기준
-- [ ] `AppHeader` 전역 크레딧은 개인 관점 (profile.credits = MY pool) 유지 또는 조직 컨텍스트에서 hide — 착수 시 세부 결정
 
-**포함하지 않음** (M3-B 밖)
-- Member 본인 조회 API (M3-C)
-- Reconciliation cron 등록 (M3-C)
+**포함하지 않음**
+- Member 본인 조회 API (M3-4)
+- Reconciliation cron 등록 (M3-4)
 
-**M3-B 완료 조건**
+**M3-3 완료 조건**
 - `pnpm tsc --noEmit` PASS, `pnpm build` PASS
 - 신규 코드에 legacy `reserveCredits/refundCredits` 직접 호출 없음 (deprecated wrapper 만 유지)
 
-**사용자 테스트 지점 (6단계)**
-1. **잔액 표시** — `/organization/my` 홈 헤더 · `/organization/{학교}` 홈 헤더에 각각 다른 pool.balance 표시. Generate sidebar 도 현재 조직 기준
-2. **MY 생성 → MY pool 만 차감** — MY 에서 이미지 1장 생성 → MY pool.balance 1 감소, 학교 pool 무변화. Ledger USE row 의 pool_id = MY pool
-3. **학교 생성 → 학교 pool 만 차감** — 사전 준비 `curl POST /api/admin/organizations/{학교id}/allocate` 로 학교 pool 에 50 지급 → 이미지 1장 생성 → 학교 pool.balance 1 감소, MY pool 무변화
-4. **실패·취소 시 원래 pool 환불** — 생성 실패 유도 → Ledger REFUND row + 해당 pool balance 원복. 같은 job 에 대해 두 번 refund 시도 시 `already_refunded=true` (중복 방지)
-5. **잔액 부족 시 생성 차단** — 학교 pool.balance=0 상태에서 학교 조직 생성 시도 → `INSUFFICIENT_BALANCE` 에러
-6. **다른 Workspace 무영향** — 여러 케이스 후 MY pool = ledger_sum(MY pool), 학교 pool = ledger_sum(학교 pool) invariant 유지. SQL: `UPDATE profiles SET credits=... WHERE ...` 직접 시도 → Write Guard 예외
+**사용자 테스트 지점 (크레딧만)**
+1. **잔액 표시** — MY 홈 · 학교 홈 헤더에 각각 다른 pool.balance 표시. Generate sidebar 도 현재 조직 기준
+2. **MY 생성 → MY pool 만 차감** — MY 에서 1장 생성 → MY pool -1, 학교 pool 무변화. Ledger USE row 의 pool_id = MY pool
+3. **학교 생성 → 학교 pool 만 차감** — `curl POST /api/admin/organizations/{학교id}/allocate` 로 학교 pool 에 50 지급 → 학교 조직에서 1장 생성 → 학교 pool -1, MY pool 무변화
+4. **실패·취소 시 원래 pool 환불** — 생성 실패 유도 → Ledger REFUND row + 해당 pool 원복. 같은 job 에 refund 두 번 시 `already_refunded=true`
+5. **잔액 부족 시 생성 차단** — 학교 pool=0 에서 학교 조직 생성 시도 → `INSUFFICIENT_BALANCE` 에러
+6. **다른 Workspace 무영향** — invariant: MY pool.balance = MY ledger_sum, 학교 pool.balance = 학교 ledger_sum. `UPDATE profiles SET credits=... WHERE ...` 직접 시도 → Write Guard 예외
 
 ---
 
-#### 2.3.3 M3-C — 안정화 및 전체 검증
+#### 2.3.4 M3-4 — 운영 (History · Statistics · Reconciliation · Admin · Rollback)
 
-**목표**: Member 관점 조회 API · 자동 검증 배치 · Legacy 잔존 확인 · 전체 회귀. M3 6가지 최종 완료 기준 육안·SQL 검증 통과.
+**사용자 관점**: 전체 회귀. 조회 API 정상 · 배치 검증 정기 · Legacy 잔존 없음 · Rollback 준비. M3 6가지 최종 기준 통과.
 
 **포함**
 
-*Member Token API*
-- [ ] `/api/me/tokens` — 본인의 MY pool 요약 (balance, 최근 사용/지급 요약)
+*History · Statistics API*
+- [ ] `/api/me/tokens` — 본인의 MY pool 요약
 - [ ] `/api/me/tokens/history` — 본인 ledger 이력
+- [ ] 조직별 · 유저별 기본 사용 통계 (M4 Dashboard 는 별도 · 여기는 최소 API 만)
 
 *Reconciliation*
-- [ ] Reconciliation view (SQL) — `SELECT pool_id, balance, ledger_sum, (balance - ledger_sum) AS drift FROM ...`
-- [ ] Supabase pg_cron 등록 — 매일 실행. drift 발견 시 admin alert (log or webhook)
+- [ ] Reconciliation view (SQL) — pool.balance vs ledger_sum drift
+- [ ] Supabase pg_cron 등록 — 매일 실행 · drift 시 alert
 
-*Legacy 정리 · 최종 회귀 검증*
-- [ ] Legacy `reserveCredits`/`refundCredits` 잔존 호출 grep 후 0 확인 (deprecated wrapper 는 유지, 신규 코드에서 직접 호출 없음)
-- [ ] 신규 job 의 `org_id NULL` 개수 확인 → 0
-- [ ] Package Job 부분 실패 시 slot 별 환불 정상
-- [ ] Upscale (Lanczos 무료, Replicate 유료) 회귀
-- [ ] 동시성: 같은 pool 에 concurrent use × N 실행 → 결과 pool.balance = 초기 - N×amount (race 없음)
-- [ ] 중복 요청: 같은 job 에 대해 refund 두 번 호출 → 두 번째는 `already_refunded=true`
-- [ ] Rollback 검증: dev 환경에서 Migration 066 (Write Guard 트리거) DROP → 배포 전 상태 복구 가능 확인
+*Admin · Legacy 정리 · Rollback*
+- [ ] Admin: `POST /api/admin/organizations/[id]/allocate` (M3-3 배포됨) API 동작 재확인 · curl 테스트 스크립트 문서화
+- [ ] Legacy `reserveCredits/refundCredits` 잔존 호출 grep → 0 (deprecated wrapper 만 유지)
+- [ ] Rollback: dev 환경에서 Migration 066 (Write Guard) DROP → 배포 전 상태 복구 가능 확인
+- [ ] 신규 job `org_id NULL` 검사 → 0
+- [ ] Package Job 부분 실패 환불 · Upscale 회귀 · 동시성 · 중복 요청 검증
 
-**M3-C 완료 조건**
+**M3-4 완료 조건**
 - `pnpm tsc --noEmit` PASS, `pnpm build` PASS
 
 **사용자 테스트 지점 (전체 회귀)**
-1. `/api/me/tokens` 응답 확인 (balance, 최근 사용 요약)
-2. `/api/me/tokens/history` 응답 확인 (Ledger 이력)
-3. Reconciliation cron 실행 (다음날 로그) — drift 0
-4. M3 최종 6가지 완료 기준 (① Job 저장 · ② Conversation · ③ Credit 표시 · ④ Token 차감 · ⑤ Library · ⑥ Generate) 모두 육안 · SQL 통과
-5. 회귀: Single/Package/Upscale 정상 · 크레딧 정확 · 환불 정확 · 다중 세션 동시 요청 무결성
+1. `/api/me/tokens` · `/history` 응답 정상
+2. Reconciliation cron 실행 (다음날 로그) — drift 0
+3. Package Job / Upscale 회귀 정상
+4. M3 최종 6가지 완료 기준 (① Job 저장 · ② Conversation · ③ Credit 표시 · ④ Token 차감 · ⑤ Library · ⑥ Generate) 모두 통과
+5. Rollback 문서 확인
 
 ### 2.4 Milestone 4 — Organization · Admin UI
 
@@ -999,3 +1020,4 @@ v0.1.0 의 P-1 ~ P-5 는 모두 확정 채택 (§6, §7, §8 에 반영):
 | 0.2.3 | 2026-08-06 | M2 완료 · M3 착수 준비. M3 의 관점을 "기술 계층 전환" 에서 "**Workspace 독립성 완성**" 으로 재프레임 (사용자 지시). 완료 기준을 Workspace 단위 6가지 (Job/Conversation/Credit 표시/Token 차감/Library/Generate) 로 재정리. Credit Service · Conversation store 조직별 격리 · Library 조직 필터 · Job 조직 라우팅 · 조직 크레딧 표시 UI 를 하나의 M3 스코프로 통합. Admin Allocate API (`POST /api/admin/organizations/[id]/allocate`) 는 M3 에 포함 (B-2), 대응 UI 는 M4 유지. | sbtmxk20 |
 | 0.2.4 | 2026-08-06 | M3 를 4개 하위 마일스톤으로 분할 (사용자 지시): M3-1 (Workspace Generate — Job/Library 조직 라우팅) → M3-2 (Workspace Conversation 격리 + persist migration) → M3-3 (Credit Service · Pool Resolver · Admin Allocate API · Write Guard 부착) → M3-4 (Header/Sidebar Credit 표시 · Member API · Reconciliation 등록). 각 하위 마일스톤 종료 시 tsc/build 확인 후 사용자 직접 테스트, 승인 시 다음 진행. 내부 커밋은 자유롭게 세분화하되 사용자 검증 지점은 4개. | sbtmxk20 |
 | 0.2.5 | 2026-08-06 | 사용자 검증 지점을 4개 → 3개로 재조정. 기술 범위는 v0.2.4 (M3-1~M3-4) 그대로 유지하되 다음 3개 단위로 묶음: **M3-A** (구 M3-1 + M3-2 — Workspace 작업 분리: Generate 조직 라우팅 · Library 필터 · Conversation 격리 · Persist migration · 비멤버 접근 거부) → **M3-B** (구 M3-3 + M3-4 크레딧 UI — Workspace Credit: Credit Service · Pool Resolver · 호출부 전환 · Admin Allocate API · 크레딧 표시 UI · 잔액 부족 처리 · 호출부 전환 검증 후 Write Guard 활성) → **M3-C** (구 M3-4 나머지 — 안정화 및 전체 검증: Member Token API · History API · Reconciliation · Legacy 정리 · 동시성 · 회귀 · M3 6개 완료 기준 최종 확인). 함수·Migration 단위로는 승인받지 않고, 검증 단위로만 승인받는다. | sbtmxk20 |
+| 0.2.6 | 2026-08-06 | 사용자 UX 관점 4개 단위로 재배치 (사용자 지시). 기술 범위 감축 없이 다음 순서: **M3-1 Workspace 생성** ("각 조직에서 생성이 되는가" — Generate 조직 라우팅 · Membership 검증 · Job/Image org_id 저장) → **M3-2 Workspace 데이터** ("각 조직 데이터가 섞이지 않는가" — Library 필터 · Conversation 격리 · Sidebar · Persist migration) → **M3-3 Workspace Credit** ("각 조직 크레딧이 따로 소진되는가" — Credit Service · Pool · Ledger · Allocate/Refund · Write Guard · 조직 크레딧 표시 UI · Admin Allocate API) → **M3-4 운영** (전체 회귀 · History · Statistics · Reconciliation · Rollback · Legacy 정리). 사용자 승인 지점 4개, 내부 커밋은 자유롭게 세분화. | sbtmxk20 |
