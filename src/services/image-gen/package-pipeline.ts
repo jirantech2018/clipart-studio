@@ -238,6 +238,8 @@ export async function runPackageSlot({
   const { error: insertErr } = await service.from('images').insert({
     id: imageId,
     user_id: job.userId,
+    // Plan v0.2.6 M3-1: 이미지는 job 이 속한 workspace 로 저장.
+    organization_id: job.orgId,
     prompt: finalPrompt.slice(0, 1000),
     model: gen.model,
     seed: gen.seed,

@@ -38,9 +38,13 @@ interface ParentImage {
 interface Props {
   initialCredits: number;
   parent?: ParentImage | null;
+  /** 현재 Workspace 의 organization slug. 서버 컴포넌트가 페이지 경로에서
+   *  결정해 전달. MY 는 hidden `personal-{user_id}`, 학교는 그 조직 slug.
+   *  submit 시 body 로 함께 전송되어 서버가 org_id 로 저장. */
+  orgSlug: string;
 }
 
-export function GenerateV2Client({ initialCredits, parent }: Props) {
+export function GenerateV2Client({ initialCredits, parent, orgSlug }: Props) {
   const router = useRouter();
   const currentId = useConversationStore((s) => s.currentId);
   const conversations = useConversationStore((s) => s.conversations);
@@ -58,10 +62,11 @@ export function GenerateV2Client({ initialCredits, parent }: Props) {
 
   const [guideOpen, setGuideOpen] = useState(true);
 
-  // 유효한 currentId 없으면 새 conversation 만들기.
+  // 유효한 currentId 없으면 새 conversation 만들기. 첫 draft block 이
+  // 현재 workspace 의 orgSlug 를 seed 로 갖도록 seed 옵션 전달.
   useEffect(() => {
     if (!currentId || !conversations[currentId]) {
-      createConversation();
+      createConversation({ orgSlug });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

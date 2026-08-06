@@ -75,6 +75,7 @@ export default async function OrganizationGeneratePage({ params, searchParams }:
     <GenerateV2Client
       initialCredits={profileResult.data?.credits ?? 0}
       parent={parent}
+      orgSlug={params.slug}
     />
   );
 }

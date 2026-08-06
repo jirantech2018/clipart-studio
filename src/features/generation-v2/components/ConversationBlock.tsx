@@ -229,7 +229,13 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       }
       setSubmitting(true);
       try {
-        const result = await submitPackage(packagePlanState);
+        // orgSlug 는 draft block 이 workspace context 에서 seed 받음. 없으면
+        // submit 자체 거부 (서버가 어차피 400/403 반환하지만 client 에서 조기 방어).
+        if (!block.options.orgSlug) {
+          toast.error('워크스페이스 정보가 없어요. 페이지를 새로고침해주세요.');
+          return;
+        }
+        const result = await submitPackage(packagePlanState, block.options.orgSlug);
         markQueued(convId, block.id, result.jobId);
         // 대화 제목은 목적 + 주제 조합. 주제가 없으면 목적만.
         const titleSeed =

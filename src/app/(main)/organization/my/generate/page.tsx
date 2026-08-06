@@ -71,6 +71,7 @@ export default async function MyGeneratePage({ searchParams }: Props) {
     <GenerateV2Client
       initialCredits={profileResult.data?.credits ?? 0}
       parent={parent}
+      orgSlug={myOrg.slug}
     />
   );
 }

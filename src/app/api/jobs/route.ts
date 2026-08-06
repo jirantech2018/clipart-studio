@@ -113,11 +113,15 @@ async function handleSingle(
     throw err;
   }
 
-  let orgIdSnapshot: string | null = null;
+  // Plan v0.2.6 M3-1: 모든 job 은 workspace (organization) 컨텍스트를 갖는다.
+  // orgSlug 미전달 시 세션 유저의 MY organization 으로 default (workspace
+  // 격리를 유지하면서도 legacy 클라이언트 호환).
+  let orgIdSnapshot: string;
+  let orgIdSchoolContext: string | null = null;  // 조직 (school/general) 컨텍스트에서만 활용
   if (body.orgSlug) {
     const { data: orgRow } = await supabase
       .from('organizations')
-      .select('id')
+      .select('id, type')
       .eq('slug', body.orgSlug)
       .is('deleted_at', null)
       .maybeSingle();
@@ -126,6 +130,7 @@ async function handleSingle(
       return apiError('VALIDATION_ERROR', '요청한 조직을 찾을 수 없어요');
     }
     const orgId = (orgRow as { id: string }).id;
+    const orgType = (orgRow as { type: string }).type;
     const { data: member } = await supabase
       .from('organization_members')
       .select('user_id')
@@ -138,6 +143,24 @@ async function handleSingle(
       return apiError('FORBIDDEN', '이 조직의 멤버가 아니에요');
     }
     orgIdSnapshot = orgId;
+    // 조직 (school/general) 컨텍스트만 orgIdSchoolContext 에 담아 org 참조
+    // 이미지 · school profile 로직에 그대로 이용. personal 은 개인 컨텍스트 유지.
+    if (orgType !== 'personal') orgIdSchoolContext = orgId;
+  } else {
+    // Fallback: MY organization 자동 매핑. 신규 job 이 org_id NULL 로 저장되는
+    // 상황을 원천 차단.
+    const { data: myOrg } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('type', 'personal')
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!myOrg) {
+      await refundCredits(userId, body.batchSize);
+      return apiError('INTERNAL_ERROR', '워크스페이스가 아직 준비되지 않았어요');
+    }
+    orgIdSnapshot = (myOrg as { id: string }).id;
   }
 
   let customReferenceR2Key: string | null = null;
@@ -153,14 +176,14 @@ async function handleSingle(
       return apiError('VALIDATION_ERROR', '선택한 참조 이미지를 찾을 수 없어요');
     }
     customReferenceR2Key = ref.r2_key as string;
-  } else if (body.orgReferenceId && orgIdSnapshot) {
+  } else if (body.orgReferenceId && orgIdSchoolContext) {
     const service = createSupabaseServiceClient();
     const { data: orgRef } = await service
       .from('organization_reference_images')
       .select('r2_key, organization_id')
       .eq('id', body.orgReferenceId)
       .maybeSingle();
-    if (!orgRef || (orgRef as { organization_id: string }).organization_id !== orgIdSnapshot) {
+    if (!orgRef || (orgRef as { organization_id: string }).organization_id !== orgIdSchoolContext) {
       await refundCredits(userId, body.batchSize);
       return apiError('VALIDATION_ERROR', '선택한 조직 참조 이미지를 찾을 수 없어요');
     }
@@ -243,8 +266,9 @@ async function handlePackage(
     return apiError('ACTIVE_JOB_EXISTS', '이전 생성이 진행 중입니다', { activeJobId: active.id });
   }
 
-  // 조직 컨텍스트 (선택). package 도 학교/조직 base_prompt 를 상속.
-  let orgIdSnapshot: string | null = null;
+  // Plan v0.2.6 M3-1: 모든 package job 도 workspace (organization) 컨텍스트를
+  // 갖는다. orgSlug 없으면 MY organization 으로 default.
+  let orgIdSnapshot: string;
   if (body.orgSlug) {
     const { data: orgRow } = await supabase
       .from('organizations')
@@ -267,6 +291,18 @@ async function handlePackage(
       return apiError('FORBIDDEN', '이 조직의 멤버가 아니에요');
     }
     orgIdSnapshot = orgId;
+  } else {
+    const { data: myOrg } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('type', 'personal')
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!myOrg) {
+      return apiError('INTERNAL_ERROR', '워크스페이스가 아직 준비되지 않았어요');
+    }
+    orgIdSnapshot = (myOrg as { id: string }).id;
   }
 
   // 크레딧 예약 — 총 slot 수만큼.

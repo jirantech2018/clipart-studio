@@ -31,7 +31,7 @@ export class PackageSubmitError extends Error {
   }
 }
 
-export function buildPackageSubmitPayload(plan: PackagePlanState) {
+export function buildPackageSubmitPayload(plan: PackagePlanState, orgSlug: string) {
   const visibleItems = selectVisibleItems(plan);
   const keywords = selectVisibleKeywords(plan);
   const enabled = visibleItems.filter((it) => it.enabled && it.quantity > 0);
@@ -48,9 +48,10 @@ export function buildPackageSubmitPayload(plan: PackagePlanState) {
 
   return {
     kind: 'package' as const,
+    // Plan v0.2.6 M3-1: 항상 현재 Workspace slug 를 함께 전송 → 서버가
+    // organization_id 세팅 (MY 는 hidden personal-{user_id}, 학교는 그 조직).
+    orgSlug,
     packagePlan: {
-      // 현재 스냅샷 스키마 버전. 서버 Zod 도 default(1) 지만 client 도 명시적
-      // 으로 실어 보내 이후 진화 대응이 쉬워지도록 한다.
       version: 1,
       purpose: plan.purpose,
       topicOrEvent: plan.topicOrEvent,
@@ -61,7 +62,6 @@ export function buildPackageSubmitPayload(plan: PackagePlanState) {
       keywords,
     },
     items,
-    // orgSlug / schoolProfileApplied 는 Phase 2 초기에는 미전달 (지시서 §Prompt).
     schoolProfileApplied: false,
   };
 }
@@ -84,8 +84,9 @@ export function canSubmitPackage(plan: PackagePlanState): boolean {
 
 export async function submitPackage(
   plan: PackagePlanState,
+  orgSlug: string,
 ): Promise<PackageSubmitResponse> {
-  const payload = buildPackageSubmitPayload(plan);
+  const payload = buildPackageSubmitPayload(plan, orgSlug);
   const res = await fetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -114,7 +114,7 @@ interface ConversationState {
   conversations: Record<string, Conversation>;
 
   // ----- Conversation lifecycle -----
-  createConversation: () => string;
+  createConversation: (seedOptions?: Partial<BlockOptions>) => string;
   setCurrentConversation: (id: string) => void;
   removeEmptyConversation: (id: string) => void;
   confirmConversationTitle: (id: string, firstPrompt: string) => void;
@@ -244,10 +244,10 @@ export const useConversationStore = create<ConversationState>()(
       conversations: {},
 
       // ----- Conversation lifecycle -----
-      createConversation: () => {
+      createConversation: (seedOptions) => {
         const id = uid();
         const now = new Date().toISOString();
-        const firstBlock = makeBlock();
+        const firstBlock = makeBlock(seedOptions);
         set((state) => ({
           currentId: id,
           conversations: {

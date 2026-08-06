@@ -79,9 +79,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   // RLS 통과 시 소유자 or authenticated/public. 업스케일은 소유자만.
+  // Plan v0.2.6 M3-1: organization_id 도 함께 조회 — 결과 이미지에 상속.
   const { data: image } = await supabase
     .from('images')
-    .select('id, user_id, r2_key, prompt, model, status')
+    .select('id, user_id, r2_key, prompt, model, status, organization_id')
     .eq('id', params.id)
     .maybeSingle();
   if (!image) return apiError('NOT_FOUND', '이미지를 찾을 수 없습니다');
@@ -124,6 +125,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     r2_key: string;
     prompt: string;
     model: string;
+    organization_id: string | null;
   };
 
   const sourceUrl = publicUrl(src.r2_key);
@@ -186,6 +188,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const { error: insertError } = await service.from('images').insert({
     id: newId,
     user_id: userId,
+    // Plan v0.2.6 M3-1: 업스케일 결과는 원본과 같은 workspace 로 상속.
+    organization_id: src.organization_id,
     prompt: src.prompt,
     model: src.model,
     r2_key: r2Key,
