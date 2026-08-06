@@ -68,13 +68,25 @@ export function OrganizationHome({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <header className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="truncate text-2xl font-semibold tracking-tight">{org.name}</h1>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
-              /{org.slug}
-            </span>
+            <h1 className="truncate text-2xl font-semibold tracking-tight">
+              {isPersonal ? '내 작업실' : org.name}
+            </h1>
+            {/* Personal (MY) Organization 의 hidden slug (`personal-{user_id}`) 는
+                사용자 화면에 절대 노출하지 않는다 (D-open-2). 일반 조직은 slug 를
+                뱃지로 표시. */}
+            {!isPersonal && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground">
+                /{org.slug}
+              </span>
+            )}
           </div>
-          {org.description && (
+          {org.description && !isPersonal && (
             <p className="text-sm text-muted-foreground">{org.description}</p>
+          )}
+          {isPersonal && (
+            <p className="text-sm text-muted-foreground">
+              나만 사용하는 개인 워크스페이스입니다.
+            </p>
           )}
           <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
