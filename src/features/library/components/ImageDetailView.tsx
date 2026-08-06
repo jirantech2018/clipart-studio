@@ -332,7 +332,8 @@ export function ImageDetailView({ id }: { id: string }) {
               </Button>
             </div>
 
-            {/* 고화질 다운로드 — 소유자만. 2x 는 1 크레딧, 4x 는 2 크레딧.
+            {/* 고화질 다운로드 — 소유자만. 서버 provider (Lanczos / Replicate)
+                에 따라 실제 비용이 달라지므로 UI 는 비용 표시를 하지 않는다.
                 업스케일 결과는 라이브러리에 새 이미지로 자동 저장되면서
                 즉시 다운로드도 시작된다. */}
             {image.isOwner && (
@@ -356,7 +357,7 @@ export function ImageDetailView({ id }: { id: string }) {
                     {upscalingScale === 2 ? (
                       <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                     ) : null}
-                    2x <span className="ml-1 text-xs text-muted-foreground">(1 크레딧)</span>
+                    2x
                   </Button>
                   <Button
                     type="button"
@@ -368,8 +369,7 @@ export function ImageDetailView({ id }: { id: string }) {
                     {upscalingScale === 4 ? (
                       <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                     ) : null}
-                    4x (인쇄 표준){' '}
-                    <span className="ml-1 text-xs text-muted-foreground">(2)</span>
+                    4x (인쇄용 권장)
                   </Button>
                 </div>
               </div>

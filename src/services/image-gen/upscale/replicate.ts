@@ -1,20 +1,26 @@
-// Replicate Real-ESRGAN 기반 이미지 업스케일러. FLUX 어댑터와 동일한 Prediction
-// 폴링 패턴을 재사용한다. 인쇄 목적이 주된 use-case 이므로 face_enhance 는
-// 기본 off (얼굴 왜곡 최소화, 학교 클립아트는 대개 일러스트).
+// Replicate Real-ESRGAN 기반 AI 업스케일 어댑터.
 //
-// 실패는 UpscaleUpstreamError 로 감싼다. caller (route) 는 category 로 분기해
-// 안전한 error code 를 클라이언트에 반환하고, 서버 로그에는 원본 status /
-// body 를 그대로 남긴다.
+// 현재 default provider 는 lanczos. 이 파일은 삭제하지 않고 유지한다.
+// Railway Variables 에 UPSCALE_PROVIDER=replicate 를 설정하면 index.ts
+// 의 primaryUpscaler() 가 이 어댑터를 선택한다.
 //
-// 토큰 정규화는 services/replicate/token 을 공유해 flux 와 완전히 동일한
-// 문자열이 두 경로에 흐르도록 한다. 첫 호출 시 fingerprint 를 로그해 두
-// 경로가 같은 토큰을 쓰는지 서버 로그에서 육안 비교 가능.
+// FLUX 어댑터와 동일한 Prediction 폴링 패턴 · 동일한 replicateToken()
+// 정규화 경로를 사용. 첫 호출 시 fingerprint 를 서버 로그에 남겨 flux 와
+// 완전히 같은 토큰을 쓰는지 진단 가능.
 
 import {
   ReplicateTokenMissingError,
   replicateToken,
   replicateTokenFingerprint,
 } from '@/services/replicate/token';
+
+import {
+  UpscaleUpstreamError,
+  type UpscaleAdapter,
+  type UpscaleInput,
+  type UpscaleResult,
+  type UpscaleUpstreamCategory,
+} from './adapter';
 
 const REPLICATE_URL = 'https://api.replicate.com/v1/predictions';
 // nightmareai/real-esrgan — 오랜기간 안정적으로 유지되는 4x 슈퍼 리솔루션 모델.
@@ -24,43 +30,6 @@ const REAL_ESRGAN_VERSION =
 
 const REPLICATE_TIMEOUT_MS = 120_000; // 4x 는 20-40초 걸리는 편, 여유 있게 2분
 
-export type UpscaleScale = 2 | 4;
-
-export interface UpscaleResult {
-  bytes: Buffer;
-  contentType: 'image/png';
-}
-
-/**
- * caller 가 클라이언트에 반환할 error code 를 결정할 때 사용할 category.
- *   unconfigured    : REPLICATE_API_TOKEN 이 서버에 설정되지 않음 (500)
- *   unauthorized    : Replicate 401 — 토큰이 유효하지 않음 (503)
- *   quota           : Replicate 402 — 계정 크레딧 소진 (503)
- *   request_invalid : Replicate 422 — 입력값 / 모델 스키마 오류 (503)
- *   failed          : 그 외 (Prediction 상태 failed, 출력 다운로드 실패 등)
- */
-export type UpscaleUpstreamCategory =
-  | 'unconfigured'
-  | 'unauthorized'
-  | 'quota'
-  | 'request_invalid'
-  | 'failed';
-
-export class UpscaleUpstreamError extends Error {
-  category: UpscaleUpstreamCategory;
-  upstreamStatus: number | null;
-  constructor(
-    message: string,
-    category: UpscaleUpstreamCategory,
-    upstreamStatus: number | null = null,
-  ) {
-    super(message);
-    this.name = 'UpscaleUpstreamError';
-    this.category = category;
-    this.upstreamStatus = upstreamStatus;
-  }
-}
-
 interface Prediction {
   id: string;
   status: 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled';
@@ -69,8 +38,6 @@ interface Prediction {
   urls: { get: string };
 }
 
-// 프로세스당 1회만 fingerprint 를 로그. flux · upscale 두 경로가 완전히
-// 같은 토큰을 사용하는지 서버 로그로 검증하기 위한 것.
 let fingerprintLogged = false;
 
 function token(): string {
@@ -123,14 +90,7 @@ async function pollUntilDone(pred: Prediction): Promise<Prediction> {
   return current;
 }
 
-/**
- * 이미지 URL 을 Real-ESRGAN 으로 업스케일. 결과는 PNG buffer.
- * 소스 URL 은 Replicate 가 직접 가져가므로 R2 public URL 을 그대로 넘긴다.
- */
-export async function upscaleFromUrl(
-  imageUrl: string,
-  scale: UpscaleScale,
-): Promise<UpscaleResult> {
+async function upscaleFromUrl(imageUrl: string, scale: 2 | 4): Promise<UpscaleResult> {
   const startRes = await fetch(REPLICATE_URL, {
     method: 'POST',
     headers: {
@@ -181,3 +141,13 @@ export async function upscaleFromUrl(
   const bytes = Buffer.from(await dl.arrayBuffer());
   return { bytes, contentType: 'image/png' };
 }
+
+export const replicateUpscaler: UpscaleAdapter = {
+  name: 'replicate-real-esrgan',
+  creditCost(scale) {
+    return scale === 2 ? 1 : 2;
+  },
+  upscale({ imageUrl, scale }: UpscaleInput) {
+    return upscaleFromUrl(imageUrl, scale);
+  },
+};

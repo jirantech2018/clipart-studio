@@ -1,16 +1,19 @@
-// 이미지 업스케일 — Real-ESRGAN (Replicate) 로 2x / 4x 확대 후 결과를
-// 라이브러리에 새 이미지로 저장하고 다운로드 URL 을 돌려준다.
+// 이미지 업스케일 — 2x / 4x 확대 후 결과를 라이브러리에 새 이미지로 저장
+// 하고 다운로드 URL 을 돌려준다.
 //
 // POST /api/images/[id]/upscale   body: { scale: 2 | 4 }
 //   - 소유자만 실행 가능 (다른 사람 이미지 업스케일은 허용하지 않음).
-//   - 크레딧: 2x = 1, 4x = 2. reserveCredits 로 원자적 차감, 업스케일
-//     실패 시 refundCredits 로 환불.
+//   - 실제 확대는 primaryUpscaler() 가 선택한 어댑터가 담당.
+//     운영 기본: lanczos (Sharp Lanczos3). 무료.
+//     Railway Variables 에 UPSCALE_PROVIDER=replicate 설정 시 Real-ESRGAN.
+//   - 크레딧 비용은 어댑터의 creditCost(scale) 이 결정. 0 이면 reserve /
+//     refund 로직 전체가 건너뛰어져 예약 · 차감 · 환불이 없다.
 //   - 결과 이미지는 images 테이블에 별도 row 로 저장 (is_upscaled=true,
 //     upscaled_from_id=원본, parent_image_id=원본). tagging 은 하지 않는다
 //     (원본 시점에 이미 완료).
 
 export const runtime = 'nodejs';
-export const maxDuration = 180; // 4x 는 20-40초, Railway 여유 확보
+export const maxDuration = 180; // Replicate 4x 는 20-40초, 안전 여유 확보
 
 import { randomUUID } from 'node:crypto';
 
@@ -25,7 +28,7 @@ import {
 } from '@/services/credit';
 import {
   UpscaleUpstreamError,
-  upscaleFromUrl,
+  primaryUpscaler,
   type UpscaleScale,
   type UpscaleUpstreamCategory,
 } from '@/services/image-gen/upscale';
@@ -39,9 +42,6 @@ import {
 const bodySchema = z.object({
   scale: z.union([z.literal(2), z.literal(4)]),
 });
-
-// scale 별 크레딧 비용. 나중에 조정 편하도록 상수로.
-const CREDIT_COST: Record<UpscaleScale, number> = { 2: 1, 4: 2 };
 
 // 클라이언트에 노출할 공통 안내 메시지. Replicate 인증 문제 · 계정 크레딧
 // 소진 · 모델 스키마 오류 등 내부 원인은 절대 노출하지 않는다.
@@ -62,6 +62,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
+  // 이후 async closure (refundIfCharged) 에서 narrowing 이 보존되지 않으므로
+  // id 를 로컬로 고정.
+  const userId = user.id;
 
   let body: { scale: UpscaleScale };
   try {
@@ -82,24 +85,37 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .eq('id', params.id)
     .maybeSingle();
   if (!image) return apiError('NOT_FOUND', '이미지를 찾을 수 없습니다');
-  if ((image as { user_id: string }).user_id !== user.id) {
+  if ((image as { user_id: string }).user_id !== userId) {
     return apiError('FORBIDDEN', '내 이미지만 업스케일할 수 있어요');
   }
   if ((image as { status: string }).status !== 'saved') {
     return apiError('VALIDATION_ERROR', '저장된 이미지만 업스케일할 수 있어요');
   }
 
-  const cost = CREDIT_COST[body.scale];
+  const adapter = primaryUpscaler();
+  const cost = adapter.creditCost(body.scale);
+
+  // cost=0 (무료 provider) 인 경우 예약·차감·환불 로직을 완전히 건너뛴다.
+  // 현재 profile.credits 는 표시용으로만 응답에 실어 준다.
   let remainingCredits: number;
-  try {
-    remainingCredits = await reserveCredits(user.id, cost);
-  } catch (err) {
-    if (err instanceof InsufficientCreditsError) {
-      return apiError('INSUFFICIENT_CREDITS', '이번 달 크레딧이 부족해요', {
-        requiredCredits: cost,
-      });
+  if (cost > 0) {
+    try {
+      remainingCredits = await reserveCredits(userId, cost);
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) {
+        return apiError('INSUFFICIENT_CREDITS', '이번 달 크레딧이 부족해요', {
+          requiredCredits: cost,
+        });
+      }
+      throw err;
     }
-    throw err;
+  } else {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('credits')
+      .eq('id', userId)
+      .single();
+    remainingCredits = (profile as { credits: number } | null)?.credits ?? 0;
   }
 
   const src = image as {
@@ -112,31 +128,35 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const sourceUrl = publicUrl(src.r2_key);
 
-  let upscaled: Awaited<ReturnType<typeof upscaleFromUrl>>;
+  // cost > 0 일 때만 환불. 무료 provider 는 예약 자체가 없어 환불 대상 없음.
+  async function refundIfCharged(reason: string) {
+    if (cost === 0) return;
+    await refundCredits(userId, cost).catch((refundErr) => {
+      console.error(`[upscale] refund failed after ${reason} for image ${src.id}`, refundErr);
+    });
+  }
+
+  let upscaled: { bytes: Buffer; contentType: 'image/png' };
   try {
-    upscaled = await upscaleFromUrl(sourceUrl, body.scale);
+    upscaled = await adapter.upscale({ imageUrl: sourceUrl, scale: body.scale });
   } catch (err) {
-    // 서버 로그에는 Replicate 원본 status / message / stack 유지.
+    // 서버 로그에는 provider 원본 status / message / stack 유지.
     // 클라이언트에는 category → 안전한 error code + 공통 안내 문구만.
     console.error(`[upscale] failed for image ${src.id}`, {
+      provider: adapter.name,
       name: err instanceof Error ? err.name : typeof err,
       message: err instanceof Error ? err.message : String(err),
       category: err instanceof UpscaleUpstreamError ? err.category : null,
       upstreamStatus: err instanceof UpscaleUpstreamError ? err.upstreamStatus : null,
     });
-    await refundCredits(user.id, cost).catch((refundErr) => {
-      console.error(
-        `[upscale] refund failed after upstream error for image ${src.id}`,
-        refundErr,
-      );
-    });
+    await refundIfCharged('upstream error');
     const code: ErrorCode = err instanceof UpscaleUpstreamError
       ? UPSCALE_ERROR_CODE_BY_CATEGORY[err.category]
       : 'UPSCALE_UPSTREAM_FAILED';
     return apiError(code, USER_FACING_UPSCALE_MESSAGE);
   }
 
-  // 실측 크기 (sharp 로 metadata 읽음) — Real-ESRGAN 결과 크기 신뢰 확인.
+  // 실측 크기 (sharp 로 metadata 읽음).
   let width = 0;
   let height = 0;
   try {
@@ -148,7 +168,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   const newId = randomUUID();
-  const r2Key = `users/${user.id}/${newId}.png`;
+  const r2Key = `users/${userId}/${newId}.png`;
 
   try {
     await putObject({
@@ -158,14 +178,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
     });
   } catch (err) {
     console.error(`[upscale] R2 put failed for ${newId}`, err);
-    await refundCredits(user.id, cost).catch(() => {});
+    await refundIfCharged('r2 put failure');
     return apiError('INTERNAL_ERROR', '업스케일 결과 저장에 실패했어요');
   }
 
   const service = createSupabaseServiceClient();
   const { error: insertError } = await service.from('images').insert({
     id: newId,
-    user_id: user.id,
+    user_id: userId,
     prompt: src.prompt,
     model: src.model,
     r2_key: r2Key,
@@ -182,7 +202,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (insertError) {
     console.error(`[upscale] insert failed for ${newId}`, insertError);
     await deleteObject(r2Key).catch(() => {});
-    await refundCredits(user.id, cost).catch(() => {});
+    await refundIfCharged('images insert failure');
     return apiError('INTERNAL_ERROR', '업스케일 결과 등록에 실패했어요');
   }
 
