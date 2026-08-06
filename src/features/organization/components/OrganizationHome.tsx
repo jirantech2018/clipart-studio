@@ -10,6 +10,7 @@ import { ArrowLeft, ExternalLink, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { LibraryGrid } from '@/features/library/components/LibraryGrid';
 import { OrganizationLibraryGrid } from '@/features/organization/components/OrganizationLibraryGrid';
 import { useOrganization } from '@/features/organization/hooks/useOrganizations';
 import { cn } from '@/lib/utils';
@@ -160,12 +161,19 @@ export function OrganizationHome({
         </aside>
       </div>
 
-      {/* 조직 라이브러리 직접 embed — 뒤로가기·조직명 헤더는 위에 이미 있으니 숨김 */}
-      <OrganizationLibraryGrid
-        slug={slug}
-        currentUserId={currentUserId}
-        hideOrgHeader
-      />
+      {/* Personal (MY) 조직의 홈에서는 "이 조직에 공유된 이미지" (다른 사람이
+          공유한 것) 가 아니라 owner 본인의 개인 라이브러리 전체를 보여줘야
+          한다. MY 는 owner 1인 고정이라 shared 이미지 개념이 없다.
+          일반 조직 홈은 기존대로 OrganizationLibraryGrid (공유된 이미지). */}
+      {isPersonal ? (
+        <LibraryGrid />
+      ) : (
+        <OrganizationLibraryGrid
+          slug={slug}
+          currentUserId={currentUserId}
+          hideOrgHeader
+        />
+      )}
     </div>
   );
 }
