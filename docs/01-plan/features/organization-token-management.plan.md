@@ -3,7 +3,7 @@
 > **Summary**: Super Admin → Organization → Member 3계층 토큰 관리 SaaS 인프라. 개인 사용도 "1인 Organization (type=personal)" 으로 통일해 모든 워크스페이스를 Organization 하나의 개념으로 관리한다. Ledger 기반 감사(Source of Truth) · Pool 기반 잔액 캐시 · profiles.credits UI 캐시 3-tier 구조.
 >
 > **Project**: ClipArt Studio — Organization Token Management
-> **Version**: 0.2.1 (Plan — 사용자 M1 착수 전 4개 조정 반영)
+> **Version**: 0.2.2 (Plan — M2 에 상단 네비 조정 및 라우트 재구성 포함)
 > **Author**: sbtmxk20
 > **Date**: 2026-08-06
 > **Status**: Draft — 사용자 승인 대기
@@ -94,34 +94,65 @@
 - **기존 로그인 · 크레딧 표시 · 이미지 생성 · 실패 환불 이 그대로 동작**
 - 사용자 테스트 가이드 제공 (§10.1)
 
-### 2.2 Milestone 2 — MY Organization 및 기존 데이터 이관
+### 2.2 Milestone 2 — MY Organization 및 기존 데이터 이관 + 진입 구조 전환
+
+**M2 의 성격**: 단순한 데이터 이관이 아니라 **기존 개인 진입 구조 → Organization 중심 구조 전환** 까지 포함한다 (사용자 지시).
 
 **포함**
 
+*DB · 이관*
 - [ ] Migration 062 — `provision_my_organization(user_id)` RPC (idempotent)
 - [ ] Migration 063 — `handle_new_user()` v2 트리거 갱신 (신규 유저 signup 시 profile + MY org + Owner membership + Pool + 초기 Ledger 를 한 트랜잭션으로 생성)
 - [ ] Migration 064 — 전 유저 backfill 스크립트 (기존 유저마다 `provision_my_organization` 호출)
-- [ ] Migration 065 — 기존 개인 데이터 이관 스크립트 (images / generation_jobs / reference_images / knowledge 등 `owner_id` 기반 개인 데이터의 `organization_id` 를 유저의 MY org id 로 UPDATE)
-- [ ] Next.js redirect 추가 (`next.config.js`): `/library` → `/organization/my/library`, `/generate` → `/organization/my/generate`, `/generate-v2` → `/organization/my/generate`
-- [ ] `/organization/my/*` middleware — 세션 유저 → 유저의 MY organization 조회 → route handler 에 `organization_id` 컨텍스트 주입 (route 파일은 M4 에서 실제 UI 로 채움; 이 마일스톤은 middleware / route resolver 만 배포)
-- [ ] `/organizations` 페이지에 MY 카드 표시 (기존 조직 카드와 나란히)
+- [ ] Migration 065 — 기존 개인 데이터 이관 스크립트 (images / generation_jobs / reference_images 등 `owner_id` 기반 개인 데이터의 `organization_id` 를 유저의 MY org id 로 UPDATE). 대상은 개인 소유이면서 `org_id=NULL` 인 row 만; 조직 컨텍스트로 이미 생성된 row 는 유지.
+
+*Redirect · Middleware*
+- [ ] `next.config.js` redirects: `/library` → `/organization/my/library`, `/generate` → `/organization/my/generate`, `/generate-v2` → `/organization/my/generate` (기존 링크/북마크 호환용, 302)
+- [ ] `/organization/my/*` middleware alias — 세션 유저 → 유저의 MY organization 조회 → route handler 에 `organization_id` 컨텍스트 주입
+- [ ] 앱 내부 링크는 **기존 URL 을 사용하지 않고** 새 경로 사용:
+  - MY: `/organization/my/{library,generate,history,reference-images,settings}`
+  - 일반 조직: `/organization/{slug}/{library,generate,history,reference-images,members,settings}`
+  - 특히 일반 Organization 내부의 `+클립아트 만들기` 버튼은 `/generate-v2` 가 아니라 반드시 `/organization/{slug}/generate` 로 이동
+
+*라우트 재구성*
+- [ ] `/organization/[slug]/library` 신규 (기존 `/library` UI 컴포넌트 재사용, organization_id 컨텍스트 주입)
+- [ ] `/organization/[slug]/generate` 신규 (기존 `/generate-v2` UI 컴포넌트 재사용)
+- [ ] 기존 `/library`, `/generate`, `/generate-v2` 페이지 파일은 삭제 (redirect 가 대체). 컴포넌트 (LibraryClient, GenerateV2Client 등) 는 shared 로 유지.
+
+*상단 네비 · Organization 리스트*
+- [ ] `AppHeader.NAV_ITEMS` 조정 — `+클립아트 만들기` · `MY` 제거, `우리학교` (`/organizations`) 만 유지 (관리자 `관리` 는 그대로)
+- [ ] `/organizations` 페이지에 MY 카드 (`내 작업실`) 표시. 3-그룹 구성 (최근 사용 · 내 작업실 · 참여 중 조직) 은 M4 에서 완성, M2 는 최소한 MY 카드 + 기존 조직 카드 병렬 표시
+
+*Organization 내부 메뉴 · MY 조직 UI 제한*
+- [ ] 각 Organization 상세 페이지에 다음 메뉴 노출: `+클립아트 만들기`, `라이브러리`, `생성 이력`, `참조 이미지`, `토큰`, `설정`
+- [ ] 일반 Organization 만 추가로 `멤버`, `초대` 메뉴 노출
+- [ ] MY Organization 에는 `멤버`, `초대`, `조직 탈퇴/해체` 메뉴 노출 금지
+- [ ] MY Organization 대상 members / invites / role change / dissolve API 호출 시 403 반환
 
 **포함하지 않음**
 
 - Credit Service 앱 코드 전환 (M3)
 - `profiles.credits` Write Guard 활성화 (M3)
-- Organization Token 설정 UI (M4)
+- Organization Token 설정 UI 상세 (M4 에서 Summary · Members · Allocate · History 완성)
 - Admin Dashboard (M4)
+- 3-그룹 랜딩 (최근 사용 등) 세부 UX (M4)
 
-**M2 완료 조건**
+**M2 완료 조건** (사용자 지시 §M2 완료 기준 7가지 그대로 채택)
+
+1. 상단 메뉴에는 `우리학교` 만 표시 (`+클립아트 만들기` · `MY` 사라짐)
+2. `/organizations` 에 `내 작업실` 카드 표시
+3. 내 작업실 카드에서 `+클립아트 만들기` 와 라이브러리 진입 가능 (각각 `/organization/my/generate`, `/organization/my/library`)
+4. 일반 조직 카드에서도 해당 조직의 생성 · 라이브러리 진입 가능 (각각 `/organization/{slug}/generate`, `/organization/{slug}/library`)
+5. `/library`, `/generate`, `/generate-v2` 기존 URL 은 정상 Redirect
+6. MY Organization 에는 멤버 · 초대 메뉴가 보이지 않음
+7. 일반 Organization 에는 멤버 관리 메뉴가 유지됨
+
+**추가 완료 조건** (기존 v0.2.1 에서 유지)
 
 - `SELECT COUNT(*) FROM organizations WHERE type='personal'` = `SELECT COUNT(*) FROM auth.users`
 - `SELECT COUNT(*) FROM token_pools` = `SELECT COUNT(*) FROM organizations`
 - `provision_my_organization` 재실행 (idempotent) → 중복 MY Organization 생성되지 않음
-- `/library` 접속 → `/organization/my/library` 로 redirect
-- `/organizations` 랜딩 → MY 카드 (`내 워크스페이스`) + 기존 조직 카드 함께 표시
 - **기존 개인 이미지 수 · Reference Image 수 · 생성 이력 유지** (`organization_id` 로 재라벨되어 있으나 사용자 조회 결과는 동일)
-- MY 카드에는 `members` / `invitations` 메뉴 미노출
 - 사용자 테스트 가이드 제공 (§10.2)
 
 ### 2.3 Milestone 3 — Credit Service · 호출부 전환 · Write Guard 활성
@@ -847,3 +878,4 @@ v0.1.0 의 P-1 ~ P-5 는 모두 확정 채택 (§6, §7, §8 에 반영):
 | 0.1.0 | 2026-08-06 | 초안 — PRD v1.0 + Addendum v1.1 을 SoT 로 착수 Plan 작성. 12개 Decision 항목 및 5개 Proposal 포함. | sbtmxk20 |
 | 0.2.0 | 2026-08-06 | MY Organization Decision Response 반영. Personal Pool 개념 폐기 → 모든 워크스페이스가 organization 으로 통일. `organizations.type` 도입. `/organization/my` URL alias 확정. 4개 사용자 검증 마일스톤으로 재구성. D-3/D-5 폐기, D-open-2/3/4/5 확정, Proposal P-1~P-5 모두 확정 반영. | sbtmxk20 |
 | 0.2.1 | 2026-08-06 | 사용자 M1 착수 전 4개 조정 반영: (1) Migration 순서 재정렬 — `organizations.type` (056) 을 `token_pools` 보다 먼저 배치, 각 Migration `depends_on` 명시. (2) `pool-router.ts` Proposal 수정 — `organization-pool-resolver.ts` 로 이름·책임 축소 (개인/조직 분기 없음). (3) `monthly_credit_reset` D-6 표현 수정 — "personal pool 대상" → "organizations.type='personal' 인 MY Organization Pool 대상", 부족 수량만 ISSUE, 월별 idempotency key 필수. (4) D-open-2 확정 세부 반영 — 사용자당 personal Organization 1개 UNIQUE partial index (Migration 056), 실제 권한 기준은 `owner_id + type='personal'`. | sbtmxk20 |
+| 0.2.2 | 2026-08-06 | M1 승인 · M2 재개 시점. M2 범위를 "데이터 이관 중심" 에서 "**진입 구조 전환 포함**" 으로 확장. 상단 네비 조정 (`+클립아트 만들기` · `MY` 제거, `우리학교` 만 유지), 라우트 재구성 (`/organization/[slug]/{library,generate}` 신규 · 기존 페이지 삭제 후 next.config redirect), MY Organization 의 멤버/초대/해체 UI 및 API 거부를 M2 에 포함. 사용자 지시 M2 완료 기준 7가지 그대로 채택. Redirect 는 오직 기존 링크/북마크 호환용이며 앱 내부 링크는 새 경로만 사용. | sbtmxk20 |
