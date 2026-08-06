@@ -25,6 +25,8 @@ interface ConversationSidebarProps {
   activeJobExists: boolean;
   onNewConversation: () => void;
   onOpenConversation: (id: string) => void;
+  /** M3-2: 현재 workspace slug. 이 값이 일치하는 대화만 히스토리에 표시. */
+  organizationSlug: string;
 }
 
 // "N일 전" / "N시간 전" 등 상대 시간. 대화 히스토리 아이템 우측에 사용.
@@ -52,12 +54,17 @@ export function ConversationSidebar({
   activeJobExists,
   onNewConversation,
   onOpenConversation,
+  organizationSlug,
 }: ConversationSidebarProps) {
   const conversations = useConversationStore((s) => s.conversations);
   const currentId = useConversationStore((s) => s.currentId);
 
+  // M3-2: 현재 workspace 의 대화만 리스트. organizationSlug 없는 legacy 대화
+  // 는 GenerateV2Client 가 마운트 시 MY 로 backfill 하므로 이 시점에는 반드시
+  // 값이 있음. 방어적으로 undefined 는 표시 제외.
   const historyList = Object.values(conversations)
     .filter((c) => c.title)
+    .filter((c) => c.organizationSlug === organizationSlug)
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
     .slice(0, 20);
 

@@ -14,6 +14,10 @@ const querySchema = z.object({
   sort: z.enum(['newest', 'oldest']).default('newest'),
   limit: z.coerce.number().int().min(1).max(60).default(24),
   offset: z.coerce.number().int().min(0).default(0),
+  // Plan v0.2.7 §M3-2: workspace 필터. 전달 시 그 organization 의 이미지만.
+  // organizationSlug 로 넘겨 서버가 id 로 resolve. 미전달 시 이전 동작 (개인
+  // owner 전체) 유지 — 하위호환.
+  organizationSlug: z.string().min(1).max(200).optional(),
 });
 
 interface ImageWithMeta extends Image {
@@ -81,6 +85,7 @@ export async function GET(request: Request) {
     sort: url.searchParams.get('sort') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
     offset: url.searchParams.get('offset') ?? undefined,
+    organizationSlug: url.searchParams.get('organizationSlug') ?? undefined,
   });
   if (!parsed.success) {
     return apiError('VALIDATION_ERROR', '쿼리 파라미터가 올바르지 않습니다', {
@@ -88,7 +93,25 @@ export async function GET(request: Request) {
     });
   }
 
-  const { filter, sort, limit, offset } = parsed.data;
+  const { filter, sort, limit, offset, organizationSlug } = parsed.data;
+
+  // organizationSlug 가 있으면 그 조직 id 로 필터. Membership 검증까지 하려면
+  // organization_members join 필요하지만 여기는 SELECT 만이고 organizations
+  // RLS 가 소속 조직만 통과시키므로 slug lookup 자체가 안전 필터로 동작.
+  let organizationId: string | null = null;
+  if (organizationSlug) {
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('slug', organizationSlug)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!orgRow) {
+      return apiError('NOT_FOUND', '조직을 찾을 수 없어요');
+    }
+    organizationId = (orgRow as { id: string }).id;
+  }
+
   let query = supabase
     .from('images')
     .select(
@@ -97,8 +120,15 @@ export async function GET(request: Request) {
       // 이미지 소유자) 로 보호되지만 여기선 소유자만 SELECT 하므로 통과.
       '*, image_tags(tag), image_categories(category), image_organization_shares(organizations(slug, name, deleted_at))',
       { count: 'exact' },
-    )
-    .eq('user_id', user.id);
+    );
+
+  if (organizationId) {
+    // Workspace 필터: 그 조직에 속한 이미지 (owner 무관, 조직 멤버라면 조회).
+    query = query.eq('organization_id', organizationId);
+  } else {
+    // 하위호환: 개인 owner 기반 (organizationSlug 미전달 시).
+    query = query.eq('user_id', user.id);
+  }
 
   // All library images are 'saved' by policy (no pending/discarded lifecycle).
   query = query.eq('status', 'saved');

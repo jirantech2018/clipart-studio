@@ -26,7 +26,13 @@ import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 
 import type { LibraryFilter, LibrarySort } from '@/features/library/hooks/useMyImages';
 
-export function LibraryGrid() {
+interface LibraryGridProps {
+  /** Plan v0.2.7 §M3-2: workspace 필터. 전달 시 해당 organization 이미지만.
+   *  미전달 시 개인 owner 기반 (하위호환). */
+  organizationSlug?: string;
+}
+
+export function LibraryGrid({ organizationSlug }: LibraryGridProps = {}) {
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('newest');
   const [zipPending, setZipPending] = useState(false);
@@ -53,7 +59,7 @@ export function LibraryGrid() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useMyImages(filter, sort);
+  } = useMyImages(filter, sort, organizationSlug);
 
   const images = data?.pages.flatMap((p) => p.images) ?? [];
 

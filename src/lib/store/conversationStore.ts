@@ -107,6 +107,10 @@ export interface Conversation {
   blocks: Block[];
   createdAt: string;
   updatedAt: string;
+  /** 이 대화가 속한 workspace (organization slug).
+   *  M3-2 이전에 생성된 legacy 대화는 undefined — GenerateV2Client 가 마운트
+   *  시점에 세션 유저의 MY organizationSlug 로 backfill 한다 (사용자 지시 §M3-2). */
+  organizationSlug?: string;
 }
 
 interface ConversationState {
@@ -114,10 +118,13 @@ interface ConversationState {
   conversations: Record<string, Conversation>;
 
   // ----- Conversation lifecycle -----
-  createConversation: (seedOptions?: Partial<BlockOptions>) => string;
+  createConversation: (seedOptions?: Partial<BlockOptions>, organizationSlug?: string) => string;
   setCurrentConversation: (id: string) => void;
   removeEmptyConversation: (id: string) => void;
   confirmConversationTitle: (id: string, firstPrompt: string) => void;
+  /** M3-2 persist migration: organizationSlug 없는 legacy 대화를 넘어온 slug 로
+   *  일괄 backfill. GenerateV2Client 첫 마운트 시 1회 호출. */
+  backfillLegacyOrganizationSlug: (fallbackSlug: string) => void;
 
   // ----- Block lifecycle -----
   addBlock: (convId: string, seedOptions?: Partial<BlockOptions>) => string;
@@ -244,7 +251,7 @@ export const useConversationStore = create<ConversationState>()(
       conversations: {},
 
       // ----- Conversation lifecycle -----
-      createConversation: (seedOptions) => {
+      createConversation: (seedOptions, organizationSlug) => {
         const id = uid();
         const now = new Date().toISOString();
         const firstBlock = makeBlock(seedOptions);
@@ -258,10 +265,28 @@ export const useConversationStore = create<ConversationState>()(
               blocks: [firstBlock],
               createdAt: now,
               updatedAt: now,
+              organizationSlug,
             },
           },
         }));
         return id;
+      },
+
+      backfillLegacyOrganizationSlug: (fallbackSlug) => {
+        set((state) => {
+          let touched = false;
+          const next: Record<string, Conversation> = {};
+          for (const [id, conv] of Object.entries(state.conversations)) {
+            if (conv.organizationSlug) {
+              next[id] = conv;
+              continue;
+            }
+            touched = true;
+            next[id] = { ...conv, organizationSlug: fallbackSlug };
+          }
+          if (!touched) return state;
+          return { conversations: next };
+        });
       },
 
       setCurrentConversation: (id) => set({ currentId: id }),
@@ -390,7 +415,14 @@ export const useConversationStore = create<ConversationState>()(
     {
       name: 'clipart-conversation-v2',
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      // v1 → v2 (2026-08-06, Plan v0.2.6/v0.2.7 §M3-2):
+      //   Conversation.organizationSlug 필드 추가 (optional). Zustand persist 는
+      //   optional 신규 필드는 자동 병합해 무손실 hydrate. 실제 backfill (legacy
+      //   대화 → 세션 유저 MY organizationSlug) 은 앱 레이어 (GenerateV2Client)
+      //   가 첫 마운트 시 backfillLegacyOrganizationSlug 로 수행 — 세션 정보에
+      //   접근할 수 있는 지점이 앱뿐이기 때문.
+      version: 2,
+      migrate: (persistedState) => persistedState as ConversationState,
       // 진행 중 상태는 저장 X — rehydrate 시 'unknown' 으로 강등.
       // 개인/조직 참조 이미지 선택도 세션 상태로 보되 편의상 저장 유지.
       onRehydrateStorage: () => (state) => {

@@ -39,6 +39,7 @@ async function fetchImagesPage(
   filter: LibraryFilter,
   sort: LibrarySort,
   offset: number,
+  organizationSlug?: string,
 ): Promise<ListResponse> {
   const params = new URLSearchParams({
     filter,
@@ -46,16 +47,23 @@ async function fetchImagesPage(
     limit: String(PAGE_SIZE),
     offset: String(offset),
   });
+  if (organizationSlug) params.set('organizationSlug', organizationSlug);
   const res = await fetch(`/api/images?${params.toString()}`);
   if (!res.ok) throw new Error('이미지 목록을 불러오지 못했습니다');
   const json = (await res.json()) as { data: ListResponse };
   return json.data;
 }
 
-export function useMyImages(filter: LibraryFilter, sort: LibrarySort) {
+export function useMyImages(
+  filter: LibraryFilter,
+  sort: LibrarySort,
+  organizationSlug?: string,
+) {
   return useInfiniteQuery({
-    queryKey: ['images', filter, sort],
-    queryFn: ({ pageParam }) => fetchImagesPage(filter, sort, pageParam as number),
+    // organizationSlug 를 queryKey 에 포함해 workspace 전환 시 자동 refetch.
+    queryKey: ['images', filter, sort, organizationSlug ?? '__personal__'],
+    queryFn: ({ pageParam }) =>
+      fetchImagesPage(filter, sort, pageParam as number, organizationSlug),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const fetched = allPages.reduce((sum, p) => sum + p.images.length, 0);

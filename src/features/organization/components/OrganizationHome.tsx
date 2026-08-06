@@ -174,19 +174,10 @@ export function OrganizationHome({
         </aside>
       </div>
 
-      {/* Personal (MY) 조직의 홈에서는 "이 조직에 공유된 이미지" (다른 사람이
-          공유한 것) 가 아니라 owner 본인의 개인 라이브러리 전체를 보여줘야
-          한다. MY 는 owner 1인 고정이라 shared 이미지 개념이 없다.
-          일반 조직 홈은 기존대로 OrganizationLibraryGrid (공유된 이미지). */}
-      {isPersonal ? (
-        <LibraryGrid />
-      ) : (
-        <OrganizationLibraryGrid
-          slug={slug}
-          currentUserId={currentUserId}
-          hideOrgHeader
-        />
-      )}
+      {/* Plan v0.2.7 §M3-2: 모든 workspace 홈이 통일된 LibraryGrid + workspace
+          필터로 그 조직의 이미지만 표시. 기존 OrganizationLibraryGrid (share
+          기반) 는 legacy 로 유지되지만 이 라우트에서는 사용하지 않는다. */}
+      <LibraryGrid organizationSlug={slug} />
     </div>
   );
 }

@@ -72,6 +72,7 @@ export default async function MyGeneratePage({ searchParams }: Props) {
       initialCredits={profileResult.data?.credits ?? 0}
       parent={parent}
       orgSlug={myOrg.slug}
+      myOrgSlug={myOrg.slug}
     />
   );
 }

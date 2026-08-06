@@ -43,7 +43,7 @@ export default async function MyLibraryPage() {
 찾거나 만든 이미지는 언제든 다시 사용할 수 있도록 내 라이브러리에 저장됩니다.`}
         </p>
       </div>
-      <LibraryGrid />
+      <LibraryGrid organizationSlug={myOrg.slug} />
     </div>
   );
 }

@@ -8,6 +8,7 @@
 import { redirect } from 'next/navigation';
 
 import { GenerateV2Client } from '@/features/generation-v2/components/GenerateV2Client';
+import { resolveMyOrganization } from '@/lib/organization/resolve-personal';
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -71,11 +72,16 @@ export default async function OrganizationGeneratePage({ params, searchParams }:
       }
     : null;
 
+  // 세션 유저의 MY organizationSlug — legacy conversation backfill 용.
+  const myOrg = await resolveMyOrganization(supabase, user.id);
+  if (!myOrg) redirect('/organizations');
+
   return (
     <GenerateV2Client
       initialCredits={profileResult.data?.credits ?? 0}
       parent={parent}
       orgSlug={params.slug}
+      myOrgSlug={myOrg.slug}
     />
   );
 }

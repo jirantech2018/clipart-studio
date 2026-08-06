@@ -42,9 +42,12 @@ interface Props {
    *  결정해 전달. MY 는 hidden `personal-{user_id}`, 학교는 그 조직 slug.
    *  submit 시 body 로 함께 전송되어 서버가 org_id 로 저장. */
   orgSlug: string;
+  /** 세션 유저의 MY organizationSlug. Legacy 대화 (organizationSlug 미보유)
+   *  를 이 값으로 backfill 하기 위해 사용 (Plan v0.2.7 §M3-2). */
+  myOrgSlug: string;
 }
 
-export function GenerateV2Client({ initialCredits, parent, orgSlug }: Props) {
+export function GenerateV2Client({ initialCredits, parent, orgSlug, myOrgSlug }: Props) {
   const router = useRouter();
   const currentId = useConversationStore((s) => s.currentId);
   const conversations = useConversationStore((s) => s.conversations);
@@ -56,6 +59,17 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug }: Props) {
   const addBlock = useConversationStore((s) => s.addBlock);
   const updateOptions = useConversationStore((s) => s.updateBlockOptions);
   const confirmTitle = useConversationStore((s) => s.confirmConversationTitle);
+  const backfillLegacyOrgSlug = useConversationStore(
+    (s) => s.backfillLegacyOrganizationSlug,
+  );
+
+  // M3-2: 마운트 즉시 organizationSlug 없는 legacy 대화를 세션 유저의 MY
+  // organizationSlug 로 backfill. 이 컴포넌트는 workspace 컨텍스트를 갖는
+  // 유일한 진입점이므로 여기서 1회 실행하면 이후 모든 sidebar 필터가 정확.
+  useEffect(() => {
+    backfillLegacyOrgSlug(myOrgSlug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const storeCredits = useAuthStore((s) => s.profile?.credits);
   const credits = storeCredits ?? initialCredits;
@@ -63,13 +77,19 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug }: Props) {
   const [guideOpen, setGuideOpen] = useState(true);
 
   // 유효한 currentId 없으면 새 conversation 만들기. 첫 draft block 이
-  // 현재 workspace 의 orgSlug 를 seed 로 갖도록 seed 옵션 전달.
+  // 현재 workspace 의 orgSlug 를 seed 로 갖도록 seed 옵션 전달. Conversation
+  // 자체에도 organizationSlug 를 세팅해 sidebar 필터 대상이 되게 한다.
+  //
+  // 또한 currentId 가 존재하지만 그 대화의 organizationSlug 가 지금 페이지
+  // workspace 와 다르면 새 대화를 만든다 (다른 workspace 대화는 이 페이지에
+  // 표시되면 안 됨).
   useEffect(() => {
-    if (!currentId || !conversations[currentId]) {
-      createConversation({ orgSlug });
+    const existing = currentId ? conversations[currentId] : null;
+    if (!existing || existing.organizationSlug !== orgSlug) {
+      createConversation({ orgSlug }, orgSlug);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [orgSlug]);
 
   const conv = currentId ? conversations[currentId] : null;
   const blocks = conv?.blocks ?? [];
@@ -234,6 +254,7 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug }: Props) {
         activeJobExists={activeJobExists}
         onNewConversation={handleNewConversation}
         onOpenConversation={handleOpenConversation}
+        organizationSlug={orgSlug}
       />
     </div>
   );
