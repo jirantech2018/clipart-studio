@@ -3,7 +3,7 @@
 > **Summary**: Super Admin → Organization → Member 3계층 토큰 관리 SaaS 인프라. 개인 사용도 "1인 Organization (type=personal)" 으로 통일해 모든 워크스페이스를 Organization 하나의 개념으로 관리한다. Ledger 기반 감사(Source of Truth) · Pool 기반 잔액 캐시 · profiles.credits UI 캐시 3-tier 구조.
 >
 > **Project**: ClipArt Studio — Organization Token Management
-> **Version**: 0.2.6 (Plan — M3 를 사용자 UX 관점 4개 (생성 → 데이터 → 크레딧 → 운영) 로 재배치)
+> **Version**: 0.2.7 (Plan — M3-4 → M3-C rename + 완료 보고 형식 문서화)
 > **Author**: sbtmxk20
 > **Date**: 2026-08-06
 > **Status**: Draft — 사용자 승인 대기
@@ -159,15 +159,25 @@
 
 **목표 (사용자 지시)**: Workspace (내 작업실 및 일반 Organization) 가 서로 완전히 독립적으로 동작한다. 각 Workspace 는 **자기만의 Job · Credit · Conversation · Library · Generate** 를 갖는다.
 
-**진행 원칙** (사용자 지시 v0.2.6):
+**진행 원칙** (사용자 지시 v0.2.6-v0.2.7):
 - **기술 범위 감축 없음.** v0.2.4/v0.2.5 의 모든 항목 그대로 진행.
 - **사용자 검증 단위** 는 4개. 사용자가 실제로 화면에서 기능을 사용하고 피드백할 수 있는 관점으로 분할:
   - **M3-1 Workspace 생성** — 사용자 관점: "각 조직에서 생성이 되는가"
   - **M3-2 Workspace 데이터** — 사용자 관점: "각 조직 데이터가 섞이지 않는가"
   - **M3-3 Workspace Credit** — 사용자 관점: "각 조직 크레딧이 따로 소진되는가"
-  - **M3-4 운영** — 전체 회귀 · Rollback · Reconciliation
+  - **M3-C 운영** — 전체 회귀 · Rollback · Reconciliation
 - 각 단위 종료 시 `pnpm tsc --noEmit` + `pnpm build` + 자동 검증 + 사용자 테스트 URL/정상 결과 제공 후 stop.
 - 내부 커밋은 자유롭게 세분화. 함수/Migration 하나 단위로 승인받지 않음.
+
+**완료 보고 형식** (사용자 지시 v0.2.7):
+
+각 하위 마일스톤 종료 시 다음 5개 섹션으로 보고. 순서 준수 필수.
+
+1. **이번에 사용자가 사용할 수 있게 된 기능** — 실제로 달라진 사용자 경험을 가장 먼저. 이 항목만 읽어도 이해 가능.
+2. **사용자 테스트 (약 5분)** — 화면에서 실행 가능한 시나리오. SQL 보다 우선.
+3. **개발 검증 (SQL)** — 사용자 테스트 이후 데이터 검증용.
+4. **현재 제한사항** — 아직 구현되지 않은 기능을 명확히.
+5. **다음 단계** — 다음 마일스톤 예고.
 
 **M3 최종 완료 기준 (모든 하위 마일스톤 종료 후 성립해야 함)**
 
@@ -239,7 +249,7 @@
 **포함하지 않음**
 - Credit Service (M3-3)
 - 크레딧 표시 (M3-3)
-- Reconciliation / Member API (M3-4)
+- Reconciliation / Member API (M3-C)
 
 **M3-2 완료 조건**
 - `pnpm tsc --noEmit` PASS, `pnpm build` PASS
@@ -263,7 +273,7 @@
 *Credit Service · 호출부 전환*
 - [ ] `src/services/credit/` 재작성 (신규 6개 함수 + `organization-pool-resolver.ts` + `errors.ts` + `types.ts`)
 - [ ] `POST /api/jobs`, `GET /jobs/[id]/stream`, `package-pipeline`, `upscale` 을 신규 `use()` / `refund()` 로 전환. 대상 pool 은 `resolveOrganizationPool(job.org_id)` 결과
-- [ ] 기존 `reserveCredits` / `refundCredits` 는 신규 서비스로 위임하는 deprecated wrapper 로 유지 (M3-4 관찰 후 제거)
+- [ ] 기존 `reserveCredits` / `refundCredits` 는 신규 서비스로 위임하는 deprecated wrapper 로 유지 (M3-C 관찰 후 제거)
 - [ ] Idempotency: `refund()` 는 `pool + job (+ slot_id metadata)` 중복 방지
 - [ ] 잔액 부족 처리: `INSUFFICIENT_BALANCE` 에러 → 클라이언트에 명확한 안내
 
@@ -278,8 +288,8 @@
 - [ ] `GenerateV2Client` sidebar credit badge 가 현재 컨텍스트 pool.balance 기준
 
 **포함하지 않음**
-- Member 본인 조회 API (M3-4)
-- Reconciliation cron 등록 (M3-4)
+- Member 본인 조회 API (M3-C)
+- Reconciliation cron 등록 (M3-C)
 
 **M3-3 완료 조건**
 - `pnpm tsc --noEmit` PASS, `pnpm build` PASS
@@ -295,7 +305,7 @@
 
 ---
 
-#### 2.3.4 M3-4 — 운영 (History · Statistics · Reconciliation · Admin · Rollback)
+#### 2.3.4 M3-C — 운영 (History · Statistics · Reconciliation · Admin · Rollback)
 
 **사용자 관점**: 전체 회귀. 조회 API 정상 · 배치 검증 정기 · Legacy 잔존 없음 · Rollback 준비. M3 6가지 최종 기준 통과.
 
@@ -317,7 +327,7 @@
 - [ ] 신규 job `org_id NULL` 검사 → 0
 - [ ] Package Job 부분 실패 환불 · Upscale 회귀 · 동시성 · 중복 요청 검증
 
-**M3-4 완료 조건**
+**M3-C 완료 조건**
 - `pnpm tsc --noEmit` PASS, `pnpm build` PASS
 
 **사용자 테스트 지점 (전체 회귀)**
@@ -1021,3 +1031,4 @@ v0.1.0 의 P-1 ~ P-5 는 모두 확정 채택 (§6, §7, §8 에 반영):
 | 0.2.4 | 2026-08-06 | M3 를 4개 하위 마일스톤으로 분할 (사용자 지시): M3-1 (Workspace Generate — Job/Library 조직 라우팅) → M3-2 (Workspace Conversation 격리 + persist migration) → M3-3 (Credit Service · Pool Resolver · Admin Allocate API · Write Guard 부착) → M3-4 (Header/Sidebar Credit 표시 · Member API · Reconciliation 등록). 각 하위 마일스톤 종료 시 tsc/build 확인 후 사용자 직접 테스트, 승인 시 다음 진행. 내부 커밋은 자유롭게 세분화하되 사용자 검증 지점은 4개. | sbtmxk20 |
 | 0.2.5 | 2026-08-06 | 사용자 검증 지점을 4개 → 3개로 재조정. 기술 범위는 v0.2.4 (M3-1~M3-4) 그대로 유지하되 다음 3개 단위로 묶음: **M3-A** (구 M3-1 + M3-2 — Workspace 작업 분리: Generate 조직 라우팅 · Library 필터 · Conversation 격리 · Persist migration · 비멤버 접근 거부) → **M3-B** (구 M3-3 + M3-4 크레딧 UI — Workspace Credit: Credit Service · Pool Resolver · 호출부 전환 · Admin Allocate API · 크레딧 표시 UI · 잔액 부족 처리 · 호출부 전환 검증 후 Write Guard 활성) → **M3-C** (구 M3-4 나머지 — 안정화 및 전체 검증: Member Token API · History API · Reconciliation · Legacy 정리 · 동시성 · 회귀 · M3 6개 완료 기준 최종 확인). 함수·Migration 단위로는 승인받지 않고, 검증 단위로만 승인받는다. | sbtmxk20 |
 | 0.2.6 | 2026-08-06 | 사용자 UX 관점 4개 단위로 재배치 (사용자 지시). 기술 범위 감축 없이 다음 순서: **M3-1 Workspace 생성** ("각 조직에서 생성이 되는가" — Generate 조직 라우팅 · Membership 검증 · Job/Image org_id 저장) → **M3-2 Workspace 데이터** ("각 조직 데이터가 섞이지 않는가" — Library 필터 · Conversation 격리 · Sidebar · Persist migration) → **M3-3 Workspace Credit** ("각 조직 크레딧이 따로 소진되는가" — Credit Service · Pool · Ledger · Allocate/Refund · Write Guard · 조직 크레딧 표시 UI · Admin Allocate API) → **M3-4 운영** (전체 회귀 · History · Statistics · Reconciliation · Rollback · Legacy 정리). 사용자 승인 지점 4개, 내부 커밋은 자유롭게 세분화. | sbtmxk20 |
+| 0.2.7 | 2026-08-06 | M3-1 완료 · M3-2 착수 준비. M3-4 → **M3-C** rename (사용자 지시 표기 일치). 완료 보고 형식 문서화 (§2.3 상단) — 5개 섹션 순서 명시: 이번에 사용자가 사용할 수 있게 된 기능 → 사용자 테스트 (5분) → 개발 검증 (SQL) → 현재 제한사항 → 다음 단계. 기술 범위 변경 없음. | sbtmxk20 |
