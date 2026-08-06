@@ -6,9 +6,10 @@
 // 보이게 통합. 서브페이지 /organization/[slug]/library 는 기존 링크 호환용
 // 으로 유지 (동일 콘텐츠 렌더).
 
-import { ArrowLeft, ExternalLink, Settings, Users } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Plus, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LibraryGrid } from '@/features/library/components/LibraryGrid';
 import { OrganizationLibraryGrid } from '@/features/organization/components/OrganizationLibraryGrid';
@@ -117,6 +118,18 @@ export function OrganizationHome({
         </header>
 
         <aside className="flex flex-col gap-2 sm:flex-row lg:flex-col lg:w-64">
+          {/* Primary CTA: 이 워크스페이스 컨텍스트에서 클립아트 만들기.
+              MY 는 `/organization/my/generate` (URL alias), 일반은
+              `/organization/{slug}/generate`. Job 생성 시 조직 컨텍스트
+              (org_id) 가 자동으로 반영되어 M3 이후 조직 pool 이 소진된다. */}
+          <Link
+            href={isPersonal ? '/organization/my/generate' : `/organization/${org.slug}/generate`}
+            className={cn(buttonVariants({ size: 'lg' }), 'w-full')}
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            클립아트 만들기
+          </Link>
+
           {/* Personal (MY) Organization 은 owner 1인 고정 · 초대·해체 없음.
               멤버·설정 카드를 노출하지 않는다 (M2 완료 기준 6). */}
           {!isPersonal && (
