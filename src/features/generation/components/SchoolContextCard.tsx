@@ -19,7 +19,7 @@ import { useSchoolApplyStore } from '@/lib/store/schoolApplyStore';
 import { cn } from '@/lib/utils';
 import { SCHOOL_LEVEL_LABELS } from '@/types/domain';
 
-import type { OrgGenerationContext } from '@/app/(main)/generate/page';
+import type { OrgGenerationContext } from '@/features/generation/lib/org-context';
 
 interface Props {
   orgContext: OrgGenerationContext | null;

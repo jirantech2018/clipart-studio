@@ -18,6 +18,12 @@ export type GenerationMode = 'text2img' | 'img2img' | 'upscale';
 export type OrganizationRole = 'owner' | 'admin' | 'editor' | 'viewer';
 export type OrganizationMemberStatus = 'active' | 'suspended';
 
+/** Organization 분류. Migration 056 organization_type_enum 과 정확히 일치.
+ *  - personal : MY Organization (owner 1인 고정, 초대·멤버·해체 UI 없음)
+ *  - school   : 학교 조직
+ *  - general  : 일반 조직 (default) */
+export type OrganizationType = 'personal' | 'school' | 'general';
+
 export interface Organization {
   id: string;
   slug: string;
@@ -27,6 +33,8 @@ export interface Organization {
   homepageUrl: string | null;
   ownerId: string;
   maxVisibility: ImageVisibility;
+  /** Migration 056 로 도입된 조직 분류. Legacy row 는 default 'general'. */
+  type: OrganizationType;
   /** 조직 (=학교) 학교급. AI 생성 스타일 힌트로 사용. */
   schoolLevel: SchoolLevel | null;
   /** 조직 컨텍스트 생성 시 프롬프트 앞에 붙일 학교 기본 설명. */

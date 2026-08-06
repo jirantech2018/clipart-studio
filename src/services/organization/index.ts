@@ -5,6 +5,7 @@ import type {
   ImageVisibility,
   Organization,
   OrganizationRole,
+  OrganizationType,
   OrganizationWithMyRole,
   SchoolLevel,
 } from '@/types/domain';
@@ -18,6 +19,8 @@ export interface OrganizationRow {
   homepage_url: string | null;
   owner_id: string;
   max_visibility: ImageVisibility;
+  // Migration 056: NOT NULL DEFAULT 'general'. Row 조회 시 항상 값 존재.
+  type: OrganizationType;
   school_level: SchoolLevel | null;
   base_prompt: string | null;
   style_enabled: boolean;
@@ -36,6 +39,8 @@ export function organizationRowToDomain(row: OrganizationRow): Organization {
     homepageUrl: row.homepage_url,
     ownerId: row.owner_id,
     maxVisibility: row.max_visibility,
+    // Legacy row 는 Migration 056 default 로 'general'. undefined 방어.
+    type: (row.type as OrganizationType) ?? 'general',
     schoolLevel: row.school_level,
     basePrompt: row.base_prompt,
     styleEnabled: row.style_enabled,

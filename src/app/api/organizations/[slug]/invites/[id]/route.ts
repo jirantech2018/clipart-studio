@@ -4,6 +4,7 @@
 //   실제 삭제 대신 revoked_at 세팅 (감사 로그 유지).
 
 import { apiError, apiOk } from '@/lib/api-error';
+import { isPersonalOrganization } from '@/lib/organization/personal-guard';
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -20,6 +21,11 @@ export async function DELETE(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
+
+  // MY (personal) Organization 은 초대 자체가 없으므로 취소 요청도 거부.
+  if (await isPersonalOrganization(supabase, params.slug)) {
+    return apiError('FORBIDDEN', '개인 워크스페이스에서는 초대를 관리할 수 없어요');
+  }
 
   // 조직 slug → id
   const { data: org } = await supabase

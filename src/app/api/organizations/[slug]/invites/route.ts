@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { ZodError } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';
+import { isPersonalOrganization } from '@/lib/organization/personal-guard';
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -130,6 +131,11 @@ export async function POST(request: Request, { params }: { params: { slug: strin
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
+
+  // MY (personal) Organization 은 1인 고정. 초대 자체 불가.
+  if (await isPersonalOrganization(supabase, params.slug)) {
+    return apiError('FORBIDDEN', '개인 워크스페이스에는 다른 멤버를 초대할 수 없어요');
+  }
 
   const { org, requesterRole } = await loadContext(params.slug, user.id);
   if (!org) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');

@@ -14,9 +14,13 @@ import { createSupabaseBrowserClient } from '@/services/supabase/client';
 
 // 상단 메뉴. 홈("/") = 공유라이브러리라서 로고 클릭이 진입점이고 nav 에는
 // 굳이 두지 않음. 관리 는 isAdmin 일 때만 렌더.
+//
+// Plan v0.2.2 §M2: 개인 진입 구조를 Organization 중심으로 통합.
+//   기존 `+클립아트 만들기` (/generate-v2) 와 `MY` (/library) 는 상단 nav
+//   에서 제거. 사용자는 `우리학교` → 조직 리스트 → `내 작업실` 또는 학교
+//   조직 선택 → 그 조직 내부에서 `+클립아트 만들기` · 라이브러리 이용.
+//   기존 URL 은 next.config.js redirects 로 새 경로로 이동.
 const NAV_ITEMS = [
-  { href: '/generate-v2', label: '+클립아트 만들기' },
-  { href: '/library', label: 'MY' },
   { href: '/organizations', label: '우리학교' },
 ] as const;
 

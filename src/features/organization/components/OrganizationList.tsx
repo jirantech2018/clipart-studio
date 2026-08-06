@@ -65,13 +65,22 @@ export function OrganizationList() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {data?.organizations.map((org) => (
-            <Link key={org.id} href={`/organization/${org.slug}`}>
+            <Link
+              key={org.id}
+              // Personal (MY) Organization 은 사용자 URL 로 항상 `/organization/my`
+              // 를 노출한다 (내부 hidden slug 는 사용자 화면에 절대 노출 안 함).
+              href={org.type === 'personal' ? '/organization/my' : `/organization/${org.slug}`}
+            >
               <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
                 <CardContent className="space-y-2 py-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h2 className="truncate text-base font-semibold">{org.name}</h2>
-                      <p className="text-xs text-muted-foreground">/{org.slug}</p>
+                      <h2 className="truncate text-base font-semibold">
+                        {org.type === 'personal' ? '내 작업실' : org.name}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        {org.type === 'personal' ? '나만 사용하는 개인 공간' : `/${org.slug}`}
+                      </p>
                     </div>
                     <span
                       className={cn(

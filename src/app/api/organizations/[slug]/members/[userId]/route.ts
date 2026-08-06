@@ -11,6 +11,7 @@
 import { ZodError } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';
+import { isPersonalOrganization } from '@/lib/organization/personal-guard';
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -53,6 +54,11 @@ export async function PATCH(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
+
+  // MY (personal) Organization 은 owner 1인 고정. 역할 변경 불가.
+  if (await isPersonalOrganization(supabase, params.slug)) {
+    return apiError('FORBIDDEN', '개인 워크스페이스에서는 역할을 변경할 수 없어요');
+  }
 
   const { orgId, requesterRole } = await loadContext(params.slug, user.id);
   if (!orgId) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
@@ -125,6 +131,11 @@ export async function DELETE(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
+
+  // MY (personal) Organization 은 owner 1인 고정. 강퇴/탈퇴 불가.
+  if (await isPersonalOrganization(supabase, params.slug)) {
+    return apiError('FORBIDDEN', '개인 워크스페이스에서는 멤버를 제거할 수 없어요');
+  }
 
   const { orgId, requesterRole } = await loadContext(params.slug, user.id);
   if (!orgId) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');

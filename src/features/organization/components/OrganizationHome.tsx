@@ -52,6 +52,7 @@ export function OrganizationHome({
 
   const org = data.organization;
   const canManage = org.myRole === 'owner' || org.myRole === 'admin';
+  const isPersonal = org.type === 'personal';
 
   return (
     <div className="space-y-6">
@@ -103,40 +104,46 @@ export function OrganizationHome({
         </header>
 
         <aside className="flex flex-col gap-2 sm:flex-row lg:flex-col lg:w-64">
-          <Link href={`/organization/${org.slug}/members`} className="flex-1">
-            <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
-              <CardContent className="flex items-start gap-3 py-3">
-                <div className="rounded-md bg-primary/10 p-2 text-primary">
-                  <Users className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">
-                    {canManage ? '멤버 관리' : '멤버'}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {canManage ? '초대·역할 변경·강퇴' : '멤버 목록·초대'}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+          {/* Personal (MY) Organization 은 owner 1인 고정 · 초대·해체 없음.
+              멤버·설정 카드를 노출하지 않는다 (M2 완료 기준 6). */}
+          {!isPersonal && (
+            <>
+              <Link href={`/organization/${org.slug}/members`} className="flex-1">
+                <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
+                  <CardContent className="flex items-start gap-3 py-3">
+                    <div className="rounded-md bg-primary/10 p-2 text-primary">
+                      <Users className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">
+                        {canManage ? '멤버 관리' : '멤버'}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {canManage ? '초대·역할 변경·강퇴' : '멤버 목록·초대'}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
 
-          {org.myRole === 'owner' && (
-            <Link href={`/organization/${org.slug}/settings`} className="flex-1">
-              <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
-                <CardContent className="flex items-start gap-3 py-3">
-                  <div className="rounded-md bg-primary/10 p-2 text-primary">
-                    <Settings className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">조직 설정</div>
-                    <p className="text-xs text-muted-foreground">
-                      이름·소개·정책 등
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+              {org.myRole === 'owner' && (
+                <Link href={`/organization/${org.slug}/settings`} className="flex-1">
+                  <Card className="transition-colors hover:border-primary/60 hover:bg-accent/40">
+                    <CardContent className="flex items-start gap-3 py-3">
+                      <div className="rounded-md bg-primary/10 p-2 text-primary">
+                        <Settings className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold">조직 설정</div>
+                        <p className="text-xs text-muted-foreground">
+                          이름·소개·정책 등
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              )}
+            </>
           )}
         </aside>
       </div>

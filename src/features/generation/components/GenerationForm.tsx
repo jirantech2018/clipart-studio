@@ -36,7 +36,7 @@ import { useReferenceStore } from '@/lib/store/referenceStore';
 import { useSchoolApplyStore } from '@/lib/store/schoolApplyStore';
 import { cn } from '@/lib/utils';
 
-import type { OrgGenerationContext } from '@/app/(main)/generate/page';
+import type { OrgGenerationContext } from '@/features/generation/lib/org-context';
 import { MAX_BATCH_SIZE } from '@/types/domain';
 import { createJobSchema } from '@/types/schemas';
 

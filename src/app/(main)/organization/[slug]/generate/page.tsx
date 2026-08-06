@@ -1,13 +1,9 @@
-// generate-v2 (Conversation UI) 신규 페이지 — server 진입점.
+// 일반 Organization 컨텍스트 클립아트 만들기. GenerateV2Client 를 그대로
+// 재사용하되, 여기서는 조직 컨텍스트 (orgSlug) 를 명시적으로 초기 seed 로
+// 전달한다.
 //
-// URL query:
-//   ?parent=<image_id>  : 이 이미지로 다시 만들기 (chaining / img2img).
-//                         존재하고 조회 가능하면 v2 옵션 상단에 참조 카드로
-//                         노출되도록 client 로 넘긴다.
-//
-// 왜 server 컴포넌트인가:
-//   /generate 와 동일 패턴으로 SSR 시점의 profile.credits 를 client 로 넘겨,
-//   client 는 storeCredits ?? initialCredits 로 fallback 한다.
+// 조직 컨텍스트가 활성이면 Job 생성 시 org_id 가 세팅되어 조직 Token Pool
+// 에서 크레딧이 소진된다. Personal Pool 소진 아님.
 
 import { redirect } from 'next/navigation';
 
@@ -18,15 +14,34 @@ import { createSupabaseServerClient } from '@/services/supabase/server';
 export const dynamic = 'force-dynamic';
 
 interface Props {
+  params: { slug: string };
   searchParams: { parent?: string };
 }
 
-export default async function GenerateV2Page({ searchParams }: Props) {
+export default async function OrganizationGeneratePage({ params, searchParams }: Props) {
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) redirect(`/login?next=/organization/${params.slug}/generate`);
+
+  // 조직 접근 권한 검증: active member 만.
+  const { data: orgRow } = await supabase
+    .from('organizations')
+    .select('id, slug, type')
+    .eq('slug', params.slug)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!orgRow) redirect('/organizations');
+
+  const { data: membership } = await supabase
+    .from('organization_members')
+    .select('user_id')
+    .eq('organization_id', (orgRow as { id: string }).id)
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!membership) redirect('/organizations');
 
   const parentId = searchParams.parent?.trim() || null;
 

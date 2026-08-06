@@ -7,6 +7,7 @@
 import { ZodError } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';
+import { isPersonalOrganization } from '@/lib/organization/personal-guard';
 import {
   organizationRowToDomain,
   withMyRole,
@@ -155,6 +156,11 @@ export async function DELETE(_req: Request, { params }: { params: { slug: string
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return apiError('UNAUTHORIZED', '로그인이 필요합니다');
+
+  // MY (personal) Organization 은 해체 불가. 계정 삭제 정책에 따라 함께 처리.
+  if (await isPersonalOrganization(supabase, params.slug)) {
+    return apiError('FORBIDDEN', '개인 워크스페이스는 해체할 수 없어요');
+  }
 
   const { org, role } = await loadOrgAndRole(params.slug, user.id);
   if (!org || !role) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
