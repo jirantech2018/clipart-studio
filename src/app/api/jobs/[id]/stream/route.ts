@@ -14,7 +14,7 @@ import {
   runPackageSlot,
   slotFromRow,
 } from '@/services/image-gen/package-pipeline';
-import { refundCredits } from '@/services/credit';
+import { refundOrgTokens } from '@/services/credit';
 import {
   composeKnowledgePrompt,
   matchKnowledgeForPrompt,
@@ -269,7 +269,24 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
                   refundedCredits: 1,
                 }),
               );
-              await refundCredits(job.userId, 1);
+              // Plan v0.2.8 §M3-3: workspace pool 로 환불. metadata.slot_id 로
+              // 같은 job 안 여러 order 실패도 각기 dedup 된다 (single-order).
+              if (job.orgId) {
+                try {
+                  await refundOrgTokens({
+                    organizationId: job.orgId,
+                    amount: 1,
+                    jobId: job.id,
+                    reason: err?.message ?? 'generation failed',
+                    metadata: { slot_id: `single-${order}` },
+                  });
+                } catch (refundErr) {
+                  console.error(
+                    `[jobs/${job.id}/stream] refund failed at order ${order}:`,
+                    refundErr,
+                  );
+                }
+              }
             }
           }
         }
@@ -282,13 +299,27 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         // Refund any slots we never got to (e.g. fatal error mid-batch)
         const untouched = job.batchSize - succeeded - failed;
         if (untouched > 0) {
-          try {
-            await refundCredits(job.userId, untouched);
-          } catch (refundErr) {
-            console.error(
-              `[jobs/${job.id}/stream] refund failed for ${untouched} untouched slots:`,
-              refundErr,
-            );
+          if (job.orgId) {
+            // 아직 실패로 마킹되지 않은 각 order 를 개별 metadata.slot_id 로
+            // dedup 하며 환불. 재접속으로 이 finally 가 중복 실행돼도 동일 order
+            // 는 refund_tokens 의 already_refunded 로 skip 된다.
+            for (let i = 0; i < untouched; i += 1) {
+              const untouchedOrder = succeeded + failed + i;
+              try {
+                await refundOrgTokens({
+                  organizationId: job.orgId,
+                  amount: 1,
+                  jobId: job.id,
+                  reason: fatal ? `fatal: ${fatal.message}` : 'untouched slot on stream end',
+                  metadata: { slot_id: `single-${untouchedOrder}` },
+                });
+              } catch (refundErr) {
+                console.error(
+                  `[jobs/${job.id}/stream] untouched refund failed at order ${untouchedOrder}:`,
+                  refundErr,
+                );
+              }
+            }
           }
           failed += untouched;
         }
@@ -462,7 +493,7 @@ function runPackageStream(
               } catch (err) {
                 const message =
                   err instanceof Error ? err.message : 'unknown error';
-                await markSlotFailedAndRefund(claimed, job.userId, message);
+                await markSlotFailedAndRefund(claimed, job.orgId, job.id, message);
                 return {
                   slotId: claimed.id,
                   order: claimed.order,
@@ -537,7 +568,7 @@ function runPackageStream(
           .eq('status', 'pending');
         if (pendingRows) {
           for (const row of pendingRows as { id: string }[]) {
-            const { canceled } = await cancelPendingSlot(row.id, job.userId);
+            const { canceled } = await cancelPendingSlot(row.id, job.orgId, job.id);
             if (canceled) {
               failed += 1;
             }

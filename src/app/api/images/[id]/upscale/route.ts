@@ -22,9 +22,10 @@ import { ZodError, z } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';
 import {
-  InsufficientCreditsError,
-  refundCredits,
-  reserveCredits,
+  InsufficientPoolBalanceError,
+  PoolNotFoundError,
+  refundOrgTokens,
+  useOrgTokens,
 } from '@/services/credit';
 import {
   UpscaleUpstreamError,
@@ -96,29 +97,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const adapter = primaryUpscaler();
   const cost = adapter.creditCost(body.scale);
 
-  // cost=0 (무료 provider) 인 경우 예약·차감·환불 로직을 완전히 건너뛴다.
-  // 현재 profile.credits 는 표시용으로만 응답에 실어 준다.
-  let remainingCredits: number;
-  if (cost > 0) {
-    try {
-      remainingCredits = await reserveCredits(userId, cost);
-    } catch (err) {
-      if (err instanceof InsufficientCreditsError) {
-        return apiError('INSUFFICIENT_CREDITS', '이번 달 크레딧이 부족해요', {
-          requiredCredits: cost,
-        });
-      }
-      throw err;
-    }
-  } else {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('credits')
-      .eq('id', userId)
-      .single();
-    remainingCredits = (profile as { credits: number } | null)?.credits ?? 0;
-  }
-
   const src = image as {
     id: string;
     user_id: string;
@@ -128,14 +106,94 @@ export async function POST(request: Request, { params }: { params: { id: string 
     organization_id: string | null;
   };
 
+  // Plan v0.2.8 §M3-3: 업스케일도 원본이 속한 workspace pool 에서 차감·환불.
+  // organization_id 가 없는 legacy 이미지는 세션 유저의 MY organization 으로
+  // fallback 하여 pool 을 결정한다.
+  let chargeOrganizationId: string | null = src.organization_id;
+  if (!chargeOrganizationId) {
+    const { data: myOrg } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('type', 'personal')
+      .is('deleted_at', null)
+      .maybeSingle();
+    chargeOrganizationId = (myOrg as { id: string } | null)?.id ?? null;
+  }
+
+  // cost=0 (무료 provider) 인 경우 예약·차감·환불 로직을 완전히 건너뛴다.
+  // remainingCredits 는 표시용으로만 응답에 실어 준다.
+  let remainingCredits: number;
+  if (cost > 0) {
+    if (!chargeOrganizationId) {
+      return apiError('INTERNAL_ERROR', '워크스페이스 크레딧 풀이 준비되지 않았어요');
+    }
+    try {
+      const useResult = await useOrgTokens({
+        organizationId: chargeOrganizationId,
+        amount: cost,
+        jobId: null,
+        actorUserId: userId,
+      });
+      remainingCredits = useResult.balance;
+    } catch (err) {
+      if (err instanceof InsufficientPoolBalanceError) {
+        return apiError('INSUFFICIENT_CREDITS', '이 워크스페이스의 크레딧이 부족해요', {
+          requiredCredits: cost,
+        });
+      }
+      if (err instanceof PoolNotFoundError) {
+        return apiError('INTERNAL_ERROR', '워크스페이스 크레딧 풀이 준비되지 않았어요');
+      }
+      throw err;
+    }
+  } else {
+    // 무료 provider — 표시용 잔액만 조회 (workspace pool 우선, 없으면 profile).
+    if (chargeOrganizationId) {
+      const service = createSupabaseServiceClient();
+      const { data: poolRow } = await service
+        .from('token_pools')
+        .select('balance')
+        .eq('organization_id', chargeOrganizationId)
+        .maybeSingle();
+      remainingCredits = (poolRow as { balance: number } | null)?.balance ?? 0;
+    } else {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('id', userId)
+        .single();
+      remainingCredits = (profile as { credits: number } | null)?.credits ?? 0;
+    }
+  }
+
   const sourceUrl = publicUrl(src.r2_key);
 
   // cost > 0 일 때만 환불. 무료 provider 는 예약 자체가 없어 환불 대상 없음.
   async function refundIfCharged(reason: string) {
-    if (cost === 0) return;
-    await refundCredits(userId, cost).catch((refundErr) => {
-      console.error(`[upscale] refund failed after ${reason} for image ${src.id}`, refundErr);
+    if (cost === 0 || !chargeOrganizationId) return;
+    // Upscale 은 jobId 가 없어 refund_tokens 의 job_id 기반 dedup 을 쓸 수 없다.
+    // Adjust 로 pool 잔액만 원복 (감사 로그는 ADJUST 로 남는다).
+    const service = createSupabaseServiceClient();
+    const { data: poolRow } = await service
+      .from('token_pools')
+      .select('id')
+      .eq('organization_id', chargeOrganizationId)
+      .maybeSingle();
+    const poolId = (poolRow as { id: string } | null)?.id;
+    if (!poolId) return;
+    const { error: adjErr } = await service.rpc('adjust_tokens', {
+      p_pool: poolId,
+      p_delta: cost,
+      p_memo: `upscale refund (${reason}) image=${src.id}`,
+      p_actor: userId,
     });
+    if (adjErr) {
+      console.error(
+        `[upscale] refund failed after ${reason} for image ${src.id}`,
+        adjErr,
+      );
+    }
   }
 
   let upscaled: { bytes: Buffer; contentType: 'image/png' };

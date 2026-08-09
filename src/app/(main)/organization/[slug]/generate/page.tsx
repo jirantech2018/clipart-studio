@@ -46,8 +46,15 @@ export default async function OrganizationGeneratePage({ params, searchParams }:
 
   const parentId = searchParams.parent?.trim() || null;
 
-  const [profileResult, parentResult] = await Promise.all([
-    supabase.from('profiles').select('credits').eq('id', user.id).single(),
+  // Plan v0.2.8 §M3-3: 화면 크레딧 = 이 workspace 의 pool.balance.
+  // 학교/일반 조직도 조직별로 자체 pool 이 있으며, Job 은 이 pool 에서만
+  // 차감된다 (개인 profile.credits 는 표시에 사용하지 않는다).
+  const [poolResult, parentResult] = await Promise.all([
+    supabase
+      .from('token_pools')
+      .select('balance')
+      .eq('organization_id', (orgRow as { id: string }).id)
+      .maybeSingle(),
     parentId
       ? supabase
           .from('images')
@@ -76,9 +83,12 @@ export default async function OrganizationGeneratePage({ params, searchParams }:
   const myOrg = await resolveMyOrganization(supabase, user.id);
   if (!myOrg) redirect('/organizations');
 
+  const workspaceCredits =
+    (poolResult.data as { balance: number } | null)?.balance ?? 0;
+
   return (
     <GenerateV2Client
-      initialCredits={profileResult.data?.credits ?? 0}
+      initialCredits={workspaceCredits}
       parent={parent}
       orgSlug={params.slug}
       myOrgSlug={myOrg.slug}

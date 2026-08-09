@@ -53,8 +53,9 @@ export function withMyRole(
   org: Organization,
   myRole: OrganizationRole,
   memberCount: number,
+  credits: number = 0,
 ): OrganizationWithMyRole {
-  return { ...org, myRole, memberCount };
+  return { ...org, myRole, memberCount, credits };
 }
 
 // 활동 로그 종류. Migration 033 의 org_activity_type enum 과 정확히 일치해야 함.

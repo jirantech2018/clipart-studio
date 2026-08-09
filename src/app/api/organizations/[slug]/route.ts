@@ -56,6 +56,18 @@ async function memberCount(orgId: string): Promise<number> {
   return count ?? 0;
 }
 
+/** Plan v0.2.8 §M3-3: workspace pool.balance 를 응답에 실어 화면 표시와 실제
+ *  차감 대상 pool 을 일치시킨다. 조직 멤버는 RLS 상 SELECT 가능. */
+async function poolBalance(orgId: string): Promise<number> {
+  const supabase = createSupabaseServerClient();
+  const { data } = await supabase
+    .from('token_pools')
+    .select('balance')
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  return (data as { balance: number } | null)?.balance ?? 0;
+}
+
 export async function GET(_req: Request, { params }: { params: { slug: string } }) {
   const supabase = createSupabaseServerClient();
   const {
@@ -66,9 +78,9 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
   const { org, role } = await loadOrgAndRole(params.slug, user.id);
   if (!org || !role) return apiError('NOT_FOUND', '조직을 찾을 수 없습니다');
 
-  const count = await memberCount(org.id);
+  const [count, credits] = await Promise.all([memberCount(org.id), poolBalance(org.id)]);
   return apiOk({
-    organization: withMyRole(organizationRowToDomain(org), role, count),
+    organization: withMyRole(organizationRowToDomain(org), role, count, credits),
   });
 }
 
@@ -110,9 +122,9 @@ export async function PATCH(request: Request, { params }: { params: { slug: stri
   if (body.styleEnabled !== undefined) update.style_enabled = body.styleEnabled;
 
   if (Object.keys(update).length === 0) {
-    const count = await memberCount(org.id);
+    const [count, credits] = await Promise.all([memberCount(org.id), poolBalance(org.id)]);
     return apiOk({
-      organization: withMyRole(organizationRowToDomain(org), role, count),
+      organization: withMyRole(organizationRowToDomain(org), role, count, credits),
     });
   }
 
@@ -140,12 +152,13 @@ export async function PATCH(request: Request, { params }: { params: { slug: stri
     metadata: { updated_fields: Object.keys(update) },
   });
 
-  const count = await memberCount(org.id);
+  const [count, credits] = await Promise.all([memberCount(org.id), poolBalance(org.id)]);
   return apiOk({
     organization: withMyRole(
       organizationRowToDomain(updated as OrganizationRow),
       role,
       count,
+      credits,
     ),
   });
 }

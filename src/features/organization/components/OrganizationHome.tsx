@@ -6,7 +6,7 @@
 // 보이게 통합. 서브페이지 /organization/[slug]/library 는 기존 링크 호환용
 // 으로 유지 (동일 콘텐츠 렌더).
 
-import { ArrowLeft, ExternalLink, Plus, Settings, Users } from 'lucide-react';
+import { ArrowLeft, Coins, ExternalLink, Plus, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 
 import { buttonVariants } from '@/components/ui/button';
@@ -91,6 +91,14 @@ export function OrganizationHome({
             </p>
           )}
           <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-muted-foreground">
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-sm font-medium text-foreground"
+              title="이 워크스페이스에서 사용할 수 있는 크레딧입니다. 여기서 만든 이미지는 이 크레딧에서만 차감돼요."
+            >
+              <Coins className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+              <span className="tabular-nums">{org.credits}</span>
+              <span className="text-muted-foreground">크레딧</span>
+            </span>
             <span className="inline-flex items-center gap-1">
               <Users className="h-3 w-3" /> {org.memberCount}명
             </span>

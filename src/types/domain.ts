@@ -49,6 +49,10 @@ export interface Organization {
 export interface OrganizationWithMyRole extends Organization {
   myRole: OrganizationRole;
   memberCount: number;
+  /** Plan v0.2.8 §M3-3: 이 워크스페이스의 Token Pool 잔액.
+   *  화면 표시용 캐시로, Job 생성 시 실제로 차감되는 값과 동일 pool.balance.
+   *  풀이 아직 생성되지 않은 극단적 상태에서는 0. */
+  credits: number;
 }
 
 // 조직 멤버 상세 — 멤버 관리 페이지에서 표시.

@@ -41,8 +41,15 @@ export default async function MyGeneratePage({ searchParams }: Props) {
 
   const parentId = searchParams.parent?.trim() || null;
 
-  const [profileResult, parentResult] = await Promise.all([
-    supabase.from('profiles').select('credits').eq('id', user.id).single(),
+  // Plan v0.2.8 §M3-3: 화면에 표시되는 크레딧 = 실제로 차감되는 pool.balance.
+  // MY workspace 의 token_pool.balance 를 직접 조회 (profiles.credits 는 RPC
+  // 가 sync 해두는 캐시이지만, 표시-차감 대응을 위해 pool 을 SoT 로 사용).
+  const [poolResult, parentResult] = await Promise.all([
+    supabase
+      .from('token_pools')
+      .select('balance')
+      .eq('organization_id', myOrg.id)
+      .maybeSingle(),
     parentId
       ? supabase
           .from('images')
@@ -67,9 +74,12 @@ export default async function MyGeneratePage({ searchParams }: Props) {
       }
     : null;
 
+  const workspaceCredits =
+    (poolResult.data as { balance: number } | null)?.balance ?? 0;
+
   return (
     <GenerateV2Client
-      initialCredits={profileResult.data?.credits ?? 0}
+      initialCredits={workspaceCredits}
       parent={parent}
       orgSlug={myOrg.slug}
       myOrgSlug={myOrg.slug}

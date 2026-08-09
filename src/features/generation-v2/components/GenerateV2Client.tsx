@@ -71,8 +71,15 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug, myOrgSlug }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Plan v0.2.8 §M3-3: 화면 크레딧 = 이 workspace 의 pool.balance.
+  // - MY workspace: profiles.credits 가 곧 MY pool.balance (RPC 가 sync 하므로
+  //   authStore live 값을 그대로 신뢰 가능).
+  // - 학교/일반 workspace: authStore(profiles.credits) 는 개인 pool 값이라
+  //   무관. SSR 로 전달된 initialCredits (그 조직 pool.balance) 만 사용.
+  //   Live 반영은 다음 iteration (SSE done 후 useOrganization invalidate).
+  const isMyWorkspace = orgSlug === myOrgSlug;
   const storeCredits = useAuthStore((s) => s.profile?.credits);
-  const credits = storeCredits ?? initialCredits;
+  const credits = isMyWorkspace ? (storeCredits ?? initialCredits) : initialCredits;
 
   const [guideOpen, setGuideOpen] = useState(true);
 

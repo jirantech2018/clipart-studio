@@ -60,15 +60,27 @@ export async function GET() {
   // 멤버 수 병렬 조회
   const orgIds = orgs.map((o) => o.row.id);
   const memberCountMap = new Map<string, number>();
+  const creditsMap = new Map<string, number>();
   if (orgIds.length > 0) {
-    const { data: counts } = await supabase
-      .from('organization_members')
-      .select('organization_id')
-      .in('organization_id', orgIds)
-      .eq('status', 'active');
-    for (const row of counts ?? []) {
+    const [membersResult, poolsResult] = await Promise.all([
+      supabase
+        .from('organization_members')
+        .select('organization_id')
+        .in('organization_id', orgIds)
+        .eq('status', 'active'),
+      // Plan v0.2.8 §M3-3: 각 workspace 의 pool.balance 를 리스트 카드에 표시.
+      supabase
+        .from('token_pools')
+        .select('organization_id, balance')
+        .in('organization_id', orgIds),
+    ]);
+    for (const row of membersResult.data ?? []) {
       const orgId = (row as { organization_id: string }).organization_id;
       memberCountMap.set(orgId, (memberCountMap.get(orgId) ?? 0) + 1);
+    }
+    for (const row of poolsResult.data ?? []) {
+      const r = row as { organization_id: string; balance: number };
+      creditsMap.set(r.organization_id, r.balance);
     }
   }
 
@@ -77,6 +89,7 @@ export async function GET() {
       organizationRowToDomain(o.row),
       o.role,
       memberCountMap.get(o.row.id) ?? 0,
+      creditsMap.get(o.row.id) ?? 0,
     ),
   );
 

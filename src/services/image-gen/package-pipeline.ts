@@ -17,7 +17,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { primaryAdapter } from '@/services/image-gen';
-import { refundCredits } from '@/services/credit';
+import { refundOrgTokens } from '@/services/credit';
 import { publicUrl, putObject } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 import { ASPECT_RATIO_DIMENSIONS, aspectRatioSizeString } from '@/types/domain';
@@ -116,14 +116,17 @@ export async function claimSlot(slotId: string): Promise<PackageJobSlot | null> 
 /**
  * Slot 실패 시: status='failed' + error 저장 + refunded_at 원자 마킹 후 환불.
  * refunded_at 이 이미 있으면 double refund 방지.
+ *
+ * Plan v0.2.8 §M3-3: 환불 대상은 job 이 속한 workspace 의 pool. jobId 를
+ * 명시적으로 받아 refund_tokens RPC 의 metadata.slot_id dedup 을 활용한다.
  */
 export async function markSlotFailedAndRefund(
   slot: PackageJobSlot,
-  userId: string,
+  organizationId: string | null,
+  jobId: string,
   errorMessage: string,
 ): Promise<{ refunded: boolean }> {
   const service = createSupabaseServiceClient();
-  // 상태 + refunded_at 을 한 번의 UPDATE 에서 원자적으로 잡는다.
   const { data, error } = await service
     .from('generation_job_slots')
     .update({
@@ -142,11 +145,22 @@ export async function markSlotFailedAndRefund(
     return { refunded: false };
   }
   if (!data) {
-    // 이미 다른 경로가 환불 확정 → 중복 환불 방지.
+    return { refunded: false };
+  }
+  if (!organizationId) {
+    // orgId 없는 legacy job — 이 경로는 M2 이관 이후 발생하지 않아야 함.
+    // 방어적으로 refund 자체를 스킵하고 로그만 남긴다 (invariant 위배 감지용).
+    console.warn('[package-pipeline] refund skipped: no organizationId', slot.id);
     return { refunded: false };
   }
   try {
-    await refundCredits(userId, 1);
+    await refundOrgTokens({
+      organizationId,
+      amount: 1,
+      jobId,
+      reason: errorMessage.slice(0, 500),
+      metadata: { slot_id: slot.id },
+    });
   } catch (err) {
     console.error('[package-pipeline] refund failed for slot', slot.id, err);
   }
@@ -160,7 +174,8 @@ export async function markSlotFailedAndRefund(
  */
 export async function cancelPendingSlot(
   slotId: string,
-  userId: string,
+  organizationId: string | null,
+  jobId: string,
 ): Promise<{ canceled: boolean; refunded: boolean }> {
   const service = createSupabaseServiceClient();
   const { data, error } = await service
@@ -180,8 +195,18 @@ export async function cancelPendingSlot(
     return { canceled: false, refunded: false };
   }
   if (!data) return { canceled: false, refunded: false };
+  if (!organizationId) {
+    console.warn('[package-pipeline] cancel refund skipped: no organizationId', slotId);
+    return { canceled: true, refunded: false };
+  }
   try {
-    await refundCredits(userId, 1);
+    await refundOrgTokens({
+      organizationId,
+      amount: 1,
+      jobId,
+      reason: 'slot canceled (pending on stream end)',
+      metadata: { slot_id: slotId },
+    });
   } catch (err) {
     console.error('[package-pipeline] refund on cancel failed', slotId, err);
     return { canceled: true, refunded: false };

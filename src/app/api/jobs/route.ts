@@ -10,7 +10,12 @@ export const maxDuration = 30;
 import { ZodError } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';
-import { InsufficientCreditsError, refundCredits, reserveCredits } from '@/services/credit';
+import {
+  InsufficientPoolBalanceError,
+  PoolNotFoundError,
+  refundOrgTokens,
+  useOrgTokens,
+} from '@/services/credit';
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -94,30 +99,11 @@ async function handleSingle(
     return apiError('ACTIVE_JOB_EXISTS', '이전 생성이 진행 중입니다', { activeJobId: active.id });
   }
 
-  let remainingCredits: number;
-  try {
-    remainingCredits = await reserveCredits(userId, body.batchSize);
-  } catch (err) {
-    if (err instanceof InsufficientCreditsError) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('credits, credits_reset_at')
-        .eq('id', userId)
-        .single();
-      return apiError('INSUFFICIENT_CREDITS', '이번 달 크레딧이 부족합니다', {
-        remainingCredits: profile?.credits ?? 0,
-        requiredCredits: body.batchSize,
-        nextResetAt: profile?.credits_reset_at ?? null,
-      });
-    }
-    throw err;
-  }
-
-  // Plan v0.2.6 M3-1: 모든 job 은 workspace (organization) 컨텍스트를 갖는다.
-  // orgSlug 미전달 시 세션 유저의 MY organization 으로 default (workspace
-  // 격리를 유지하면서도 legacy 클라이언트 호환).
+  // Plan v0.2.8 §M3-3: workspace 확정을 크레딧 조작보다 먼저 한다.
+  // Job.organization_id → Pool 이라는 원칙을 유지하기 위해, org 검증 → job
+  // insert → use_tokens(job_id) 순으로 진행한다.
   let orgIdSnapshot: string;
-  let orgIdSchoolContext: string | null = null;  // 조직 (school/general) 컨텍스트에서만 활용
+  let orgIdSchoolContext: string | null = null;
   if (body.orgSlug) {
     const { data: orgRow } = await supabase
       .from('organizations')
@@ -126,7 +112,6 @@ async function handleSingle(
       .is('deleted_at', null)
       .maybeSingle();
     if (!orgRow) {
-      await refundCredits(userId, body.batchSize);
       return apiError('VALIDATION_ERROR', '요청한 조직을 찾을 수 없어요');
     }
     const orgId = (orgRow as { id: string }).id;
@@ -139,16 +124,11 @@ async function handleSingle(
       .eq('status', 'active')
       .maybeSingle();
     if (!member) {
-      await refundCredits(userId, body.batchSize);
       return apiError('FORBIDDEN', '이 조직의 멤버가 아니에요');
     }
     orgIdSnapshot = orgId;
-    // 조직 (school/general) 컨텍스트만 orgIdSchoolContext 에 담아 org 참조
-    // 이미지 · school profile 로직에 그대로 이용. personal 은 개인 컨텍스트 유지.
     if (orgType !== 'personal') orgIdSchoolContext = orgId;
   } else {
-    // Fallback: MY organization 자동 매핑. 신규 job 이 org_id NULL 로 저장되는
-    // 상황을 원천 차단.
     const { data: myOrg } = await supabase
       .from('organizations')
       .select('id')
@@ -157,7 +137,6 @@ async function handleSingle(
       .is('deleted_at', null)
       .maybeSingle();
     if (!myOrg) {
-      await refundCredits(userId, body.batchSize);
       return apiError('INTERNAL_ERROR', '워크스페이스가 아직 준비되지 않았어요');
     }
     orgIdSnapshot = (myOrg as { id: string }).id;
@@ -172,7 +151,6 @@ async function handleSingle(
       .eq('user_id', userId)
       .maybeSingle();
     if (!ref) {
-      await refundCredits(userId, body.batchSize);
       return apiError('VALIDATION_ERROR', '선택한 참조 이미지를 찾을 수 없어요');
     }
     customReferenceR2Key = ref.r2_key as string;
@@ -184,7 +162,6 @@ async function handleSingle(
       .eq('id', body.orgReferenceId)
       .maybeSingle();
     if (!orgRef || (orgRef as { organization_id: string }).organization_id !== orgIdSchoolContext) {
-      await refundCredits(userId, body.batchSize);
       return apiError('VALIDATION_ERROR', '선택한 조직 참조 이미지를 찾을 수 없어요');
     }
     customReferenceR2Key = (orgRef as { r2_key: string }).r2_key;
@@ -211,8 +188,38 @@ async function handleSingle(
     .single();
 
   if (jobError || !job) {
-    await refundCredits(userId, body.batchSize);
     return apiError('INTERNAL_ERROR', 'Job 생성 실패');
+  }
+
+  // 크레딧 차감. Job insert 이후 원자적으로 use_tokens 를 호출 — 실패 시
+  // orphan job 이 남지 않도록 즉시 삭제한다.
+  let remainingCredits: number;
+  try {
+    const useResult = await useOrgTokens({
+      organizationId: orgIdSnapshot,
+      amount: body.batchSize,
+      jobId: job.id as string,
+      actorUserId: userId,
+    });
+    remainingCredits = useResult.balance;
+  } catch (err) {
+    const service = createSupabaseServiceClient();
+    await service.from('generation_jobs').delete().eq('id', job.id);
+    if (err instanceof InsufficientPoolBalanceError) {
+      const { data: poolRow } = await service
+        .from('token_pools')
+        .select('balance')
+        .eq('organization_id', orgIdSnapshot)
+        .maybeSingle();
+      return apiError('INSUFFICIENT_CREDITS', '이 워크스페이스의 크레딧이 부족합니다', {
+        remainingCredits: (poolRow as { balance: number } | null)?.balance ?? 0,
+        requiredCredits: body.batchSize,
+      });
+    }
+    if (err instanceof PoolNotFoundError) {
+      return apiError('INTERNAL_ERROR', '워크스페이스 크레딧 풀이 준비되지 않았어요');
+    }
+    throw err;
   }
 
   return apiOk(
@@ -305,27 +312,8 @@ async function handlePackage(
     orgIdSnapshot = (myOrg as { id: string }).id;
   }
 
-  // 크레딧 예약 — 총 slot 수만큼.
-  let remainingCredits: number;
-  try {
-    remainingCredits = await reserveCredits(userId, totalSlots);
-  } catch (err) {
-    if (err instanceof InsufficientCreditsError) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('credits, credits_reset_at')
-        .eq('id', userId)
-        .single();
-      return apiError('INSUFFICIENT_CREDITS', '이번 달 크레딧이 부족합니다', {
-        remainingCredits: profile?.credits ?? 0,
-        requiredCredits: totalSlots,
-        nextResetAt: profile?.credits_reset_at ?? null,
-      });
-    }
-    throw err;
-  }
-
-  // Job insert. 실패 시 크레딧 전량 환불.
+  // Plan v0.2.8 §M3-3: package 도 workspace pool 에서 차감. Job insert 이후
+  // use_tokens 를 원자적으로 호출. 실패 시 job + 이미 삽입된 slot 정리.
   // version 은 Zod default(1) 가 이미 채워두지만 명시적으로 저장.
   const packagePlanSnapshot = {
     version: body.packagePlan.version,
@@ -361,17 +349,12 @@ async function handlePackage(
     .single();
 
   if (jobError || !job) {
-    // Supabase 원본 오류는 서버 로그로만. Constraint / SQL / 스키마 오류
-    // 모두 여기서 message · code · hint · details 로 남는다.
     console.error('[jobs POST package] job insert failed', {
       code: jobError?.code,
       message: jobError?.message,
       hint: jobError?.hint,
       details: jobError?.details,
     });
-    await refundCredits(userId, totalSlots);
-    // 스키마 미적용 (undefined_table / undefined_column) 은 별도 코드로.
-    // 나머지는 안전한 PACKAGE_JOB_INSERT_FAILED.
     if (jobError && isSchemaNotReadyError(jobError.code)) {
       return apiError(
         'PACKAGE_SCHEMA_NOT_READY',
@@ -385,6 +368,35 @@ async function handlePackage(
   }
 
   const jobId = job.id as string;
+
+  // Job insert 성공 후 크레딧 차감. 실패 시 job 삭제.
+  let remainingCredits: number;
+  try {
+    const useResult = await useOrgTokens({
+      organizationId: orgIdSnapshot,
+      amount: totalSlots,
+      jobId,
+      actorUserId: userId,
+    });
+    remainingCredits = useResult.balance;
+  } catch (err) {
+    await jobService.from('generation_jobs').delete().eq('id', jobId);
+    if (err instanceof InsufficientPoolBalanceError) {
+      const { data: poolRow } = await jobService
+        .from('token_pools')
+        .select('balance')
+        .eq('organization_id', orgIdSnapshot)
+        .maybeSingle();
+      return apiError('INSUFFICIENT_CREDITS', '이 워크스페이스의 크레딧이 부족합니다', {
+        remainingCredits: (poolRow as { balance: number } | null)?.balance ?? 0,
+        requiredCredits: totalSlots,
+      });
+    }
+    if (err instanceof PoolNotFoundError) {
+      return apiError('INTERNAL_ERROR', '워크스페이스 크레딧 풀이 준비되지 않았어요');
+    }
+    throw err;
+  }
 
   // Slot rows — enabled 항목 × quantity 만큼 flat 배열로 생성.
   // 전역 순서 `order` 는 0..N-1, category 별 순서 `category_order` 는 각
@@ -427,10 +439,19 @@ async function handlePackage(
     .insert(slotRows);
 
   if (slotError) {
-    // Slot insert 실패 — job 정리 + 크레딧 전량 환불.
+    // Slot insert 실패 — 이미 use_tokens 로 차감된 크레딧을 환불 후 job 정리.
     // CASCADE 로 slots 는 자동 삭제되지만 명시적으로 job 을 지운다.
+    try {
+      await refundOrgTokens({
+        organizationId: orgIdSnapshot,
+        amount: totalSlots,
+        jobId,
+        reason: 'package slot insert failed — full refund',
+      });
+    } catch (refundErr) {
+      console.error('[jobs POST package] slot-fail refund error', refundErr);
+    }
     await jobService.from('generation_jobs').delete().eq('id', jobId);
-    await refundCredits(userId, totalSlots);
     console.error('[jobs POST package] slot insert failed', {
       code: slotError.code,
       message: slotError.message,
