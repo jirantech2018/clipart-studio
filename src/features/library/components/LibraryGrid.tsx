@@ -24,17 +24,35 @@ import { ShareToOrgDialog } from '@/features/organization/components/ShareToOrgD
 import { useIntersection } from '@/lib/hooks/useIntersection';
 import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 
-import type { LibraryFilter, LibrarySort } from '@/features/library/hooks/useMyImages';
+import type {
+  LibraryFilter,
+  LibraryScope,
+  LibrarySort,
+} from '@/features/library/hooks/useMyImages';
 
 interface LibraryGridProps {
   /** Plan v0.2.7 §M3-2: workspace 필터. 전달 시 해당 organization 이미지만.
    *  미전달 시 개인 owner 기반 (하위호환). */
   organizationSlug?: string;
+  /** Plan v0.2.7 §M3-2 (C 방향): 조직 라이브러리 3-tab (전체/이 조직에서 만든
+   *  이미지/공유받은 이미지) 노출 여부. MY workspace 는 다른 조직에서 MY 로
+   *  공유될 일이 없으므로 false 로 숨긴다. */
+  showWorkspaceTabs?: boolean;
 }
 
-export function LibraryGrid({ organizationSlug }: LibraryGridProps = {}) {
+const SCOPE_LABELS: Record<LibraryScope, string> = {
+  all: '전체',
+  created: '이 조직에서 만든 이미지',
+  shared: '공유받은 이미지',
+};
+
+export function LibraryGrid({
+  organizationSlug,
+  showWorkspaceTabs = false,
+}: LibraryGridProps = {}) {
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('newest');
+  const [scope, setScope] = useState<LibraryScope>('all');
   const [zipPending, setZipPending] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const selection = useMultiSelection('library');
@@ -45,11 +63,11 @@ export function LibraryGrid({ organizationSlug }: LibraryGridProps = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 필터·정렬 변경 시에도 선택 초기화 (사용자 요구 B-2.5 §5).
+  // 필터·정렬·탭 변경 시에도 선택 초기화 (사용자 요구 B-2.5 §5).
   useEffect(() => {
     selection.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, sort]);
+  }, [filter, sort, scope]);
 
   const {
     data,
@@ -59,7 +77,7 @@ export function LibraryGrid({ organizationSlug }: LibraryGridProps = {}) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useMyImages(filter, sort, organizationSlug);
+  } = useMyImages(filter, sort, organizationSlug, scope);
 
   const images = data?.pages.flatMap((p) => p.images) ?? [];
 
@@ -107,6 +125,35 @@ export function LibraryGrid({ organizationSlug }: LibraryGridProps = {}) {
 
   return (
     <div className="space-y-4">
+      {showWorkspaceTabs && (
+        <div
+          role="tablist"
+          aria-label="라이브러리 범위"
+          className="flex flex-wrap gap-1.5 border-b"
+        >
+          {(Object.keys(SCOPE_LABELS) as LibraryScope[]).map((key) => {
+            const active = scope === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setScope(key)}
+                className={
+                  'relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors ' +
+                  (active
+                    ? 'border-primary font-medium text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground')
+                }
+              >
+                {SCOPE_LABELS[key]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <LibraryFilters
         filter={filter}
         sort={sort}

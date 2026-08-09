@@ -174,10 +174,12 @@ export function OrganizationHome({
         </aside>
       </div>
 
-      {/* Plan v0.2.7 §M3-2: 모든 workspace 홈이 통일된 LibraryGrid + workspace
-          필터로 그 조직의 이미지만 표시. 기존 OrganizationLibraryGrid (share
-          기반) 는 legacy 로 유지되지만 이 라우트에서는 사용하지 않는다. */}
-      <LibraryGrid organizationSlug={slug} />
+      {/* Plan v0.2.7 §M3-2 (C 방향): 통일된 LibraryGrid + workspace 필터.
+          일반 조직은 3-tab (전체/이 조직에서 만든 이미지/공유받은 이미지) 을
+          노출하고, MY workspace 는 다른 조직에서 MY 로 공유될 일이 없어
+          탭을 숨긴다. 기존 OrganizationLibraryGrid (share 전용 legacy) 는
+          이 라우트에서 사용하지 않는다. */}
+      <LibraryGrid organizationSlug={slug} showWorkspaceTabs={!isPersonal} />
     </div>
   );
 }

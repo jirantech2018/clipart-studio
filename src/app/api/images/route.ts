@@ -18,6 +18,13 @@ const querySchema = z.object({
   // organizationSlug 로 넘겨 서버가 id 로 resolve. 미전달 시 이전 동작 (개인
   // owner 전체) 유지 — 하위호환.
   organizationSlug: z.string().min(1).max(200).optional(),
+  // Plan v0.2.7 §M3-2 (C 방향): 조직 라이브러리 3-tab 분할.
+  //   all     — 이 조직에서 만든 이미지 + 이 조직으로 공유받은 이미지 (기본)
+  //   created — 이 조직에서 만든 이미지 (organization_id = X)
+  //   shared  — 이 조직으로 공유받은 이미지 (image_organization_shares 경유,
+  //             organization_id != X 로 자기 이미지 제외)
+  // organizationSlug 미전달 시에는 무시.
+  scope: z.enum(['all', 'created', 'shared']).default('all'),
 });
 
 interface ImageWithMeta extends Image {
@@ -93,7 +100,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const { filter, sort, limit, offset, organizationSlug } = parsed.data;
+  const { filter, sort, limit, offset, organizationSlug, scope } = parsed.data;
 
   // organizationSlug 가 있으면 그 조직 id 로 필터. Membership 검증까지 하려면
   // organization_members join 필요하지만 여기는 SELECT 만이고 organizations
@@ -123,8 +130,43 @@ export async function GET(request: Request) {
     );
 
   if (organizationId) {
-    // Workspace 필터: 그 조직에 속한 이미지 (owner 무관, 조직 멤버라면 조회).
-    query = query.eq('organization_id', organizationId);
+    // Plan v0.2.7 §M3-2 (C 방향): scope 별 워크스페이스 필터.
+    //   organizations.id 는 "만든 곳" 을 나타내고, image_organization_shares
+    //   는 "공유받은 곳" 을 나타낸다. 두 개념이 분리돼 있어 조합으로 3개 뷰를
+    //   만든다. 자기 이미지가 아닌 공유받은 이미지만 필터하기 위해 shared 는
+    //   organization_id != X 조건으로 자기 창작물을 제외한다.
+    if (scope === 'created') {
+      query = query.eq('organization_id', organizationId);
+    } else if (scope === 'shared') {
+      // 이 조직으로 공유된 image_id 목록을 먼저 조회.
+      const { data: shareRows, error: shareErr } = await supabase
+        .from('image_organization_shares')
+        .select('image_id')
+        .eq('organization_id', organizationId);
+      if (shareErr) return apiError('INTERNAL_ERROR', '공유 목록 조회 실패');
+      const sharedIds = (shareRows ?? []).map((r) => (r as { image_id: string }).image_id);
+      if (sharedIds.length === 0) {
+        return apiOk({ images: [], total: 0, limit, offset });
+      }
+      query = query.in('id', sharedIds).neq('organization_id', organizationId);
+    } else {
+      // scope === 'all': 이 조직 소속 + 이 조직으로 공유받은 것 (자기 창작
+      // 여부 무관). shares 는 organization_id != X 인 이미지만 실질 추가됨
+      // (같은 조직에서 만든 이미지는 이미 첫 조건에 포함).
+      const { data: shareRows, error: shareErr } = await supabase
+        .from('image_organization_shares')
+        .select('image_id')
+        .eq('organization_id', organizationId);
+      if (shareErr) return apiError('INTERNAL_ERROR', '공유 목록 조회 실패');
+      const sharedIds = (shareRows ?? []).map((r) => (r as { image_id: string }).image_id);
+      if (sharedIds.length > 0) {
+        query = query.or(
+          `organization_id.eq.${organizationId},id.in.(${sharedIds.join(',')})`,
+        );
+      } else {
+        query = query.eq('organization_id', organizationId);
+      }
+    }
   } else {
     // 하위호환: 개인 owner 기반 (organizationSlug 미전달 시).
     query = query.eq('user_id', user.id);

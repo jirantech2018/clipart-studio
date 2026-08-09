@@ -44,7 +44,9 @@ export default async function OrganizationLibraryPage({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <LibraryGrid organizationSlug={params.slug} />
+      {/* Plan v0.2.7 §M3-2 (C 방향): 조직 라이브러리는 3-tab (전체 / 이
+          조직에서 만든 이미지 / 공유받은 이미지) 노출. */}
+      <LibraryGrid organizationSlug={params.slug} showWorkspaceTabs />
     </div>
   );
 }

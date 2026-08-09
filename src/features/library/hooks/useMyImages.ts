@@ -15,6 +15,9 @@ import type { Image, ImageVisibility } from '@/types/domain';
 
 export type LibraryFilter = 'all' | 'public';
 export type LibrarySort = 'newest' | 'oldest';
+/** Plan v0.2.7 §M3-2 (C 방향) — 조직 라이브러리 3-tab. 개인 라이브러리에는
+ *  scope 를 넘기지 않고 서버가 'all' 로 처리. */
+export type LibraryScope = 'all' | 'created' | 'shared';
 
 export interface LibraryImage extends Image {
   thumbnailUrl: string;
@@ -40,6 +43,7 @@ async function fetchImagesPage(
   sort: LibrarySort,
   offset: number,
   organizationSlug?: string,
+  scope?: LibraryScope,
 ): Promise<ListResponse> {
   const params = new URLSearchParams({
     filter,
@@ -48,6 +52,7 @@ async function fetchImagesPage(
     offset: String(offset),
   });
   if (organizationSlug) params.set('organizationSlug', organizationSlug);
+  if (scope && scope !== 'all') params.set('scope', scope);
   const res = await fetch(`/api/images?${params.toString()}`);
   if (!res.ok) throw new Error('이미지 목록을 불러오지 못했습니다');
   const json = (await res.json()) as { data: ListResponse };
@@ -58,12 +63,20 @@ export function useMyImages(
   filter: LibraryFilter,
   sort: LibrarySort,
   organizationSlug?: string,
+  scope: LibraryScope = 'all',
 ) {
   return useInfiniteQuery({
-    // organizationSlug 를 queryKey 에 포함해 workspace 전환 시 자동 refetch.
-    queryKey: ['images', filter, sort, organizationSlug ?? '__personal__'],
+    // organizationSlug + scope 를 queryKey 에 포함해 workspace/tab 전환 시
+    // 자동 refetch.
+    queryKey: [
+      'images',
+      filter,
+      sort,
+      organizationSlug ?? '__personal__',
+      scope,
+    ],
     queryFn: ({ pageParam }) =>
-      fetchImagesPage(filter, sort, pageParam as number, organizationSlug),
+      fetchImagesPage(filter, sort, pageParam as number, organizationSlug, scope),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const fetched = allPages.reduce((sum, p) => sum + p.images.length, 0);
