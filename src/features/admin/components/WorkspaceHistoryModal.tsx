@@ -81,7 +81,7 @@ export function WorkspaceHistoryModal({
       aria-modal="true"
       aria-labelledby="workspace-history-title"
     >
-      <div className="w-full max-w-3xl overflow-hidden rounded-lg border bg-background shadow-lg">
+      <div className="w-full max-w-6xl overflow-hidden rounded-lg border bg-background shadow-lg">
         {/* Header */}
         <div className="border-b px-4 py-3">
           <div className="flex items-start justify-between gap-2">
@@ -128,53 +128,64 @@ export function WorkspaceHistoryModal({
               아직 히스토리가 없어요.
             </p>
           ) : (
-            <table className="w-full text-xs">
-              <thead className="text-muted-foreground">
-                <tr className="text-left">
-                  <th className="px-2 py-1">시각</th>
-                  <th className="px-2 py-1">종류</th>
-                  <th className="px-2 py-1 text-right">amount</th>
-                  <th className="px-2 py-1">actor</th>
-                  <th className="px-2 py-1">memo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(ledger.data?.entries ?? []).map((e) => (
-                  <tr key={e.id} className="border-t align-top">
-                    <td className="px-2 py-1 text-muted-foreground">
-                      {formatDateTime(e.createdAt)}
-                    </td>
-                    <td className="px-2 py-1">
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
-                          LEDGER_TYPE_BADGE[e.type] ?? 'bg-secondary'
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-xs">
+                <colgroup>
+                  <col className="w-[140px]" />
+                  <col className="w-[64px]" />
+                  <col className="w-[80px]" />
+                  <col className="w-[220px]" />
+                  <col />
+                </colgroup>
+                <thead className="text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="px-2 py-1 whitespace-nowrap">시각</th>
+                    <th className="px-2 py-1 whitespace-nowrap">종류</th>
+                    <th className="px-2 py-1 whitespace-nowrap text-right">amount</th>
+                    <th className="px-2 py-1 whitespace-nowrap">actor</th>
+                    <th className="px-2 py-1">memo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(ledger.data?.entries ?? []).map((e) => (
+                    <tr key={e.id} className="border-t align-top">
+                      <td className="px-2 py-1 whitespace-nowrap text-muted-foreground">
+                        {formatDateTime(e.createdAt)}
+                      </td>
+                      <td className="px-2 py-1 whitespace-nowrap">
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
+                            LEDGER_TYPE_BADGE[e.type] ?? 'bg-secondary'
+                          }`}
+                        >
+                          {LEDGER_TYPE_LABEL[e.type] ?? e.type}
+                        </span>
+                      </td>
+                      <td
+                        className={`px-2 py-1 whitespace-nowrap text-right tabular-nums font-medium ${
+                          e.amount > 0 ? 'text-emerald-600' : 'text-destructive'
                         }`}
                       >
-                        {LEDGER_TYPE_LABEL[e.type] ?? e.type}
-                      </span>
-                    </td>
-                    <td
-                      className={`px-2 py-1 text-right tabular-nums font-medium ${
-                        e.amount > 0 ? 'text-emerald-600' : 'text-destructive'
-                      }`}
-                    >
-                      {e.amount > 0 ? `+${e.amount}` : e.amount}
-                    </td>
-                    <td className="px-2 py-1 text-muted-foreground">{e.actorEmail ?? '-'}</td>
-                    <td className="px-2 py-1">
-                      <div className="truncate" title={e.memo ?? ''}>
-                        {e.memo ?? '-'}
-                      </div>
-                      {e.jobId && (
-                        <div className="text-[10px] text-muted-foreground/70">
-                          job: {e.jobId.slice(0, 8)}…
+                        {e.amount > 0 ? `+${e.amount}` : e.amount}
+                      </td>
+                      <td className="px-2 py-1 truncate text-muted-foreground" title={e.actorEmail ?? ''}>
+                        {e.actorEmail ?? '-'}
+                      </td>
+                      <td className="px-2 py-1">
+                        <div className="break-words" title={e.memo ?? ''}>
+                          {e.memo ?? '-'}
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        {e.jobId && (
+                          <div className="text-[10px] text-muted-foreground/70">
+                            job: {e.jobId.slice(0, 8)}…
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
