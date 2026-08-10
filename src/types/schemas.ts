@@ -282,6 +282,17 @@ export const updateOrganizationSchema = z.object({
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 
+// M4 Organization Approval — 신청 payload. 승인 후 실제 organizations 로
+// 옮겨질 값이므로 조직 생성 schema 와 동일 필드를 재사용한다.
+export const createOrganizationRequestSchema = createOrganizationSchema;
+export type CreateOrganizationRequestInput = z.infer<typeof createOrganizationRequestSchema>;
+
+// M4 거절 사유 (필수)
+export const rejectOrganizationRequestSchema = z.object({
+  reason: z.string().trim().min(1, '거절 사유는 필수예요').max(500, '500자 이내'),
+});
+export type RejectOrganizationRequestInput = z.infer<typeof rejectOrganizationRequestSchema>;
+
 // 멤버 초대 (POST /api/organizations/[slug]/invites)
 // role 은 P5-B 이후 UI 상 단일화되어 "멤버(editor)" 로만 발급됨. 스키마는
 // 후방 호환을 위해 optional 로 두고 기본값 editor. admin/owner 로 초대

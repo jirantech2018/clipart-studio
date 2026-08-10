@@ -3,7 +3,7 @@
 //   1. Token Dashboard (/admin/token-dashboard)
 //   2. Image Knowledge CMS (/admin/knowledge)
 
-import { BookOpen, Coins } from 'lucide-react';
+import { BookOpen, ClipboardList, Coins } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -30,6 +30,13 @@ export default async function AdminHomePage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
+        <AdminBanner
+          href="/admin/organization-requests"
+          title="조직 개설 신청"
+          description="사용자가 신청한 조직 개설 요청을 검토하고 승인 · 거절합니다. 승인 시 실제 워크스페이스와 owner 멤버십이 자동 생성돼요."
+          icon={<ClipboardList className="h-6 w-6" aria-hidden="true" />}
+          accent="from-emerald-100 to-emerald-50 border-emerald-200 text-emerald-700"
+        />
         <AdminBanner
           href="/admin/token-dashboard"
           title="Token Dashboard"

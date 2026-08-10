@@ -1,7 +1,9 @@
 'use client';
 
-// 새 조직 생성 폼. 이름 / URL 이름(slug) / 소개 / 홈페이지.
-// slug 는 실시간으로 소문자+하이픈만 허용하도록 정규화.
+// Plan M4: 조직 개설 "신청" 폼. 예전에는 즉시 organizations 를 만들었지만
+// 이제는 organization_requests 로 SUBMITTED 상태의 신청만 남긴다. 승인은
+// Super Admin 이 /admin/organization-requests 에서 수행하고, 승인 시점에
+// 실제 organizations + owner membership + token_pool (트리거) 이 생성된다.
 
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -14,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateOrganization } from '@/features/organization/hooks/useOrganizations';
+import { useCreateOrganizationRequest } from '@/features/organization/hooks/useOrganizationRequests';
 
 function normalizeSlug(input: string): string {
   return input
@@ -27,7 +29,7 @@ function normalizeSlug(input: string): string {
 
 export function OrganizationForm() {
   const router = useRouter();
-  const create = useCreateOrganization();
+  const submit = useCreateOrganizationRequest();
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -38,7 +40,6 @@ export function OrganizationForm() {
   function handleNameChange(next: string) {
     setName(next);
     if (!slugTouched) {
-      // 이름에서 slug 자동 추측 (사용자가 slug 를 직접 만지기 전까지만)
       setSlug(normalizeSlug(next));
     }
   }
@@ -50,20 +51,20 @@ export function OrganizationForm() {
       return;
     }
     try {
-      const org = await create.mutateAsync({
+      await submit.mutateAsync({
         slug,
         name: name.trim(),
-        description: description.trim() || undefined,
+        description: description.trim(),
         homepageUrl: homepageUrl.trim() || undefined,
       });
-      toast.success('조직이 생성됐어요');
-      router.push(`/organization/${org.slug}`);
+      toast.success('조직 개설 신청이 완료됐어요');
+      router.push('/organizations');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '조직 생성 실패');
+      toast.error(err instanceof Error ? err.message : '신청 실패');
     }
   }
 
-  const busy = create.isPending;
+  const busy = submit.isPending;
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
@@ -77,9 +78,11 @@ export function OrganizationForm() {
 
       <Card>
         <CardHeader>
-          <CardTitle>새 조직 만들기</CardTitle>
+          <CardTitle>새 조직 신청</CardTitle>
           <p className="text-sm text-muted-foreground">
-            같은 조직 멤버끼리 이미지를 공유하는 공간을 만들어요.
+            학교 또는 팀에서 함께 사용할 새로운 작업 공간을 신청합니다.
+            <br />
+            관리자 검토 후 승인되면 조직 작업 공간이 생성됩니다.
           </p>
         </CardHeader>
         <CardContent>
@@ -114,7 +117,8 @@ export function OrganizationForm() {
                 />
               </div>
               <p className="text-sm text-muted-foreground">
-                조직 페이지 주소에 쓰여요. 3~64자, 소문자·숫자·하이픈만. 나중에 바꿀 수 없어요.
+                조직 페이지 주소에 쓰여요. 3~64자, 소문자·숫자·하이픈만. 승인 이후에는 바꿀 수
+                없어요.
               </p>
             </div>
 
@@ -152,7 +156,7 @@ export function OrganizationForm() {
                 취소
               </Link>
               <Button type="submit" disabled={busy}>
-                {busy ? '만드는 중…' : '만들기'}
+                {busy ? '신청 중…' : '조직 개설 신청'}
               </Button>
             </div>
           </form>

@@ -55,6 +55,35 @@ export interface OrganizationWithMyRole extends Organization {
   credits: number;
 }
 
+// M4 Organization Approval Flow — 신청 상태.
+//   SUBMITTED  : 사용자가 신청 완료. 관리자 대기.
+//   REVIEWING  : 관리자가 검토 시작.
+//   APPROVED   : 승인 완료. approved_organization_id 로 실제 org 연결.
+//   REJECTED   : 승인 안 됨. rejection_reason 필수.
+export type OrganizationRequestStatus =
+  | 'SUBMITTED'
+  | 'REVIEWING'
+  | 'APPROVED'
+  | 'REJECTED';
+
+export interface OrganizationRequest {
+  id: string;
+  applicantUserId: string;
+  applicantEmail: string | null;
+  organizationName: string;
+  desiredSlug: string;
+  description: string;
+  homepageUrl: string | null;
+  status: OrganizationRequestStatus;
+  submittedAt: string;
+  reviewStartedAt: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  reviewerEmail: string | null;
+  rejectionReason: string | null;
+  approvedOrganizationId: string | null;
+}
+
 // 조직 멤버 상세 — 멤버 관리 페이지에서 표시.
 export interface OrganizationMember {
   userId: string;
