@@ -53,9 +53,9 @@ type LibraryTab =
 
 const TAB_LABELS: Record<LibraryTab, string> = {
   all: '전체',
-  created: '이 조직에서 만든 이미지',
-  shared_out: '이 조직에서 공유 중인 이미지',
-  shared: '공유받은 이미지',
+  created: '직접 만든 클립아트',
+  shared_out: '공유 중',
+  shared: '공유받은 클립아트',
   trashed: '휴지통',
 };
 
