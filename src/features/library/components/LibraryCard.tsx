@@ -121,13 +121,22 @@ export function LibraryCard({
           alt={image.prompt}
           className={cn(
             'h-full w-full object-cover transition-transform',
-            trashMode
-              ? 'brightness-[0.35] blur-sm'
-              : 'group-hover:scale-[1.02]',
+            !trashMode && 'group-hover:scale-[1.02]',
           )}
           loading="lazy"
         />
       </Link>
+
+      {/* 휴지통 이미지: 이미지 자체는 원본 그대로 두고 그 위에 반투명 검은
+          단일 레이어만 얹는다. blur/brightness 필터의 볼록·왜곡 효과 없이
+          평평한 검은 유리 한 장 덮은 느낌. pointer-events-none 이라 카드
+          클릭/포커스 흐름은 그대로. */}
+      {trashMode && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-black/65"
+        />
+      )}
 
       {/* 좌상단 선택 체크박스: 미선택 시 hover/focus 로만 표시, 선택 시 항상 표시. */}
       <div
