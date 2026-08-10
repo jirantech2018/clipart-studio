@@ -77,10 +77,10 @@ export function HomeStepsSection() {
             라이브러리로 공유하여 활용할 수 있습니다.
           </p>
           <Link
-            href="/library"
+            href="/organizations"
             className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'w-full')}
           >
-            MY 라이브러리 열기
+            우리학교 워크스페이스
           </Link>
         </CardContent>
       </Card>
