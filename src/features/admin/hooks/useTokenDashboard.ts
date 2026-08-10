@@ -11,21 +11,21 @@ export interface AdminWorkspace {
   type: 'personal' | 'school' | 'general';
   ownerEmail: string | null;
   credits: number;
-  totalIssued: number;
-  totalUsed: number;
-  monthUsed: number;
   memberCount: number;
-  lastUsedAt: string | null;
   poolId: string | null;
+}
+
+export interface AdminDashboardTotals {
+  workspaces: number;
+  credits: number;
+  totalImages: number;
+  creditsUsed: { today: number; week: number; month: number };
+  imagesGenerated: { today: number; week: number; month: number };
 }
 
 export interface AdminDashboardData {
   workspaces: AdminWorkspace[];
-  totals: {
-    workspaces: number;
-    credits: number;
-    monthUsed: number;
-  };
+  totals: AdminDashboardTotals;
 }
 
 const DASHBOARD_KEY = ['admin', 'token-dashboard'] as const;

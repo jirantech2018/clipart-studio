@@ -16,10 +16,14 @@ import {
 type Tab = 'allocate' | 'adjust' | 'ledger';
 
 const TYPE_LABEL: Record<AdminWorkspace['type'], string> = {
-  personal: 'MY (개인)',
+  personal: '개인 (MY)',
   school: '학교',
   general: '일반',
 };
+
+function displayWorkspaceName(w: AdminWorkspace): string {
+  return w.type === 'personal' ? '내 작업실' : w.name;
+}
 
 const LEDGER_TYPE_LABEL: Record<string, string> = {
   ISSUE: '발행',
@@ -92,7 +96,7 @@ export function WorkspaceActionsModal({
       const res = await allocate.mutateAsync({
         organizationId: workspace.id,
         amount: parsed,
-        memo: allocMemo.trim() || `admin allocate to ${workspace.name}`,
+        memo: allocMemo.trim() || `admin allocate to ${displayWorkspaceName(workspace)}`,
       });
       toast.success(`${parsed} 크레딧 지급 완료 · 잔액 ${res.balance}`);
       setAmount('');
@@ -144,12 +148,16 @@ export function WorkspaceActionsModal({
         <div className="border-b px-4 py-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h2 id="workspace-actions-title" className="truncate text-base font-semibold">
-                {workspace.name}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 id="workspace-actions-title" className="truncate text-base font-semibold">
+                  {displayWorkspaceName(workspace)}
+                </h2>
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium">
+                  {TYPE_LABEL[workspace.type]}
+                </span>
+              </div>
               <div className="mt-0.5 text-xs text-muted-foreground">
-                /{workspace.slug} · {TYPE_LABEL[workspace.type]} ·
-                {workspace.ownerEmail ? ` ${workspace.ownerEmail}` : ' (owner email 없음)'}
+                {workspace.ownerEmail ?? '(owner email 없음)'}
               </div>
             </div>
             <button
@@ -161,10 +169,9 @@ export function WorkspaceActionsModal({
               ✕
             </button>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+          <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
             <MetricPill label="현재 크레딧" value={workspace.credits} />
-            <MetricPill label="이번 달 사용" value={workspace.monthUsed} />
-            <MetricPill label="누적 사용" value={workspace.totalUsed} />
+            <MetricPill label="멤버" value={workspace.memberCount} />
           </div>
         </div>
 

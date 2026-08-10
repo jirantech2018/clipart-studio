@@ -28,7 +28,7 @@ export default async function AdminTokenDashboardPage() {
           <span>Token Dashboard</span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Token Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">크레딧 관리</h1>
           <Link
             href="/admin/knowledge"
             className="text-xs text-muted-foreground hover:text-foreground hover:underline"
@@ -37,8 +37,7 @@ export default async function AdminTokenDashboardPage() {
           </Link>
         </div>
         <p className="text-sm text-muted-foreground">
-          Workspace 별 크레딧 잔액과 사용량을 보고, 필요한 조직에 크레딧을 지급하거나 조정합니다.
-          모든 변동은 Ledger 에 append-only 로 기록됩니다.
+          조직별 크레딧과 멤버 현황을 확인하고 크레딧을 관리합니다.
         </p>
       </div>
 
