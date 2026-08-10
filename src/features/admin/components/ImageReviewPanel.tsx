@@ -230,10 +230,35 @@ export function ImageReviewPanel() {
                     {img.trashReason}
                   </div>
                 )}
-                <div className="mt-2 flex flex-col gap-1">
-                  {/* Community publish/unpublish — TRASHED 이미지는 게시하지
-                      않음 (원본이 숨겨진 상태). ACTIVE 에서만 노출. */}
-                  {img.trashStatus === 'ACTIVE' && (
+                {/* 2단 액션 라인 — 좌: 휴지통/복원, 우: 공유 라이브러리 on/off */}
+                <div className="mt-2 grid grid-cols-2 gap-1">
+                  {img.trashStatus === 'ACTIVE' ? (
+                    <button
+                      type="button"
+                      onClick={() => setTrashTarget(img)}
+                      disabled={trash.isPending}
+                      className="inline-flex h-7 items-center justify-center gap-1 rounded-md bg-destructive px-2 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden="true" />
+                      휴지통
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleRestore(img.id)}
+                      disabled={restore.isPending}
+                      className="inline-flex h-7 items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-[11px] font-medium hover:bg-accent disabled:opacity-50"
+                    >
+                      {restore.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                      )}
+                      복원
+                    </button>
+                  )}
+
+                  {img.trashStatus === 'ACTIVE' ? (
                     <button
                       type="button"
                       onClick={async () => {
@@ -262,34 +287,21 @@ export function ImageReviewPanel() {
                       {publish.isPending ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : (
-                        <Globe className="h-3 w-3" />
+                        <Globe className="h-3 w-3" aria-hidden="true" />
                       )}
-                      {img.isOnCommunity ? '공유 라이브러리에서 내리기' : '공유 라이브러리로'}
-                    </button>
-                  )}
-
-                  {img.trashStatus === 'ACTIVE' ? (
-                    <button
-                      type="button"
-                      onClick={() => setTrashTarget(img)}
-                      disabled={trash.isPending}
-                      className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-md bg-destructive px-2 text-[11px] font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-3 w-3" /> 휴지통
+                      공유 라이브러리
                     </button>
                   ) : (
+                    // TRASHED 이미지는 공유 라이브러리 게시 대상이 아님.
+                    // 2단 레이아웃 유지를 위해 disabled 자리채움.
                     <button
                       type="button"
-                      onClick={() => handleRestore(img.id)}
-                      disabled={restore.isPending}
-                      className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-[11px] font-medium hover:bg-accent disabled:opacity-50"
+                      disabled
+                      className="inline-flex h-7 items-center justify-center gap-1 rounded-md border border-dashed border-input bg-muted/30 px-2 text-[11px] font-medium text-muted-foreground disabled:opacity-70"
+                      title="휴지통 이미지는 공유 라이브러리에 올릴 수 없어요"
                     >
-                      {restore.isPending ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <RotateCcw className="h-3 w-3" />
-                      )}
-                      복원
+                      <Globe className="h-3 w-3" aria-hidden="true" />
+                      공유 라이브러리
                     </button>
                   )}
                 </div>
