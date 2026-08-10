@@ -65,8 +65,18 @@ async function fetchImagesPage(
   if (trash !== 'active') params.set('trash', trash);
   const res = await fetch(`/api/images?${params.toString()}`);
   if (!res.ok) throw new Error('이미지 목록을 불러오지 못했습니다');
-  const json = (await res.json()) as { data: ListResponse };
-  return json.data;
+  // JSON 파싱 실패도 방어 — server 가 예상 shape 을 못 돌려주면 빈 페이지로.
+  const json = (await res.json().catch(() => null)) as { data?: ListResponse } | null;
+  if (!json?.data) {
+    return { images: [], total: 0, limit: PAGE_SIZE, offset };
+  }
+  // 필드 누락에 대비해 최소 shape 을 보장.
+  return {
+    images: Array.isArray(json.data.images) ? json.data.images : [],
+    total: typeof json.data.total === 'number' ? json.data.total : 0,
+    limit: typeof json.data.limit === 'number' ? json.data.limit : PAGE_SIZE,
+    offset: typeof json.data.offset === 'number' ? json.data.offset : offset,
+  };
 }
 
 export function useMyImages(

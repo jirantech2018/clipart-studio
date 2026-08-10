@@ -88,12 +88,19 @@ export function LibraryGrid({
     isFetchingNextPage,
   } = useMyImages(filter, sort, organizationSlug, scope, trashView);
 
-  // 휴지통 개수 — 뷰 토글 라벨용. active 뷰일 때만 count 조회.
+  // 휴지통 개수 — 뷰 토글 라벨용. count 만 필요하므로 실패해도 UI 를 죽이지
+  // 않는다. 응답이 없거나 첫 페이지가 undefined 이면 0 으로 표시.
   const trashCountQuery = useMyImages(filter, sort, organizationSlug, 'created', 'trashed');
-  const trashCount =
-    trashCountQuery.data?.pages[0]?.total ?? 0;
+  const firstTrashPage = trashCountQuery.data?.pages?.[0];
+  const trashCount = firstTrashPage?.total ?? 0;
 
-  const images = data?.pages.flatMap((p) => p.images) ?? [];
+  // 방어적으로: page 하나가 undefined 이거나 images 필드가 누락돼도 map 하지
+  // 않도록. useMyImages 는 이미 shape 을 보장하지만 mismatch chunk 등으로
+  // undefined page 가 섞이는 경우도 방어.
+  const images =
+    data?.pages
+      .flatMap((p) => (p && Array.isArray(p.images) ? p.images : []))
+      .filter((img): img is NonNullable<typeof img> => !!img && !!img.id) ?? [];
 
   const onSentinel = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
