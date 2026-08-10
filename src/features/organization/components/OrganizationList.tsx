@@ -261,7 +261,7 @@ function RequestStatusCard({
               <button
                 type="button"
                 onClick={() => onDismiss(req.id)}
-                className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }))}
+                className={cn(buttonVariants({ size: 'sm', variant: 'default' }))}
                 aria-label="이 알림 확인 후 숨기기"
               >
                 확인
