@@ -46,8 +46,11 @@ function displayName(w: AdminWorkspace): string {
 export function TokenDashboard() {
   const { data, isLoading, isError, refetch, isFetching } = useTokenDashboard();
   const [query, setQuery] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('credits');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  // 기본 정렬을 조직명 오름차순 (ABC · 가나다) 로 고정. 지급/회수 후 잔액이
+  // 바뀌어도 행 순서가 그대로 유지되어 사용자가 방금 조작한 조직을 계속
+  // 눈으로 추적할 수 있다. 헤더를 클릭하면 크레딧·멤버 순으로 임시 전환 가능.
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [modalTarget, setModalTarget] = useState<AdminWorkspace | null>(null);
 
   const workspaces = data?.workspaces ?? [];
@@ -65,25 +68,28 @@ export function TokenDashboard() {
 
     rows.sort((a, b) => {
       const sign = sortDir === 'asc' ? 1 : -1;
-      let av: number | string = 0;
-      let bv: number | string = 0;
-      switch (sortKey) {
-        case 'name':
-          av = displayName(a);
-          bv = displayName(b);
-          break;
-        case 'credits':
-          av = a.credits;
-          bv = b.credits;
-          break;
-        case 'memberCount':
-          av = a.memberCount;
-          bv = b.memberCount;
-          break;
+      if (sortKey === 'name') {
+        // 한글/영문/숫자 혼재 정렬을 사용자가 예상하는 순서 (ABC · 가나다) 로
+        // 정확히 잡기 위해 localeCompare('ko') 사용. numeric: true 로 "학교2"
+        // vs "학교10" 도 자연스럽게 정렬.
+        return (
+          displayName(a).localeCompare(displayName(b), 'ko', { numeric: true }) *
+          sign
+        );
+      }
+      let av = 0;
+      let bv = 0;
+      if (sortKey === 'credits') {
+        av = a.credits;
+        bv = b.credits;
+      } else if (sortKey === 'memberCount') {
+        av = a.memberCount;
+        bv = b.memberCount;
       }
       if (av < bv) return -1 * sign;
       if (av > bv) return 1 * sign;
-      return 0;
+      // 동률일 때는 이름 오름차순으로 tiebreaker — 새로고침해도 순서 흔들림 방지.
+      return displayName(a).localeCompare(displayName(b), 'ko', { numeric: true });
     });
     return rows;
   }, [workspaces, query, sortKey, sortDir]);
