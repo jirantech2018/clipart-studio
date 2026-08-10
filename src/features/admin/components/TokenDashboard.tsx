@@ -10,11 +10,12 @@
 //      - 전체 현황 3개: 전체 조직 · 전체 보유 크레딧 · 전체 생성 이미지
 //      - 기간별 breakdown 2개 카드: "사용 크레딧" · "생성 이미지"
 //        각 카드에 오늘 / 이번 주 / 이번 달 (Asia/Seoul)
-//   2. Organization 목록
-//      - 3컬럼: 조직 · 현재 크레딧 · 멤버
+//   2. Organization 목록 — 2단 레이아웃 (md 이상)
+//      - 좌: 일반 조직 (school + general) — 조직·크레딧·지급/회수·멤버
+//      - 우: 개인 조직 (personal)         — 조직·크레딧·지급/회수 (멤버 열 없음)
 //      - 조직명 옆 Type badge (개인/학교/일반)
 //      - personal 조직은 name 대신 "내 작업실" 로 표시, 내부 slug 숨김
-//      - 행 전체 클릭 → 관리 상세 모달
+//      - 행 전체 클릭 → 히스토리 팝업
 
 import { useMemo, useState } from 'react';
 
@@ -142,7 +143,7 @@ export function TokenDashboard() {
         </div>
       </section>
 
-      {/* Organization 목록 */}
+      {/* Organization 목록 — 2단 레이아웃 (md 이상) */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-muted-foreground">Organization 목록</h2>
@@ -164,22 +165,93 @@ export function TokenDashboard() {
           className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
         />
 
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="bg-muted/40 text-muted-foreground">
-              <tr className="text-left">
-                <Th onClick={() => toggleSort('name')} active={sortKey === 'name'} dir={sortDir}>
-                  조직
-                </Th>
-                <Th
-                  onClick={() => toggleSort('credits')}
-                  active={sortKey === 'credits'}
-                  dir={sortDir}
-                  align="right"
-                >
-                  현재 크레딧
-                </Th>
-                <Th align="right">지급 / 회수</Th>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <OrgTable
+            title="일반 조직"
+            rows={filtered.filter((w) => w.type !== 'personal')}
+            showMember
+            isLoading={isLoading}
+            isError={isError}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            toggleSort={toggleSort}
+            onRowClick={setModalTarget}
+            onMutated={refetch}
+          />
+          <OrgTable
+            title="개인 조직"
+            rows={filtered.filter((w) => w.type === 'personal')}
+            showMember={false}
+            isLoading={isLoading}
+            isError={isError}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            toggleSort={toggleSort}
+            onRowClick={setModalTarget}
+            onMutated={refetch}
+          />
+        </div>
+      </section>
+
+      <WorkspaceHistoryModal
+        workspace={modalTarget}
+        onClose={() => setModalTarget(null)}
+      />
+    </div>
+  );
+}
+
+function OrgTable({
+  title,
+  rows,
+  showMember,
+  isLoading,
+  isError,
+  sortKey,
+  sortDir,
+  toggleSort,
+  onRowClick,
+  onMutated,
+}: {
+  title: string;
+  rows: AdminWorkspace[];
+  showMember: boolean;
+  isLoading: boolean;
+  isError: boolean;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  toggleSort: (key: SortKey) => void;
+  onRowClick: (w: AdminWorkspace) => void;
+  onMutated: () => void;
+}) {
+  const colCount = showMember ? 4 : 3;
+  const minWidthCls = showMember ? 'min-w-[560px]' : 'min-w-[480px]';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {rows.length.toLocaleString('ko-KR')}개
+        </span>
+      </div>
+      <div className="overflow-x-auto rounded-md border">
+        <table className={`w-full ${minWidthCls} text-sm`}>
+          <thead className="bg-muted/40 text-muted-foreground">
+            <tr className="text-left">
+              <Th onClick={() => toggleSort('name')} active={sortKey === 'name'} dir={sortDir}>
+                조직
+              </Th>
+              <Th
+                onClick={() => toggleSort('credits')}
+                active={sortKey === 'credits'}
+                dir={sortDir}
+                align="right"
+              >
+                현재 크레딧
+              </Th>
+              <Th align="right">지급 / 회수</Th>
+              {showMember && (
                 <Th
                   onClick={() => toggleSort('memberCount')}
                   active={sortKey === 'memberCount'}
@@ -188,84 +260,79 @@ export function TokenDashboard() {
                 >
                   멤버
                 </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-muted-foreground">
-                    불러오는 중…
-                  </td>
-                </tr>
-              ) : isError ? (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-destructive">
-                    불러오지 못했어요. 새로고침을 눌러 주세요.
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-muted-foreground">
-                    결과가 없어요.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((w) => (
-                  <tr
-                    key={w.id}
-                    onClick={() => setModalTarget(w)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setModalTarget(w);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`${displayName(w)} 히스토리 보기`}
-                    className="cursor-pointer border-t transition-colors hover:bg-muted/30 focus:bg-muted/40 focus:outline-none"
-                  >
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{displayName(w)}</span>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            TYPE_BADGE_CLASS[w.type]
-                          }`}
-                        >
-                          {TYPE_LABEL[w.type]}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {w.ownerEmail ?? '(owner email 없음)'}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-primary">
-                      {w.credits.toLocaleString('ko-KR')}
-                    </td>
-                    <td className="px-3 py-2">
-                      <InlineCreditForm
-                        organizationId={w.id}
-                        displayName={displayName(w)}
-                        currentBalance={w.credits}
-                        onMutated={() => {
-                          void refetch();
-                        }}
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{w.memberCount}</td>
-                  </tr>
-                ))
               )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <WorkspaceHistoryModal
-        workspace={modalTarget}
-        onClose={() => setModalTarget(null)}
-      />
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={colCount} className="py-8 text-center text-muted-foreground">
+                  불러오는 중…
+                </td>
+              </tr>
+            ) : isError ? (
+              <tr>
+                <td colSpan={colCount} className="py-8 text-center text-destructive">
+                  불러오지 못했어요. 새로고침을 눌러 주세요.
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={colCount} className="py-8 text-center text-muted-foreground">
+                  결과가 없어요.
+                </td>
+              </tr>
+            ) : (
+              rows.map((w) => (
+                <tr
+                  key={w.id}
+                  onClick={() => onRowClick(w)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onRowClick(w);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${displayName(w)} 히스토리 보기`}
+                  className="cursor-pointer border-t transition-colors hover:bg-muted/30 focus:bg-muted/40 focus:outline-none"
+                >
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{displayName(w)}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          TYPE_BADGE_CLASS[w.type]
+                        }`}
+                      >
+                        {TYPE_LABEL[w.type]}
+                      </span>
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {w.ownerEmail ?? '(owner email 없음)'}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums text-primary">
+                    {w.credits.toLocaleString('ko-KR')}
+                  </td>
+                  <td className="px-3 py-2">
+                    <InlineCreditForm
+                      organizationId={w.id}
+                      displayName={displayName(w)}
+                      currentBalance={w.credits}
+                      onMutated={onMutated}
+                    />
+                  </td>
+                  {showMember && (
+                    <td className="px-3 py-2 text-right tabular-nums">{w.memberCount}</td>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
