@@ -121,24 +121,27 @@ export function LibraryCard({
           alt={image.prompt}
           className={cn(
             'h-full w-full object-cover transition-transform',
+            // 휴지통 이동 주체에 따라 시각 강도 차등:
+            //   SUPER_ADMIN (이용 관리자) — 강한 blur/어두움. 정책적 제거.
+            //   USER / ORG_ADMIN (본인·조직) — 약한 blur/어두움. 되돌리기 쉬움.
             trashMode
-              // blur 로 이미지가 가장자리에서 안팎으로 번지면 볼록 렌즈처럼
-              // 보인다. scale-110 으로 blur 로 생기는 투명 여백을 미리 덮어
-              // 시각적으로 평평한 흐림을 유지 (부모의 overflow-hidden 이
-              // 안전망). 그 위에 검은 오버레이 한 장을 별도로 얹는다.
-              ? 'blur-md scale-110'
+              ? image.trashActorType === 'SUPER_ADMIN'
+                ? 'blur-md scale-110'
+                : 'blur-[2px] scale-[1.04]'
               : 'group-hover:scale-[1.02]',
           )}
           loading="lazy"
         />
       </Link>
 
-      {/* 휴지통 이미지 위의 반투명 검은 단일 레이어. blur 는 아래 이미지에
-          적용됐고, 이 레이어는 위에 평평하게 하나만 덮인다. */}
+      {/* 휴지통 이미지 위의 반투명 검은 단일 레이어. 이동 주체에 따라 농도 차등. */}
       {trashMode && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-black/65"
+          className={cn(
+            'pointer-events-none absolute inset-0',
+            image.trashActorType === 'SUPER_ADMIN' ? 'bg-black/65' : 'bg-black/30',
+          )}
         />
       )}
 
