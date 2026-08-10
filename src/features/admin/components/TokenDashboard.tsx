@@ -18,7 +18,8 @@
 
 import { useMemo, useState } from 'react';
 
-import { WorkspaceActionsModal } from '@/features/admin/components/WorkspaceActionsModal';
+import { InlineCreditForm } from '@/features/admin/components/InlineCreditForm';
+import { WorkspaceHistoryModal } from '@/features/admin/components/WorkspaceHistoryModal';
 import { useTokenDashboard } from '@/features/admin/hooks/useTokenDashboard';
 import type { AdminWorkspace } from '@/features/admin/hooks/useTokenDashboard';
 
@@ -158,7 +159,7 @@ export function TokenDashboard() {
         />
 
         <div className="overflow-x-auto rounded-md border">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-muted/40 text-muted-foreground">
               <tr className="text-left">
                 <Th onClick={() => toggleSort('name')} active={sortKey === 'name'} dir={sortDir}>
@@ -172,6 +173,7 @@ export function TokenDashboard() {
                 >
                   현재 크레딧
                 </Th>
+                <Th align="right">지급 / 회수</Th>
                 <Th
                   onClick={() => toggleSort('memberCount')}
                   active={sortKey === 'memberCount'}
@@ -185,19 +187,19 @@ export function TokenDashboard() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={4} className="py-8 text-center text-muted-foreground">
                     불러오는 중…
                   </td>
                 </tr>
               ) : isError ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-destructive">
+                  <td colSpan={4} className="py-8 text-center text-destructive">
                     불러오지 못했어요. 새로고침을 눌러 주세요.
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={4} className="py-8 text-center text-muted-foreground">
                     결과가 없어요.
                   </td>
                 </tr>
@@ -214,7 +216,7 @@ export function TokenDashboard() {
                     }}
                     tabIndex={0}
                     role="button"
-                    aria-label={`${displayName(w)} 관리`}
+                    aria-label={`${displayName(w)} 히스토리 보기`}
                     className="cursor-pointer border-t transition-colors hover:bg-muted/30 focus:bg-muted/40 focus:outline-none"
                   >
                     <td className="px-3 py-2">
@@ -235,6 +237,16 @@ export function TokenDashboard() {
                     <td className="px-3 py-2 text-right font-semibold tabular-nums text-primary">
                       {w.credits.toLocaleString('ko-KR')}
                     </td>
+                    <td className="px-3 py-2">
+                      <InlineCreditForm
+                        organizationId={w.id}
+                        displayName={displayName(w)}
+                        currentBalance={w.credits}
+                        onMutated={() => {
+                          void refetch();
+                        }}
+                      />
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">{w.memberCount}</td>
                   </tr>
                 ))
@@ -244,12 +256,9 @@ export function TokenDashboard() {
         </div>
       </section>
 
-      <WorkspaceActionsModal
+      <WorkspaceHistoryModal
         workspace={modalTarget}
         onClose={() => setModalTarget(null)}
-        onMutated={() => {
-          void refetch();
-        }}
       />
     </div>
   );
