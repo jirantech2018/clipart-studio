@@ -176,9 +176,18 @@ export function OrganizationList() {
                       {org.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Users className="h-3 w-3" />
-                    {org.memberCount}명
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-3 w-3" aria-hidden="true" />
+                      {org.memberCount}명
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Coins className="h-3 w-3 text-amber-500" aria-hidden="true" />
+                      <span className="tabular-nums font-medium text-foreground">
+                        {org.credits.toLocaleString('ko-KR')}
+                      </span>
+                      크레딧
+                    </span>
                   </div>
                 </CardContent>
               </Card>
