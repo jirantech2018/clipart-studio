@@ -357,8 +357,12 @@ export function LibraryGrid({
                 />
               ))}
           </div>
-          {hasNextPage && (
+          {hasNextPage ? (
             <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
+          ) : (
+            <div className="pt-2 text-center text-xs text-muted-foreground">
+              모든 이미지 표시가 완료되었습니다.
+            </div>
           )}
         </>
       )}
