@@ -184,3 +184,15 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.approve_organization_request(UUID, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.approve_organization_request(UUID, UUID) TO service_role;
+
+-- ============================================================
+-- (6) Table grants
+-- authenticated role 은 RLS 정책 통과 시 자기 신청을 조회·삽입할 수 있어야
+-- 한다. RLS 는 있지만 GRANT 가 없으면 42501 (permission denied).
+-- UPDATE / DELETE 는 앱 코드에서 service_role 로만 수행하므로 GRANT 없음.
+-- ============================================================
+GRANT SELECT, INSERT ON public.organization_requests TO authenticated;
+
+-- Supabase PostgREST 는 새 테이블 감지 시 schema cache 를 갱신한다. 즉시
+-- 반영이 필요하면 대시보드에서 "API → Reload schema" 또는 아래를 실행.
+NOTIFY pgrst, 'reload schema';
