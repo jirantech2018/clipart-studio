@@ -82,7 +82,15 @@ export async function GET(request: Request) {
       details: error.details,
       hint: error.hint,
     });
-    return apiError('INTERNAL_ERROR', '신청 목록 조회 실패');
+    // Admin-only endpoint 라 디버그 정보를 응답 body 에도 실어 즉시 원인 파악.
+    return apiError('INTERNAL_ERROR', '신청 목록 조회 실패', {
+      debug: {
+        code: error.code,
+        message: error.message,
+        hint: error.hint,
+        details: error.details,
+      },
+    });
   }
 
   const userIds = Array.from(
