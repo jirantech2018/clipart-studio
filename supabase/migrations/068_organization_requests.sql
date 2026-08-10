@@ -187,11 +187,15 @@ GRANT EXECUTE ON FUNCTION public.approve_organization_request(UUID, UUID) TO ser
 
 -- ============================================================
 -- (6) Table grants
--- authenticated role 은 RLS 정책 통과 시 자기 신청을 조회·삽입할 수 있어야
--- 한다. RLS 는 있지만 GRANT 가 없으면 42501 (permission denied).
--- UPDATE / DELETE 는 앱 코드에서 service_role 로만 수행하므로 GRANT 없음.
+-- 이 Supabase 프로젝트는 "Automatically expose new tables" 옵션이 OFF 라
+-- authenticated / service_role 모두 신규 테이블에 대해 기본 grant 를 받지
+-- 않는다 (Migration 018 이 image 계열에 같은 이유로 명시 grant 를 준 전례).
+--
+--   * authenticated : 본인 신청 SELECT/INSERT (RLS 통과 필요)
+--   * service_role  : admin API 가 UPDATE 포함 모든 상태 전이를 수행
 -- ============================================================
 GRANT SELECT, INSERT ON public.organization_requests TO authenticated;
+GRANT ALL ON public.organization_requests TO service_role;
 
 -- Supabase PostgREST 는 새 테이블 감지 시 schema cache 를 갱신한다. 즉시
 -- 반영이 필요하면 대시보드에서 "API → Reload schema" 또는 아래를 실행.
