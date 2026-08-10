@@ -3,7 +3,7 @@
 // M5 Super Admin Image Review — 전체 이미지 그리드 + 필터 + trash/restore.
 
 import { Loader2, RotateCcw, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
 import {
@@ -14,6 +14,7 @@ import {
   type AdminImagesFilters,
   type AdminTrashReason,
 } from '@/features/admin/hooks/useAdminImages';
+import { useIntersection } from '@/lib/hooks/useIntersection';
 import { cn } from '@/lib/utils';
 
 const REASON_LABEL: Record<AdminTrashReason, string> = {
@@ -54,13 +55,34 @@ export function ImageReviewPanel() {
     status: 'all',
     type: 'all',
   });
-  const { data, isLoading, isError, refetch, isFetching } = useAdminImages(filters);
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useAdminImages(filters);
   const trash = useAdminTrashImage();
   const restore = useAdminRestoreImage();
   const [trashTarget, setTrashTarget] = useState<AdminImageRow | null>(null);
   const [ownerQuery, setOwnerQuery] = useState('');
 
-  const images = data?.images ?? [];
+  const images = (data?.pages ?? []).flatMap((p) =>
+    p && Array.isArray(p.images) ? p.images : [],
+  );
+
+  // 스크롤 sentinel 이 뷰포트에 들어오면 다음 페이지 fetch.
+  const onSentinel = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const sentinelRef = useIntersection(onSentinel, {
+    enabled: hasNextPage && !isFetchingNextPage,
+  });
   const filtered = ownerQuery
     ? images.filter((i) =>
         (i.ownerEmail ?? '').toLowerCase().includes(ownerQuery.trim().toLowerCase()),
@@ -229,6 +251,25 @@ export function ImageReviewPanel() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 무한 스크롤 sentinel + 상태 표시 */}
+      {!isLoading && !isError && filtered.length > 0 && (
+        <div className="pt-2 text-center text-xs text-muted-foreground">
+          {hasNextPage ? (
+            <>
+              <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
+              {isFetchingNextPage && (
+                <span className="inline-flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  이미지를 더 불러오는 중…
+                </span>
+              )}
+            </>
+          ) : (
+            <span>모든 이미지 표시가 완료되었습니다.</span>
+          )}
         </div>
       )}
 

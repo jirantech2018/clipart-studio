@@ -169,7 +169,14 @@ export async function GET(request: Request) {
     };
   });
 
-  // type 필터 적용 후 total 은 정확히 알 수 없어 목록 크기로 대체 (근사).
-  // 정확한 count 는 SQL VIEW 도입 후 개선.
-  return apiOk({ images, total: type === 'all' ? count ?? images.length : images.length });
+  // total 은 서버 count (type 필터 이전 값) 로 반환한다. 무한 스크롤이 이
+  // 값을 기준으로 다음 페이지 여부를 판단해야 하므로, type 필터에 의해 페이지
+  // 안 표시 개수가 줄어도 이후 페이지에서 남은 이미지를 계속 받아온다.
+  // 정확한 type-필터 count 는 서버 join 필터 도입 시 개선.
+  return apiOk({
+    images,
+    total: count ?? images.length,
+    limit,
+    offset,
+  });
 }
