@@ -11,6 +11,7 @@
 
 import { AlertCircle, ArrowRight, Coins, Home, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,6 +20,34 @@ import { useMyOrganizationRequests } from '@/features/organization/hooks/useOrga
 import { cn } from '@/lib/utils';
 
 import type { OrganizationRequest, OrganizationWithMyRole } from '@/types/domain';
+
+// REJECTED 배너를 사용자가 "확인" 으로 dismiss 한 request id 를 저장.
+// 클라이언트-로컬 상태: 브라우저 단위. 서버 상태는 REJECTED 그대로 유지.
+const DISMISSED_STORAGE_KEY = 'dismissedOrgRequestIds';
+
+function loadDismissed(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string')) {
+      return new Set(parsed);
+    }
+  } catch {
+    // ignore
+  }
+  return new Set();
+}
+
+function saveDismissed(ids: Set<string>) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(Array.from(ids)));
+  } catch {
+    // ignore
+  }
+}
 
 // 역할 모델 단일화: owner = "어드민", 그 외 전부 "멤버".
 const ROLE_LABEL: Record<string, string> = {
@@ -35,7 +64,31 @@ export function OrganizationList() {
   const orgs = data?.organizations ?? [];
   const personalOrg = orgs.find((o) => o.type === 'personal') ?? null;
   const otherOrgs = orgs.filter((o) => o.type !== 'personal');
-  const requests = requestsQuery.data?.requests ?? [];
+  const allRequests = requestsQuery.data?.requests ?? [];
+
+  // 사용자가 REJECTED 배너에서 "확인" 을 누르면 로컬에서 그 카드를 숨긴다.
+  // 상태는 클라이언트 브라우저에 저장되며 서버 organization_requests 는 그대로.
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setDismissed(loadDismissed());
+  }, []);
+  const dismiss = useCallback((id: string) => {
+    setDismissed((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      saveDismissed(next);
+      return next;
+    });
+  }, []);
+
+  const requests = useMemo(
+    () =>
+      allRequests.filter(
+        (r) => !(r.status === 'REJECTED' && dismissed.has(r.id)),
+      ),
+    [allRequests, dismissed],
+  );
 
   return (
     <div className="space-y-6">
@@ -62,7 +115,7 @@ export function OrganizationList() {
           <h2 className="text-sm font-semibold text-muted-foreground">진행 중인 조직 신청</h2>
           <div className="grid gap-2 sm:grid-cols-2">
             {requests.map((req) => (
-              <RequestStatusCard key={req.id} req={req} />
+              <RequestStatusCard key={req.id} req={req} onDismiss={dismiss} />
             ))}
           </div>
         </div>
@@ -137,7 +190,13 @@ export function OrganizationList() {
   );
 }
 
-function RequestStatusCard({ req }: { req: OrganizationRequest }) {
+function RequestStatusCard({
+  req,
+  onDismiss,
+}: {
+  req: OrganizationRequest;
+  onDismiss: (id: string) => void;
+}) {
   // 상태 별 문구·색·진행 표시 (3단계 stepper: 신청 · 검토 · 승인).
   const isSubmitted = req.status === 'SUBMITTED';
   const isReviewing = req.status === 'REVIEWING';
@@ -192,13 +251,21 @@ function RequestStatusCard({ req }: { req: OrganizationRequest }) {
               거절 사유
             </div>
             <p className="whitespace-pre-wrap text-foreground/80">{req.rejectionReason}</p>
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-2">
               <Link
                 href="/organizations/new"
                 className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}
               >
                 다시 신청
               </Link>
+              <button
+                type="button"
+                onClick={() => onDismiss(req.id)}
+                className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }))}
+                aria-label="이 알림 확인 후 숨기기"
+              >
+                확인
+              </button>
             </div>
           </div>
         )}
