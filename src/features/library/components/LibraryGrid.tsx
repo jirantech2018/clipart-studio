@@ -124,14 +124,38 @@ export function LibraryGrid({
           onClick: async (ids) => {
             if (bulkRestorePending) return;
             setBulkRestorePending(true);
+            // 이용 관리자(SUPER_ADMIN) 가 이동한 이미지는 사용자가 복원할 수
+            // 없다. 선택 목록에서 미리 걸러내 서버 왕복 없이 안내.
+            const restorable: string[] = [];
+            const adminLocked: string[] = [];
+            for (const id of ids) {
+              const img = images.find((i) => i.id === id);
+              if (img && img.trashActorType === 'SUPER_ADMIN') adminLocked.push(id);
+              else restorable.push(id);
+            }
             try {
-              for (const id of ids) {
-                await restoreMutation.mutateAsync(id);
+              let succeeded = 0;
+              let failed = 0;
+              for (const id of restorable) {
+                try {
+                  await restoreMutation.mutateAsync(id);
+                  succeeded += 1;
+                } catch {
+                  failed += 1;
+                }
               }
-              toast.success(`${ids.length}개 복원했어요`);
+              if (succeeded > 0) {
+                toast.success(`${succeeded}개 복원했어요`);
+              }
+              if (adminLocked.length > 0) {
+                toast.error(
+                  `${adminLocked.length}개는 이용 관리자만 복원할 수 있어요`,
+                );
+              }
+              if (failed > 0) {
+                toast.error(`${failed}개 복원 실패`);
+              }
               selection.clear();
-            } catch (err) {
-              toast.error(err instanceof Error ? err.message : '복원 실패');
             } finally {
               setBulkRestorePending(false);
             }

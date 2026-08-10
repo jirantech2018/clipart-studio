@@ -159,21 +159,37 @@ export function LibraryCard({
 
       <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         {trashMode ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={handleRestore}
-            disabled={restore.isPending}
-            className="h-8 px-2 shadow-md"
-          >
-            {restore.isPending ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <RotateCcw className="mr-1 h-3 w-3" />
-            )}
-            복원
-          </Button>
+          image.trashActorType === 'SUPER_ADMIN' ? (
+            // 정책: 이용 관리자가 이동한 이미지는 조직/유저가 복원할 수 없다.
+            // 버튼 자리를 disabled + 안내로 대체해 오작동을 예방.
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled
+              className="h-8 px-2 shadow-md"
+              title="이용 관리자가 이동한 이미지는 관리자만 복원할 수 있어요"
+              aria-label="이용 관리자가 이동한 이미지는 관리자만 복원할 수 있어요"
+            >
+              관리자 복원 필요
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={handleRestore}
+              disabled={restore.isPending}
+              className="h-8 px-2 shadow-md"
+            >
+              {restore.isPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <RotateCcw className="mr-1 h-3 w-3" />
+              )}
+              복원
+            </Button>
+          )
         ) : (
           <>
             <Button

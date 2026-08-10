@@ -22,7 +22,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const service = createSupabaseServiceClient();
   const { data: image } = await service
     .from('images')
-    .select('id, user_id, organization_id, trash_status')
+    .select('id, user_id, organization_id, trash_status, trash_actor_type')
     .eq('id', params.id)
     .maybeSingle();
   if (!image) return apiError('NOT_FOUND', '이미지를 찾을 수 없어요');
@@ -36,6 +36,16 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   if ((image as { trash_status: string }).trash_status === 'ACTIVE') {
     return apiOk({ id: params.id, trashStatus: 'ACTIVE', changed: false });
+  }
+
+  // 정책: Super Admin 이 휴지통으로 옮긴 이미지는 오직 Super Admin 만 복원.
+  // 조직/유저는 여기서 복원할 수 없다 (/api/admin/images/[id]/restore 로만).
+  const currentActorType = (image as { trash_actor_type: string | null }).trash_actor_type;
+  if (currentActorType === 'SUPER_ADMIN') {
+    return apiError(
+      'FORBIDDEN',
+      '이용 관리자가 이동한 이미지는 관리자만 복원할 수 있어요',
+    );
   }
 
   const { error: updErr } = await service
