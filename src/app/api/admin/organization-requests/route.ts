@@ -75,7 +75,15 @@ export async function GET(request: Request) {
     query = query.eq('status', parsed.data.status);
   }
   const { data: rows, error } = await query;
-  if (error) return apiError('INTERNAL_ERROR', '신청 목록 조회 실패');
+  if (error) {
+    console.error('[admin org-requests GET] query error', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return apiError('INTERNAL_ERROR', '신청 목록 조회 실패');
+  }
 
   const userIds = Array.from(
     new Set(
@@ -86,7 +94,16 @@ export async function GET(request: Request) {
   );
   const emailByUserId = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: profs } = await service.from('profiles').select('id, email').in('id', userIds);
+    const { data: profs, error: profErr } = await service
+      .from('profiles')
+      .select('id, email')
+      .in('id', userIds);
+    if (profErr) {
+      console.error('[admin org-requests GET] profiles error', {
+        code: profErr.code,
+        message: profErr.message,
+      });
+    }
     for (const p of profs ?? []) {
       const r = p as { id: string; email: string | null };
       if (r.email) emailByUserId.set(r.id, r.email);
