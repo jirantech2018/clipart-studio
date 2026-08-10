@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
+import { SignupCreditsSetting } from '@/features/admin/components/SignupCreditsSetting';
 import { TokenDashboard } from '@/features/admin/components/TokenDashboard';
 import { isAdmin } from '@/lib/admin';
 import { createSupabaseServerClient } from '@/services/supabase/server';
@@ -40,6 +41,8 @@ export default async function AdminTokenDashboardPage() {
           조직별 크레딧과 멤버 현황을 확인하고 크레딧을 관리합니다.
         </p>
       </div>
+
+      <SignupCreditsSetting />
 
       <TokenDashboard />
     </div>
