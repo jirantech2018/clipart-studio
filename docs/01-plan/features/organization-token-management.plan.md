@@ -3,7 +3,7 @@
 > **Summary**: Super Admin → Organization → Member 3계층 토큰 관리 SaaS 인프라. 개인 사용도 "1인 Organization (type=personal)" 으로 통일해 모든 워크스페이스를 Organization 하나의 개념으로 관리한다. Ledger 기반 감사(Source of Truth) · Pool 기반 잔액 캐시 · profiles.credits UI 캐시 3-tier 구조.
 >
 > **Project**: ClipArt Studio — Organization Token Management
-> **Version**: 0.2.8 (Plan — M3-2 완료 확정 + Library 정책 확정 + Deferred UX TODO 섹션 추가)
+> **Version**: 0.2.9 (Plan — M3-3 완료 확정 + M4-1/M4-2 sub-milestone 명문화 + token_pools 자동 생성 gap 기록)
 > **Author**: sbtmxk20
 > **Date**: 2026-08-06
 > **Status**: Draft — 사용자 승인 대기
@@ -264,36 +264,35 @@
 
 ---
 
-#### 2.3.3 M3-3 — Workspace Credit (Credit Service · Pool · Ledger · Allocate · Refund · Write Guard)
+#### 2.3.3 M3-3 — Workspace Credit (Credit Service · Pool · Ledger · Allocate · Refund · Write Guard) — ✅ 완료 (커밋 82a6e88)
 
 **사용자 관점**: "각 조직 크레딧이 따로 소진되는가?" — 사용자가 크레딧 흐름만 테스트한다. 조직별 크레딧이 표시되고 각각 소진·환불된다.
 
-**포함**
+**포함 (완료)**
 
 *Credit Service · 호출부 전환*
-- [ ] `src/services/credit/` 재작성 (신규 6개 함수 + `organization-pool-resolver.ts` + `errors.ts` + `types.ts`)
-- [ ] `POST /api/jobs`, `GET /jobs/[id]/stream`, `package-pipeline`, `upscale` 을 신규 `use()` / `refund()` 로 전환. 대상 pool 은 `resolveOrganizationPool(job.org_id)` 결과
-- [ ] 기존 `reserveCredits` / `refundCredits` 는 신규 서비스로 위임하는 deprecated wrapper 로 유지 (M3-C 관찰 후 제거)
-- [ ] Idempotency: `refund()` 는 `pool + job (+ slot_id metadata)` 중복 방지
-- [ ] 잔액 부족 처리: `INSUFFICIENT_BALANCE` 에러 → 클라이언트에 명확한 안내
+- [x] `src/services/credit/` 재작성 (신규 6개 함수 + `pool-resolver.ts` + `errors.ts`)
+- [x] `POST /api/jobs`, `GET /jobs/[id]/stream`, `package-pipeline`, `upscale` 을 신규 `useOrgTokens()` / `refundOrgTokens()` 로 전환
+- [x] 기존 `reserveCredits` / `refundCredits` 는 신규 서비스로 위임하는 deprecated wrapper 로 유지 (M3-C 관찰 후 제거)
+- [x] Idempotency: `refund_tokens` metadata.slot_id 로 job 내 sub-unit 별 중복 방지 (single job 은 `single-{order}`, package 는 `slot.id`)
+- [x] 잔액 부족 처리: `INSUFFICIENT_POOL_BALANCE` → `INSUFFICIENT_CREDITS` API 응답 (그 workspace pool 잔액 포함)
 
 *Write Guard 활성 (호출부 전환 완료 검증 후)*
-- [ ] Migration 066 — `profiles.credits` Write Guard 트리거 부착 (M1 에서 함수만 정의됨)
+- [x] Migration 066 — `profiles.credits` Write Guard 트리거 부착
 
 *Admin Allocate API (B-2)*
-- [ ] `POST /api/admin/organizations/[id]/allocate` — Super Admin 조직 pool 지급. **API 만, UI 는 M4**
+- [x] `POST /api/admin/organizations/[id]/allocate` — Super Admin 조직 pool 지급. **API 만, UI 는 M4-1**
 
 *크레딧 표시 UI (현재 Workspace 기준)*
-- [ ] Organization 홈 헤더에 "이 워크스페이스 크레딧: N" 표시 (`useOrganization` 응답 확장 또는 별도 tokens API)
-- [ ] `GenerateV2Client` sidebar credit badge 가 현재 컨텍스트 pool.balance 기준
+- [x] Organization 홈 헤더에 "이 워크스페이스 크레딧: N" 표시 (`OrganizationWithMyRole.credits` 필드 추가)
+- [x] `GenerateV2Client` sidebar credit badge 가 현재 컨텍스트 pool.balance 기준 (MY 는 authStore live, 학교는 SSR 스냅샷)
 
-**포함하지 않음**
-- Member 본인 조회 API (M3-C)
-- Reconciliation cron 등록 (M3-C)
-
-**M3-3 완료 조건**
+**M3-3 완료 조건 — 통과**
 - `pnpm tsc --noEmit` PASS, `pnpm build` PASS
 - 신규 코드에 legacy `reserveCredits/refundCredits` 직접 호출 없음 (deprecated wrapper 만 유지)
+
+**M3-3 도중 발견된 gap (M4-1 이전 처리 필요)**
+- `token_pools` row 는 MY organization 만 자동 생성. `school`/`general` 조직 생성 시에는 pool 이 만들어지지 않아 첫 지급 시 `INVALID_TARGET: to_pool required` 에러. 임시로 수동 INSERT 로 해결한 학교팀 케이스 존재. **M4-1 착수 전에 백필 + 조직 생성 API pool 자동 생성** 을 처리한다 (아래 M4-1 §전제 항목).
 
 **사용자 테스트 지점 (크레딧만)**
 1. **잔액 표시** — MY 홈 · 학교 홈 헤더에 각각 다른 pool.balance 표시. Generate sidebar 도 현재 조직 기준
@@ -305,7 +304,71 @@
 
 ---
 
-#### 2.3.4 M3-C — 운영 (History · Statistics · Reconciliation · Admin · Rollback)
+#### 2.3.4 M4-1 — Super Admin 운영 UI (Token Dashboard · Allocate · Adjust · Ledger)
+
+**사용자 관점**: 개발자가 SQL 이나 curl 을 사용하지 않아도 Super Admin 이 화면에서 Workspace 크레딧을 지급하고 조회할 수 있다.
+
+**전제 (착수 시점에 함께 처리)**
+- [ ] Migration 067 — 모든 organization 에 대해 `token_pools` 자동 생성:
+  - 기존 학교/general 조직 백필 (pool 없는 것만)
+  - `AFTER INSERT ON organizations` 트리거로 신규 조직도 자동 provisioning
+  - `ON CONFLICT (organization_id) DO NOTHING` 로 중복 방지
+
+**포함**
+- [ ] `GET /api/admin/token-dashboard` — Workspace 목록 통계 (type, credits, 누적 지급/사용, 이번 달 사용, 멤버 수, 최근 사용일)
+- [ ] `GET /api/admin/organizations/[id]/ledger` — Workspace 별 Ledger 이력 (ISSUE/TRANSFER/USE/REFUND/ADJUST, actor email, memo, transaction_id)
+- [ ] `POST /api/admin/organizations/[id]/adjust` — ADJUST 기능 (음수 delta 로 회수, 감사 로그 남김)
+- [ ] `/admin/token-dashboard` 페이지 — Workspace 테이블 + 상세 모달 (지급 · 조정 · Ledger)
+
+**포함하지 않음**
+- Organization Admin UI (M4-2)
+- Member 본인 조회 (M3-C)
+- Statistics 대시보드/차트, Billing (M4 이후)
+
+**M4-1 완료 조건**
+- `pnpm tsc --noEmit` PASS, `pnpm build` PASS
+- Pool / profiles.credits 를 UI/API 에서 직접 UPDATE 하지 않는다 (Credit Service RPC 만)
+- Super Admin 지급 대상은 Organization Pool (Member 가 아님). MY 도 personal Organization 이라 동일 UI 에서 지급 가능
+
+**사용자 테스트 지점**
+1. `/admin/token-dashboard` 에서 MY 와 학교 Workspace 확인
+2. A학교에 임의 크레딧 지급 → Dashboard 잔액 즉시 반영
+3. A학교 Generate 크레딧도 동일하게 반영
+4. Ledger 에 ISSUE + actor/memo 기록 확인
+5. 다른 Workspace 잔액 무변화
+
+---
+
+#### 2.3.5 M4-2 — Organization Admin 운영 UI (Workspace Token 페이지)
+
+**사용자 관점**: Organization Admin 이 자기 조직의 크레딧과 멤버별 사용 현황을 직접 조회할 수 있다.
+
+**URL**: `/organization/{slug}/settings/token`
+
+**포함**
+- [ ] `GET /api/organizations/[slug]/token-stats` — 조직 잔액 + 이번 달/누적 사용량 + 총 생성 이미지 + 멤버별 이번 달/누적/최근 사용일
+- [ ] `GET /api/organizations/[slug]/token-history` — 조직 Ledger 최근 ISSUE/USE/REFUND/ADJUST (자기 조직만)
+- [ ] `/organization/{slug}/settings/token` 페이지 — 위 두 API 를 조합
+- [ ] 접근 제어: 자기 조직 데이터만. 다른 조직 slug 로 접근 시 403 · 리스트에서도 안 보임
+
+**포함하지 않음**
+- 멤버별 크레딧 할당 · 결제 · 자동 충전 (모두 M4-2 밖)
+
+**M4-2 완료 조건**
+- `pnpm tsc --noEmit` PASS, `pnpm build` PASS
+- 다른 Organization 데이터가 노출되지 않음 (RLS + API membership 이중 검증)
+
+**사용자 테스트 지점**
+1. Organization Admin 으로 Token 페이지 접속
+2. 현재 잔액 확인
+3. 멤버 A/B 사용량이 분리되어 표시
+4. Super Admin 지급 이력이 보임
+5. 생성 실패 REFUND 가 보임
+6. 다른 Organization Token 페이지 접근 차단
+
+---
+
+#### 2.3.6 M3-C — 운영 (History · Statistics · Reconciliation · Admin · Rollback)
 
 **사용자 관점**: 전체 회귀. 조회 API 정상 · 배치 검증 정기 · Legacy 잔존 없음 · Rollback 준비. M3 6가지 최종 기준 통과.
 
@@ -1026,6 +1089,7 @@ v0.1.0 의 P-1 ~ P-5 는 모두 확정 채택 (§6, §7, §8 에 반영):
 | ID | 항목 | 원 스코프 | 기록 사유 | 제안 방향 |
 |----|-----|----------|-----------|----------|
 | UX-TODO-01 | 조직 라이브러리 "공유받은 이미지" 탭에서의 다중선택 액션 | M3-2 | 현재 [ZIP 다운로드] · [조직에 공유] 액션이 노출되며 서버 소유자 검증으로 자동 skip 됨. UX 상 "0개 다운로드" 같은 혼란 여지 존재 | 탭별로 액션 세트를 다르게 노출 — `shared` 탭은 액션바 자체를 숨기거나, "원 소유자만 가능" 안내와 함께 disabled 처리. `created` 탭은 [공유 해제] 액션 추가 검토 |
+| UX-TODO-02 | 학교 workspace 크레딧 live 반영 | M3-3 | MY 는 authStore 로 즉시 반영되지만 학교 조직 pool.balance 는 SSR 스냅샷이라 SSE `done` 이후 페이지 새로고침해야 갱신됨 | `useConversationJobStream` 성공 시점에 `queryClient.invalidateQueries(['organizations', slug])` 를 호출해 자동 refetch. GenerateV2Client 가 useOrganization 을 구독하고 있으면 즉시 반영 |
 
 *추후 항목은 이 표에 계속 append.*
 
@@ -1045,3 +1109,4 @@ v0.1.0 의 P-1 ~ P-5 는 모두 확정 채택 (§6, §7, §8 에 반영):
 | 0.2.6 | 2026-08-06 | 사용자 UX 관점 4개 단위로 재배치 (사용자 지시). 기술 범위 감축 없이 다음 순서: **M3-1 Workspace 생성** ("각 조직에서 생성이 되는가" — Generate 조직 라우팅 · Membership 검증 · Job/Image org_id 저장) → **M3-2 Workspace 데이터** ("각 조직 데이터가 섞이지 않는가" — Library 필터 · Conversation 격리 · Sidebar · Persist migration) → **M3-3 Workspace Credit** ("각 조직 크레딧이 따로 소진되는가" — Credit Service · Pool · Ledger · Allocate/Refund · Write Guard · 조직 크레딧 표시 UI · Admin Allocate API) → **M3-4 운영** (전체 회귀 · History · Statistics · Reconciliation · Rollback · Legacy 정리). 사용자 승인 지점 4개, 내부 커밋은 자유롭게 세분화. | sbtmxk20 |
 | 0.2.7 | 2026-08-06 | M3-1 완료 · M3-2 착수 준비. M3-4 → **M3-C** rename (사용자 지시 표기 일치). 완료 보고 형식 문서화 (§2.3 상단) — 5개 섹션 순서 명시: 이번에 사용자가 사용할 수 있게 된 기능 → 사용자 테스트 (5분) → 개발 검증 (SQL) → 현재 제한사항 → 다음 단계. 기술 범위 변경 없음. | sbtmxk20 |
 | 0.2.8 | 2026-08-10 | M3-2 완료 확정 (커밋 eb4bdcd + 6f5117f). 사용자 확정 Library 정책 명문화: `images.organization_id` = 생성 워크스페이스 · `image_organization_shares` = 명시적 공유 · 비공유 이미지 워크스페이스 간 노출 금지 · 공유는 소유권/복제 아님. 조직 라이브러리 3-tab (전체/이 조직에서 만든 이미지/공유받은 이미지) 복원 — 기존 인프라 재사용, 신규 스키마 0건. Deferred UX TODO 섹션 신설 (§17) — "공유받은 이미지 탭의 ZIP/재공유 액션 UX 정리" 를 M3-2 비 blocker 로 기록. M3-3 착수 승인. | sbtmxk20 |
+| 0.2.9 | 2026-08-10 | M3-3 완료 확정 (커밋 82a6e88). M4 착수 승인 — 2개 하위 검증 단위로 분할: **M4-1 Super Admin 운영 UI** (§2.3.4) → **M4-2 Organization Admin 운영 UI** (§2.3.5). 기존 M3-C 는 §2.3.6 로 번호 이동. M3-3 도중 발견된 gap 명문화: `token_pools` 는 MY 만 자동 생성되어 학교/general 조직 첫 지급 시 `INVALID_TARGET` 에러 → M4-1 전제로 Migration 067 (백필 + `AFTER INSERT ON organizations` 트리거) 추가. UX TODO-02 신설 (§17): 학교 workspace 크레딧 live 반영은 job stream 성공 시 useOrganization invalidate 로 별도 처리. | sbtmxk20 |

@@ -134,6 +134,42 @@ export async function allocateTokens({
 }
 
 // ============================================================
+// Adjust tokens (관리자 수동 조정 · 감사 기록)
+// ============================================================
+export interface AdjustTokensInput {
+  poolId: string;
+  delta: number;
+  memo: string;
+  actorUserId: string;
+}
+
+export async function adjustTokens({
+  poolId,
+  delta,
+  memo,
+  actorUserId,
+}: AdjustTokensInput): Promise<{ transactionId: string; balance: number }> {
+  const service = createSupabaseServiceClient();
+  const { data, error } = await service.rpc('adjust_tokens', {
+    p_pool: poolId,
+    p_delta: delta,
+    p_memo: memo,
+    p_actor: actorUserId,
+  });
+  if (error) {
+    if (error.message.includes('INSUFFICIENT_BALANCE')) {
+      throw new InsufficientPoolBalanceError();
+    }
+    if (error.message.includes('POOL_NOT_FOUND')) {
+      throw new PoolNotFoundError();
+    }
+    throw error;
+  }
+  const result = data as { transaction_id: string; balance: number };
+  return { transactionId: result.transaction_id, balance: result.balance };
+}
+
+// ============================================================
 // Get balance (Pool.balance + Ledger SUM invariant 조회)
 // ============================================================
 export async function getOrgBalance(
