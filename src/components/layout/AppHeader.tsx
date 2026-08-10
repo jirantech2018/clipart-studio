@@ -7,41 +7,21 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { CreditBadge } from '@/features/auth/components/CreditBadge';
-import { useAuthStore } from '@/lib/store/authStore';
+import { OrgNav } from '@/components/layout/OrgNav';
 import { cn } from '@/lib/utils';
 import { createSupabaseBrowserClient } from '@/services/supabase/client';
 
-// 상단 메뉴. 홈("/") = 공유라이브러리라서 로고 클릭이 진입점이고 nav 에는
-// 굳이 두지 않음.
-//
-// Plan v0.2.2 §M2: 개인 진입 구조를 Organization 중심으로 통합.
-//   기존 `+클립아트 만들기` (/generate-v2) 와 `MY` (/library) 는 상단 nav
-//   에서 제거. 사용자는 `우리학교` → 조직 리스트 → `내 작업실` 또는 학교
-//   조직 선택 → 그 조직 내부에서 `+클립아트 만들기` · 라이브러리 이용.
-//
-// v0.2.9 M4-1: `관리` 는 상단 nav 에서 제거하고 계정 드롭다운 안 `관리자`
-// 항목으로 이동. 일반 사용자에게는 완전히 숨김.
-const NAV_ITEMS = [
-  { href: '/organizations', label: '우리학교' },
-] as const;
+// v0.2.9 M4-1: 상단 nav 구조 개편.
+//   - CreditBadge / "우리학교" 링크 제거. 크레딧은 각 workspace 화면에서 표시.
+//   - 로고 옆에 OrgNav 로 "내 작업실" + 사용자가 속한 조직 목록을 노출.
+//     내 작업실은 첫번째 고정, 나머지는 드래그로 순서 조정 (localStorage).
+//     헤더 폭에 다 안 담기면 넘친 만큼 우측 "더보기" 드롭다운.
+//   - 관리자 진입은 계정 드롭다운의 "관리자" 항목 (isAdmin 인 사용자만).
 
-export function AppHeader({
-  credits,
-  creditsResetAt,
-  isAdmin,
-}: {
-  credits: number;
-  creditsResetAt: string | null;
-  isAdmin: boolean;
-}) {
+export function AppHeader({ isAdmin }: { isAdmin: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createSupabaseBrowserClient();
-  // Live credits from Zustand — updated by useCreateJob / useJobStream after batch generation.
-  // Falls back to server-rendered `credits` until the first client mutation lands.
-  const storeCredits = useAuthStore((s) => s.profile?.credits);
-  const displayCredits = storeCredits ?? credits;
 
   async function handleLogout() {
     const { error } = await supabase.auth.signOut();
@@ -52,8 +32,6 @@ export function AppHeader({
     router.push('/login');
     router.refresh();
   }
-
-  const items = NAV_ITEMS;
 
   // 홈 ("/") 에서만 반투명 흰 헤더로 히어로 배경 이미지가 헤더 뒤로 비쳐
   // 보이게 한다. 그 외 페이지는 기존과 동일한 불투명 배경 유지.
@@ -74,8 +52,6 @@ export function AppHeader({
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        // rootMargin -56px = 헤더 높이(h-14). sentinel 이 헤더 아래 영역에서
-        // 사라지는 순간 = 히어로가 헤더 뒤로 완전히 밀려간 순간.
         setPastHero(!entry.isIntersecting);
       },
       { rootMargin: '-56px 0px 0px 0px', threshold: 0 },
@@ -84,8 +60,6 @@ export function AppHeader({
     return () => observer.disconnect();
   }, [isHome, pathname]);
 
-  // 흰색(투명) 모드 = 홈이면서 아직 히어로를 안 벗어남. 이 값이 true 일 때만
-  // 로고 이미지·nav 텍스트·CreditBadge 예외 스타일이 적용된다.
   const overBanner = isHome && !pastHero;
 
   // 우측 사람 아이콘 = 계정 메뉴 트리거. 외부 클릭 / Escape / 라우트 변경 시
@@ -121,79 +95,43 @@ export function AppHeader({
       className={cn(
         'sticky top-0 z-40 backdrop-blur-xl',
         overBanner
-          // 홈 히어로 위에 얹힌 특수 상태 — 반투명 흰 유지 (기존 톤). border 는
-          // 없애고 배경만 살짝 진하게 해서 아이덴티티 유지.
           ? 'bg-white/25 dark:bg-white/10'
-          // 일반 페이지 — 배경 gradient 위에 얹히므로 반투명 흰 유리 톤 +
-          // 하단 subtle shadow 로만 경계 표시 (외곽선 없음, glass 계열 통일).
           : 'bg-white/60 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_4px_16px_rgba(15,23,42,0.05)]',
       )}
     >
-      {/* 3분할: 좌(로고) / 중앙(nav) / 우(액션). flex-1 로 세 영역을 균등하게
-          잡아, nav 는 justify-center 로 정확히 헤더 중앙에 위치.
-          홈에서는 모든 텍스트/아이콘을 흰색으로 (배경 이미지 위에 얹혀 있음),
-          그 외 페이지는 기본 색상 유지. */}
+      {/* 좌: 로고 + OrgNav / 우: 계정 메뉴. 로고와 조직 nav 는 자연스럽게
+          붙어 있어야 하므로 flex-1 로 좌측 영역이 확장되고 나머지 조직 nav 는
+          그 안에서 오버플로우 처리. */}
       <div
         className={cn(
-          'flex h-14 items-center gap-4 px-6',
+          'flex h-14 items-center gap-3 px-6',
           overBanner && 'text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.5)]',
         )}
       >
-        <div className="flex flex-1 items-center">
-          <Link
-            href="/"
-            className={cn(
-              'inline-flex shrink-0 items-center gap-2 font-semibold',
-              // overBanner 이면 헤더 컨테이너의 text-white 를 그대로 상속.
-              // 그 외 페이지에서는 검정 대신 브랜드 톤 (#373d8e) 로.
-              !overBanner && 'text-[#373d8e]',
-            )}
-          >
-            <Image
-              src={overBanner ? '/logo_white.png' : '/logo_blue.png'}
-              alt=""
-              width={28}
-              height={28}
-              priority
-              className="h-7 w-7 object-contain"
-            />
-            <span>우리학교 클립아트스튜디오</span>
-          </Link>
+        <Link
+          href="/"
+          className={cn(
+            'inline-flex shrink-0 items-center gap-2 font-semibold',
+            !overBanner && 'text-[#373d8e]',
+          )}
+        >
+          <Image
+            src={overBanner ? '/logo_white.png' : '/logo_blue.png'}
+            alt=""
+            width={28}
+            height={28}
+            priority
+            className="h-7 w-7 object-contain"
+          />
+          <span>우리학교 클립아트스튜디오</span>
+        </Link>
+
+        {/* 조직 nav — 로고 옆에 붙여서 시작. 오버플로우는 우측 "더보기". */}
+        <div className="ml-2 hidden min-w-0 flex-1 md:flex">
+          <OrgNav overBanner={overBanner} />
         </div>
-        <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
-          {items.map((item) => {
-            const active =
-              pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors',
-                  overBanner
-                    ? cn(
-                        'text-white hover:bg-white/20',
-                        active && 'bg-white/25',
-                      )
-                    : cn(
-                        active
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                      ),
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="flex flex-1 items-center justify-end gap-3">
-          {/* 홈에서는 헤더 컨테이너가 text-white 라서 CreditBadge 의 secondary
-              배경 위에 흰 글자가 얹혀 안 보인다. 이 pill 만 어두운 글자로
-              되돌리고 shadow 는 제거 (자체 배경으로 이미 대비 확보). */}
-          <div className={cn(overBanner && 'text-foreground [text-shadow:none]')}>
-            <CreditBadge credits={displayCredits} creditsResetAt={creditsResetAt} />
-          </div>
+
+        <div className="flex items-center gap-2">
           <div className="relative" ref={accountMenuRef}>
             <button
               type="button"
@@ -212,8 +150,6 @@ export function AppHeader({
               <User className="h-4 w-4" aria-hidden="true" />
             </button>
             {accountMenuOpen && (
-              // 드롭다운 자체는 overBanner 여부와 무관하게 흰 배경/어두운 글자로.
-              // (헤더 컨테이너의 text-white 를 상속하지 않도록 text-foreground 강제)
               <div
                 role="menu"
                 className="absolute right-0 top-full z-50 mt-2 min-w-[10rem] overflow-hidden rounded-md border bg-background text-foreground shadow-md [text-shadow:none]"

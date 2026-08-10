@@ -59,11 +59,7 @@ export default async function MainLayout({ children }: PropsWithChildren) {
   return (
     <div className="flex min-h-screen flex-col">
       <AuthProfileHydrator authenticated={true} profile={mappedProfile} />
-      <AppHeader
-        credits={profile?.credits ?? 0}
-        creditsResetAt={profile?.credits_reset_at ?? null}
-        isAdmin={isAdmin(user.email)}
-      />
+      <AppHeader isAdmin={isAdmin(user.email)} />
       <TopProgressBar />
       <main className="flex-1 p-6">{children}</main>
     </div>
