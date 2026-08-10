@@ -25,7 +25,7 @@ AS $$
 DECLARE
   v_initial_credits INT;
 BEGIN
-  v_initial_credits := COALESCE(current_setting('app.initial_credits', TRUE)::INT, 50);
+  v_initial_credits := COALESCE(current_setting('app.initial_credits', TRUE)::INT, 20);
 
   -- 1. Profile 생성 (기존 로직).
   INSERT INTO public.profiles (id, email, credits, credits_reset_at)

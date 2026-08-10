@@ -14,7 +14,7 @@ CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   account_type account_type_enum NOT NULL DEFAULT 'general',
-  credits INT NOT NULL DEFAULT 50 CHECK (credits >= 0),
+  credits INT NOT NULL DEFAULT 20 CHECK (credits >= 0),
   credits_reset_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
