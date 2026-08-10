@@ -63,20 +63,36 @@ async function fetchImagesPage(
   if (organizationSlug) params.set('organizationSlug', organizationSlug);
   if (scope && scope !== 'all') params.set('scope', scope);
   if (trash !== 'active') params.set('trash', trash);
-  const res = await fetch(`/api/images?${params.toString()}`);
-  if (!res.ok) throw new Error('이미지 목록을 불러오지 못했습니다');
-  // JSON 파싱 실패도 방어 — server 가 예상 shape 을 못 돌려주면 빈 페이지로.
-  const json = (await res.json().catch(() => null)) as { data?: ListResponse } | null;
-  if (!json?.data) {
-    return { images: [], total: 0, limit: PAGE_SIZE, offset };
+  const url = `/api/images?${params.toString()}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    // 원본 상세 (status/body) 는 콘솔에 남겨 디버깅. throw 는 사용자 문구만.
+    const text = await res.text().catch(() => '');
+    // eslint-disable-next-line no-console
+    console.error('[useMyImages] fetch failed', {
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      body: text.slice(0, 500),
+    });
+    throw new Error('이미지 목록을 불러오지 못했습니다');
   }
-  // 필드 누락에 대비해 최소 shape 을 보장.
-  return {
-    images: Array.isArray(json.data.images) ? json.data.images : [],
-    total: typeof json.data.total === 'number' ? json.data.total : 0,
-    limit: typeof json.data.limit === 'number' ? json.data.limit : PAGE_SIZE,
-    offset: typeof json.data.offset === 'number' ? json.data.offset : offset,
-  };
+  const json = (await res.json().catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error('[useMyImages] JSON parse failed', { url, error: e });
+    return null;
+  })) as { data?: ListResponse } | null;
+  // 응답 shape 이 예상과 다르면 error 로 취급 — 빈 배열로 위장하지 않는다.
+  if (
+    !json?.data ||
+    !Array.isArray(json.data.images) ||
+    typeof json.data.total !== 'number'
+  ) {
+    // eslint-disable-next-line no-console
+    console.error('[useMyImages] unexpected response shape', { url, json });
+    throw new Error('이미지 목록 응답 형식이 올바르지 않습니다');
+  }
+  return json.data;
 }
 
 export function useMyImages(

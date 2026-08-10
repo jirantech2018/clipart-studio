@@ -88,11 +88,11 @@ export function LibraryGrid({
     isFetchingNextPage,
   } = useMyImages(filter, sort, organizationSlug, scope, trashView);
 
-  // 휴지통 개수 — 뷰 토글 라벨용. count 만 필요하므로 실패해도 UI 를 죽이지
-  // 않는다. 응답이 없거나 첫 페이지가 undefined 이면 0 으로 표시.
+  // 휴지통 개수 — 뷰 토글 라벨용. count 조회 실패는 페이지를 죽이지 않되,
+  // 실패 상태에서는 count 표시 자체를 감춰 사용자가 "0개" 로 오해하지 않게 한다.
   const trashCountQuery = useMyImages(filter, sort, organizationSlug, 'created', 'trashed');
-  const firstTrashPage = trashCountQuery.data?.pages?.[0];
-  const trashCount = firstTrashPage?.total ?? 0;
+  const trashCountKnown = trashCountQuery.isSuccess;
+  const trashCount = trashCountQuery.data?.pages?.[0]?.total ?? 0;
 
   // 방어적으로: page 하나가 undefined 이거나 images 필드가 누락돼도 map 하지
   // 않도록. useMyImages 는 이미 shape 을 보장하지만 mismatch chunk 등으로
@@ -231,7 +231,7 @@ export function LibraryGrid({
           >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             휴지통
-            {trashCount > 0 && (
+            {trashCountKnown && trashCount > 0 && (
               <span
                 className={
                   'ml-1 rounded-full px-1.5 text-[10px] font-medium ' +
@@ -292,22 +292,28 @@ export function LibraryGrid({
           ))}
         </div>
       ) : isError ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
-            불러오는 중 문제가 생겼어요.
+        // 명확히 Error State — 정상 응답의 empty 와 구분되어야 한다.
+        // 원본 오류는 useMyImages 안에서 console.error 로 이미 로깅됨.
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center text-sm">
+            <p className="font-medium text-destructive">이미지를 불러오지 못했습니다.</p>
+            <p className="text-xs text-muted-foreground">
+              네트워크 또는 서버 상태를 확인한 뒤 다시 시도해주세요.
+            </p>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               다시 시도
             </Button>
           </CardContent>
         </Card>
       ) : images.length === 0 ? (
+        // 정상 응답 · 0개 데이터. 위 error card 와 UX 를 명확히 구분한다.
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">
             <p>
               {trashView === 'trashed'
                 ? '휴지통이 비어 있어요.'
                 : filter === 'all'
-                  ? '아직 저장한 이미지가 없어요.'
+                  ? '아직 생성된 이미지가 없습니다.'
                   : '조건에 맞는 이미지가 없어요.'}
             </p>
             {trashView === 'active' && (
