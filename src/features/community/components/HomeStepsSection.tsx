@@ -55,10 +55,10 @@ export function HomeStepsSection() {
             줄이고, 학교에 맞는 클립아트를 만들어 보세요.
           </p>
           <Link
-            href="/generate-v2"
+            href="/organization/my/generate"
             className={cn(buttonVariants({ size: 'sm' }), 'w-full')}
           >
-            AI로 클립아트 만들기
+            내 작업실에서 만들기
           </Link>
         </CardContent>
       </Card>
