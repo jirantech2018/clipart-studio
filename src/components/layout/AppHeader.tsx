@@ -13,18 +13,18 @@ import { cn } from '@/lib/utils';
 import { createSupabaseBrowserClient } from '@/services/supabase/client';
 
 // 상단 메뉴. 홈("/") = 공유라이브러리라서 로고 클릭이 진입점이고 nav 에는
-// 굳이 두지 않음. 관리 는 isAdmin 일 때만 렌더.
+// 굳이 두지 않음.
 //
 // Plan v0.2.2 §M2: 개인 진입 구조를 Organization 중심으로 통합.
 //   기존 `+클립아트 만들기` (/generate-v2) 와 `MY` (/library) 는 상단 nav
 //   에서 제거. 사용자는 `우리학교` → 조직 리스트 → `내 작업실` 또는 학교
 //   조직 선택 → 그 조직 내부에서 `+클립아트 만들기` · 라이브러리 이용.
-//   기존 URL 은 next.config.js redirects 로 새 경로로 이동.
+//
+// v0.2.9 M4-1: `관리` 는 상단 nav 에서 제거하고 계정 드롭다운 안 `관리자`
+// 항목으로 이동. 일반 사용자에게는 완전히 숨김.
 const NAV_ITEMS = [
   { href: '/organizations', label: '우리학교' },
 ] as const;
-
-const ADMIN_ITEM = { href: '/admin', label: '관리' } as const;
 
 export function AppHeader({
   credits,
@@ -53,7 +53,7 @@ export function AppHeader({
     router.refresh();
   }
 
-  const items = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
+  const items = NAV_ITEMS;
 
   // 홈 ("/") 에서만 반투명 흰 헤더로 히어로 배경 이미지가 헤더 뒤로 비쳐
   // 보이게 한다. 그 외 페이지는 기존과 동일한 불투명 배경 유지.
@@ -179,7 +179,6 @@ export function AppHeader({
                         active
                           ? 'bg-accent text-accent-foreground'
                           : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                        item.href === ADMIN_ITEM.href && !active && 'text-primary',
                       ),
                 )}
               >
@@ -227,6 +226,20 @@ export function AppHeader({
                 >
                   개인 설정
                 </Link>
+                {isAdmin && (
+                  <>
+                    <div className="border-t" />
+                    <Link
+                      href="/admin"
+                      role="menuitem"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="block px-3 py-2 text-sm font-medium text-primary hover:bg-accent"
+                    >
+                      관리자
+                    </Link>
+                  </>
+                )}
+                <div className="border-t" />
                 <button
                   type="button"
                   role="menuitem"
