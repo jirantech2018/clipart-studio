@@ -24,6 +24,7 @@ export interface AdminImageRow {
   trashReason: string | null;
   trashActorType: 'USER' | 'ORG_ADMIN' | 'SUPER_ADMIN' | null;
   trashedByEmail: string | null;
+  isOnCommunity: boolean;
 }
 
 export interface AdminImagesFilters {
@@ -135,6 +136,30 @@ export function useAdminRestoreImage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'images'] });
       qc.invalidateQueries({ queryKey: ['images'] });
+    },
+  });
+}
+
+export function useAdminPublishImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, publish }: { id: string; publish: boolean }) => {
+      const path = publish ? 'publish' : 'unpublish';
+      const res = await fetch(`/api/admin/images/${id}/${path}`, { method: 'POST' });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(
+          json?.error?.message ??
+            (publish ? '공유 라이브러리 등록 실패' : '공유 라이브러리 해제 실패'),
+        );
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'images'] });
+      // 커뮤니티 그리드도 다음에 열리면 새 상태를 보게.
+      qc.invalidateQueries({ queryKey: ['community'] });
     },
   });
 }

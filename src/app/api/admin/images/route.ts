@@ -44,6 +44,7 @@ export interface AdminImageRow {
   trashReason: string | null;
   trashActorType: 'USER' | 'ORG_ADMIN' | 'SUPER_ADMIN' | null;
   trashedByEmail: string | null;
+  isOnCommunity: boolean;
 }
 
 export async function GET(request: Request) {
@@ -76,7 +77,7 @@ export async function GET(request: Request) {
   let query = service
     .from('images')
     .select(
-      'id, user_id, organization_id, prompt, thumbnail_r2_key, r2_key, created_at, trash_status, trashed_at, trashed_by, trash_reason, trash_actor_type',
+      'id, user_id, organization_id, prompt, thumbnail_r2_key, r2_key, created_at, trash_status, trashed_at, trashed_by, trash_reason, trash_actor_type, is_on_community',
       { count: 'exact' },
     )
     .eq('status', 'saved');
@@ -109,6 +110,7 @@ export async function GET(request: Request) {
     trashed_by: string | null;
     trash_reason: string | null;
     trash_actor_type: 'USER' | 'ORG_ADMIN' | 'SUPER_ADMIN' | null;
+    is_on_community: boolean;
   }>;
 
   // organization + profile email 매핑
@@ -166,6 +168,7 @@ export async function GET(request: Request) {
       trashReason: r.trash_reason,
       trashActorType: r.trash_actor_type,
       trashedByEmail: r.trashed_by ? emailByUserId.get(r.trashed_by) ?? null : null,
+      isOnCommunity: !!r.is_on_community,
     };
   });
 

@@ -2,12 +2,13 @@
 
 // M5 Super Admin Image Review — 전체 이미지 그리드 + 필터 + trash/restore.
 
-import { Loader2, RotateCcw, Trash2 } from 'lucide-react';
+import { Globe, Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
 import {
   useAdminImages,
+  useAdminPublishImage,
   useAdminRestoreImage,
   useAdminTrashImage,
   type AdminImageRow,
@@ -67,6 +68,7 @@ export function ImageReviewPanel() {
   } = useAdminImages(filters);
   const trash = useAdminTrashImage();
   const restore = useAdminRestoreImage();
+  const publish = useAdminPublishImage();
   const [trashTarget, setTrashTarget] = useState<AdminImageRow | null>(null);
   const [ownerQuery, setOwnerQuery] = useState('');
 
@@ -206,6 +208,12 @@ export function ImageReviewPanel() {
                     휴지통
                   </span>
                 )}
+                {img.isOnCommunity && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-medium text-white shadow">
+                    <Globe className="h-2.5 w-2.5" aria-hidden="true" />
+                    공유 중
+                  </span>
+                )}
                 {img.organizationName && (
                   <span className="rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-medium text-white shadow">
                     {img.organizationName}
@@ -222,7 +230,44 @@ export function ImageReviewPanel() {
                     {img.trashReason}
                   </div>
                 )}
-                <div className="mt-2 flex gap-1">
+                <div className="mt-2 flex flex-col gap-1">
+                  {/* Community publish/unpublish — TRASHED 이미지는 게시하지
+                      않음 (원본이 숨겨진 상태). ACTIVE 에서만 노출. */}
+                  {img.trashStatus === 'ACTIVE' && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await publish.mutateAsync({
+                            id: img.id,
+                            publish: !img.isOnCommunity,
+                          });
+                          toast.success(
+                            img.isOnCommunity
+                              ? '공유 라이브러리에서 내렸어요'
+                              : '공유 라이브러리에 올렸어요',
+                          );
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : '처리 실패');
+                        }
+                      }}
+                      disabled={publish.isPending}
+                      className={cn(
+                        'inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium disabled:opacity-50',
+                        img.isOnCommunity
+                          ? 'border border-input bg-background hover:bg-accent'
+                          : 'bg-emerald-600 text-white hover:bg-emerald-700',
+                      )}
+                    >
+                      {publish.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Globe className="h-3 w-3" />
+                      )}
+                      {img.isOnCommunity ? '공유 라이브러리에서 내리기' : '공유 라이브러리로'}
+                    </button>
+                  )}
+
                   {img.trashStatus === 'ACTIVE' ? (
                     <button
                       type="button"
