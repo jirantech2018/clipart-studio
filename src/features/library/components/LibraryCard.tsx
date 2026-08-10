@@ -102,16 +102,29 @@ export function LibraryCard({
       style={{ aspectRatio: `${image.width} / ${image.height}` }}
     >
       <Link
-        href={`/image/${image.id}`}
-        className="block h-full w-full"
-        title={image.prompt}
+        href={trashMode ? '#' : `/image/${image.id}`}
+        onClick={(e) => {
+          // 휴지통 이미지의 상세 페이지는 열지 않는다 — 카드 상 액션 (복원)
+          // 만 노출한다. 서버 detail API 도 TRASHED 는 404 로 응답.
+          if (trashMode) e.preventDefault();
+        }}
+        className={cn(
+          'block h-full w-full',
+          trashMode && 'cursor-default',
+        )}
+        title={trashMode ? '휴지통 이미지는 상세를 열 수 없어요' : image.prompt}
         aria-label={image.prompt}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={image.thumbnailUrl}
           alt={image.prompt}
-          className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+          className={cn(
+            'h-full w-full object-cover transition-transform',
+            trashMode
+              ? 'brightness-[0.35] blur-sm'
+              : 'group-hover:scale-[1.02]',
+          )}
           loading="lazy"
         />
       </Link>

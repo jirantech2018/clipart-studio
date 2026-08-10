@@ -16,6 +16,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .from('images')
     .select('*, image_tags(tag), image_categories(category)')
     .eq('id', params.id)
+    // M5: 휴지통 이미지의 상세 페이지는 열지 않는다. 원본 소유자·관리자
+    // 모두 동일. 관리 액션은 라이브러리 트래시 뷰/관리자 리뷰에서만.
+    .eq('trash_status', 'ACTIVE')
     .maybeSingle();
 
   if (!row) return apiError('NOT_FOUND', '이미지를 찾을 수 없습니다');
