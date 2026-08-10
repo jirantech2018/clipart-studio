@@ -15,9 +15,12 @@ import type { Image, ImageVisibility } from '@/types/domain';
 
 export type LibraryFilter = 'all' | 'public';
 export type LibrarySort = 'newest' | 'oldest';
-/** Plan v0.2.7 §M3-2 (C 방향) — 조직 라이브러리 3-tab. 개인 라이브러리에는
- *  scope 를 넘기지 않고 서버가 'all' 로 처리. */
-export type LibraryScope = 'all' | 'created' | 'shared';
+/** 조직 라이브러리 scope.
+ *   all         전체 (created + shared 조합)
+ *   created     이 조직에서 만든 이미지
+ *   shared_out  이 조직에서 만든 이미지 중 다른 조직으로 공유한 것
+ *   shared      이 조직으로 공유받은 이미지 (organization_id != X) */
+export type LibraryScope = 'all' | 'created' | 'shared_out' | 'shared';
 /** M5 — 라이브러리 vs 휴지통 뷰. */
 export type LibraryTrash = 'active' | 'trashed';
 

@@ -18,13 +18,13 @@ const querySchema = z.object({
   // organizationSlug 로 넘겨 서버가 id 로 resolve. 미전달 시 이전 동작 (개인
   // owner 전체) 유지 — 하위호환.
   organizationSlug: z.string().min(1).max(200).optional(),
-  // Plan v0.2.7 §M3-2 (C 방향): 조직 라이브러리 3-tab 분할.
-  //   all     — 이 조직에서 만든 이미지 + 이 조직으로 공유받은 이미지 (기본)
-  //   created — 이 조직에서 만든 이미지 (organization_id = X)
-  //   shared  — 이 조직으로 공유받은 이미지 (image_organization_shares 경유,
-  //             organization_id != X 로 자기 이미지 제외)
+  // Plan v0.2.7 §M3-2 (C 방향) + 후속 확장: 조직 라이브러리 scope.
+  //   all         — 이 조직에서 만든 이미지 + 이 조직으로 공유받은 이미지 (기본)
+  //   created     — 이 조직에서 만든 이미지 (organization_id = X)
+  //   shared_out  — 이 조직에서 만든 것 중 다른 조직으로 공유한 이미지
+  //   shared      — 이 조직으로 공유받은 이미지 (organization_id != X)
   // organizationSlug 미전달 시에는 무시.
-  scope: z.enum(['all', 'created', 'shared']).default('all'),
+  scope: z.enum(['all', 'created', 'shared_out', 'shared']).default('all'),
   // M5 Image Trash — 'active' (기본, 라이브러리) / 'trashed' (휴지통 뷰).
   // trashed 는 organization_id = 그 workspace 인 이미지만 (공유받은 것 제외).
   trash: z.enum(['active', 'trashed']).default('active'),
@@ -160,6 +160,23 @@ export async function GET(request: Request) {
       query = query.eq('organization_id', organizationId);
     } else if (scope === 'created') {
       query = query.eq('organization_id', organizationId);
+    } else if (scope === 'shared_out') {
+      // 이 조직에서 만든 이미지 중 다른 조직으로 공유된 것.
+      // shares.image_id ∈ (이 조직 소속 image ids) AND shares.org != X.
+      const { data: sharesData, error: shOutErr } = await supabase
+        .from('image_organization_shares')
+        .select('image_id')
+        .neq('organization_id', organizationId);
+      if (shOutErr) return apiError('INTERNAL_ERROR', '공유 목록 조회 실패');
+      const outIds = Array.from(
+        new Set(
+          ((sharesData ?? []) as Array<{ image_id: string }>).map((r) => r.image_id),
+        ),
+      );
+      if (outIds.length === 0) {
+        return apiOk({ images: [], total: 0, limit, offset });
+      }
+      query = query.eq('organization_id', organizationId).in('id', outIds);
     } else if (scope === 'shared') {
       // 이 조직으로 공유된 image_id 목록을 먼저 조회.
       const { data: shareRows, error: shareErr } = await supabase

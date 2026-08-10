@@ -34,30 +34,49 @@ import type {
 } from '@/features/library/hooks/useMyImages';
 
 interface LibraryGridProps {
-  /** Plan v0.2.7 §M3-2: workspace 필터. 전달 시 해당 organization 이미지만.
+  /** workspace 필터. 전달 시 해당 organization 이미지만.
    *  미전달 시 개인 owner 기반 (하위호환). */
   organizationSlug?: string;
-  /** Plan v0.2.7 §M3-2 (C 방향): 조직 라이브러리 3-tab (전체/이 조직에서 만든
-   *  이미지/공유받은 이미지) 노출 여부. MY workspace 는 다른 조직에서 MY 로
-   *  공유될 일이 없으므로 false 로 숨긴다. */
+  /** 하위호환 — 이제 모든 workspace 가 동일한 5-tab 을 노출하므로 미사용.
+   *  prop 은 API 하위호환을 위해 남겨두되 로직에 영향 없음. */
   showWorkspaceTabs?: boolean;
 }
 
-const SCOPE_LABELS: Record<LibraryScope, string> = {
+// 5개 탭 통합: 전체 / 이 조직에서 만든 이미지 / 이 조직에서 공유 중인 이미지 /
+// 공유받은 이미지 / 휴지통. 각 탭은 (scope, trash) 조합으로 서버에 매핑된다.
+type LibraryTab =
+  | 'all'
+  | 'created'
+  | 'shared_out'
+  | 'shared'
+  | 'trashed';
+
+const TAB_LABELS: Record<LibraryTab, string> = {
   all: '전체',
   created: '이 조직에서 만든 이미지',
+  shared_out: '이 조직에서 공유 중인 이미지',
   shared: '공유받은 이미지',
+  trashed: '휴지통',
 };
+
+function tabToQuery(tab: LibraryTab): { scope: LibraryScope; trash: LibraryTrash } {
+  switch (tab) {
+    case 'trashed':
+      return { scope: 'created', trash: 'trashed' };
+    case 'all':
+    case 'created':
+    case 'shared_out':
+    case 'shared':
+      return { scope: tab, trash: 'active' };
+  }
+}
 
 export function LibraryGrid({
   organizationSlug,
-  showWorkspaceTabs = false,
 }: LibraryGridProps = {}) {
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('newest');
-  const [scope, setScope] = useState<LibraryScope>('all');
-  // M5: 라이브러리 vs 휴지통. 뷰 전환 시 3-tab (workspace scope) 은 숨김.
-  const [trashView, setTrashView] = useState<LibraryTrash>('active');
+  const [tab, setTab] = useState<LibraryTab>('all');
   const [zipPending, setZipPending] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [bulkTrashPending, setBulkTrashPending] = useState(false);
@@ -66,17 +85,20 @@ export function LibraryGrid({
   const trashMutation = useTrashImage();
   const restoreMutation = useRestoreImage();
 
+  const trashView: LibraryTrash = tab === 'trashed' ? 'trashed' : 'active';
+  const { scope, trash } = tabToQuery(tab);
+
   // 페이지에서 벗어나면 선택 상태 초기화.
   useEffect(() => {
     return () => selection.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 필터·정렬·탭·뷰 변경 시에도 선택 초기화.
+  // 필터·정렬·탭 변경 시에도 선택 초기화.
   useEffect(() => {
     selection.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, sort, scope, trashView]);
+  }, [filter, sort, tab]);
 
   const {
     data,
@@ -86,10 +108,9 @@ export function LibraryGrid({
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useMyImages(filter, sort, organizationSlug, scope, trashView);
+  } = useMyImages(filter, sort, organizationSlug, scope, trash);
 
-  // 휴지통 개수 — 뷰 토글 라벨용. count 조회 실패는 페이지를 죽이지 않되,
-  // 실패 상태에서는 count 표시 자체를 감춰 사용자가 "0개" 로 오해하지 않게 한다.
+  // 휴지통 탭 라벨 옆 카운트 배지. count 실패 시 감춤.
   const trashCountQuery = useMyImages(filter, sort, organizationSlug, 'created', 'trashed');
   const trashCountKnown = trashCountQuery.isSuccess;
   const trashCount = trashCountQuery.data?.pages?.[0]?.total ?? 0;
@@ -224,79 +245,47 @@ export function LibraryGrid({
 
   return (
     <div className="space-y-4">
-      {/* 라이브러리 / 휴지통 뷰 토글 */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="tablist" aria-label="라이브러리 뷰" className="inline-flex rounded-md border p-0.5">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={trashView === 'active'}
-            onClick={() => setTrashView('active')}
-            className={
-              'inline-flex items-center gap-1 rounded px-3 py-1 text-sm transition-colors ' +
-              (trashView === 'active'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground')
-            }
-          >
-            라이브러리
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={trashView === 'trashed'}
-            onClick={() => setTrashView('trashed')}
-            className={
-              'inline-flex items-center gap-1 rounded px-3 py-1 text-sm transition-colors ' +
-              (trashView === 'trashed'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground')
-            }
-          >
-            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            휴지통
-            {trashCountKnown && trashCount > 0 && (
-              <span
-                className={
-                  'ml-1 rounded-full px-1.5 text-[10px] font-medium ' +
-                  (trashView === 'trashed' ? 'bg-primary-foreground/20' : 'bg-muted text-foreground')
-                }
-              >
-                {trashCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {showWorkspaceTabs && trashView === 'active' && (
+      {/* 5-tab 한 줄. 좁은 뷰포트에서는 가로 스크롤. MY/조직 workspace 모두 동일. */}
+      <div className="border-b">
         <div
           role="tablist"
-          aria-label="라이브러리 범위"
-          className="flex flex-wrap gap-1.5 border-b"
+          aria-label="라이브러리 탭"
+          className="flex gap-1 overflow-x-auto whitespace-nowrap"
         >
-          {(Object.keys(SCOPE_LABELS) as LibraryScope[]).map((key) => {
-            const active = scope === key;
+          {(Object.keys(TAB_LABELS) as LibraryTab[]).map((key) => {
+            const active = tab === key;
+            const isTrash = key === 'trashed';
             return (
               <button
                 key={key}
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setScope(key)}
+                onClick={() => setTab(key)}
                 className={
-                  'relative -mb-px border-b-2 px-3 py-2 text-sm transition-colors ' +
+                  'relative -mb-px inline-flex shrink-0 items-center gap-1 border-b-2 px-3 py-2 text-sm transition-colors ' +
                   (active
                     ? 'border-primary font-medium text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground')
                 }
               >
-                {SCOPE_LABELS[key]}
+                {isTrash && <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />}
+                {TAB_LABELS[key]}
+                {isTrash && trashCountKnown && trashCount > 0 && (
+                  <span
+                    className={
+                      'ml-1 rounded-full px-1.5 text-[10px] font-medium ' +
+                      (active ? 'bg-primary/15 text-primary' : 'bg-muted text-foreground')
+                    }
+                  >
+                    {trashCount}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
-      )}
+      </div>
 
       <LibraryFilters
         filter={filter}
