@@ -121,16 +121,20 @@ export function LibraryCard({
           alt={image.prompt}
           className={cn(
             'h-full w-full object-cover transition-transform',
-            !trashMode && 'group-hover:scale-[1.02]',
+            trashMode
+              // blur 로 이미지가 가장자리에서 안팎으로 번지면 볼록 렌즈처럼
+              // 보인다. scale-110 으로 blur 로 생기는 투명 여백을 미리 덮어
+              // 시각적으로 평평한 흐림을 유지 (부모의 overflow-hidden 이
+              // 안전망). 그 위에 검은 오버레이 한 장을 별도로 얹는다.
+              ? 'blur-md scale-110'
+              : 'group-hover:scale-[1.02]',
           )}
           loading="lazy"
         />
       </Link>
 
-      {/* 휴지통 이미지: 이미지 자체는 원본 그대로 두고 그 위에 반투명 검은
-          단일 레이어만 얹는다. blur/brightness 필터의 볼록·왜곡 효과 없이
-          평평한 검은 유리 한 장 덮은 느낌. pointer-events-none 이라 카드
-          클릭/포커스 흐름은 그대로. */}
+      {/* 휴지통 이미지 위의 반투명 검은 단일 레이어. blur 는 아래 이미지에
+          적용됐고, 이 레이어는 위에 평평하게 하나만 덮인다. */}
       {trashMode && (
         <div
           aria-hidden="true"
