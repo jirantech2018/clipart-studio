@@ -7,7 +7,7 @@
 // 액션이 사라지고, 소유자가 커뮤니티에 올리려면 이미지 상세 → "조직에 공유"
 // → 조직 라이브러리에서 조직 owner 가 승격하는 흐름을 따른다.
 
-import { Download, Loader2, Users } from 'lucide-react';
+import { Download, Loader2, RotateCcw, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -15,7 +15,11 @@ import { toast } from 'sonner';
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
 import { Button } from '@/components/ui/button';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
-import { downloadImageFile } from '@/features/library/hooks/useMyImages';
+import {
+  downloadImageFile,
+  useRestoreImage,
+  useTrashImage,
+} from '@/features/library/hooks/useMyImages';
 import { useMultiSelection } from '@/lib/hooks/useMultiSelection';
 import { cn } from '@/lib/utils';
 
@@ -30,10 +34,24 @@ function formatSharedOrgsLabel(orgs: { name: string }[]): string {
   return `${first.name} 외 ${orgs.length - 1}`;
 }
 
-export function LibraryCard({ image }: { image: LibraryImage }) {
+const ACTOR_LABEL: Record<'USER' | 'ORG_ADMIN' | 'SUPER_ADMIN', string> = {
+  USER: '내가',
+  ORG_ADMIN: '조직 관리자가',
+  SUPER_ADMIN: '이용 관리자가',
+};
+
+export function LibraryCard({
+  image,
+  trashMode = false,
+}: {
+  image: LibraryImage;
+  trashMode?: boolean;
+}) {
   const [downloading, setDownloading] = useState(false);
   const selection = useMultiSelection('library');
   const selected = selection.isSelected(image.id);
+  const trash = useTrashImage();
+  const restore = useRestoreImage();
 
   async function handleDownload() {
     if (downloading) return;
@@ -44,6 +62,34 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
       toast.error(err instanceof Error ? err.message : '다운로드 실패');
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleTrash(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      !window.confirm(
+        '이 이미지를 휴지통으로 이동할까요?\n이미지는 삭제되지 않으며 언제든 다시 복원할 수 있습니다.',
+      )
+    )
+      return;
+    try {
+      await trash.mutateAsync({ id: image.id });
+      toast.success('휴지통으로 이동했어요');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '휴지통 이동 실패');
+    }
+  }
+
+  async function handleRestore(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await restore.mutateAsync(image.id);
+      toast.success('복원했어요');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '복원 실패');
     }
   }
 
@@ -99,22 +145,70 @@ export function LibraryCard({ image }: { image: LibraryImage }) {
         )}
       </div>
 
-      <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={handleDownload}
-          disabled={downloading}
-          className="h-8 px-2 shadow-md"
-        >
-          {downloading ? (
-            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-          ) : (
-            <Download className="mr-1 h-3 w-3" />
+      {/* Trash 뷰: 이미지 상단에 반투명 오버레이로 처리 주체·사유 표기 */}
+      {trashMode && image.trashActorType && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-[11px] text-white">
+          <div className="font-medium">
+            {ACTOR_LABEL[image.trashActorType]} 휴지통으로 이동
+          </div>
+          {image.trashReason && (
+            <div className="line-clamp-1 opacity-90">{image.trashReason}</div>
           )}
-          다운로드
-        </Button>
+        </div>
+      )}
+
+      <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        {trashMode ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={handleRestore}
+            disabled={restore.isPending}
+            className="h-8 px-2 shadow-md"
+          >
+            {restore.isPending ? (
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <RotateCcw className="mr-1 h-3 w-3" />
+            )}
+            복원
+          </Button>
+        ) : (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={handleDownload}
+              disabled={downloading}
+              className="h-8 px-2 shadow-md"
+            >
+              {downloading ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Download className="mr-1 h-3 w-3" />
+              )}
+              다운로드
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              onClick={handleTrash}
+              disabled={trash.isPending}
+              className="h-8 px-2 shadow-md"
+              aria-label="휴지통으로 이동"
+              title="휴지통으로 이동"
+            >
+              {trash.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

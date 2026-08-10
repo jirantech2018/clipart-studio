@@ -3,7 +3,7 @@
 // Design Ref: §5.4 Image Detail Page — full image + metadata + actions
 // Non-Negotiable Rule 3: AIGeneratedBadge required.
 
-import { ArrowLeft, Download, Link2, Loader2, Maximize2, Sparkles, Users, X } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Loader2, Maximize2, Sparkles, Trash2, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { LineageTree } from '@/features/library/components/LineageTree';
 import {
   downloadImageFile,
+  useTrashImage,
   useUpdateImageVisibility,
 } from '@/features/library/hooks/useMyImages';
 import { useImageDetail } from '@/features/library/hooks/useImageDetail';
@@ -51,6 +52,7 @@ export function ImageDetailView({ id }: { id: string }) {
   // 공유 조직 목록은 소유자에게만 의미가 있으므로 isOwner 인 경우만 fetch.
   const sharedOrgs = useImageSharedOrgs(data?.isOwner ? id : null);
   const unshare = useUnshareImage();
+  const trashMutation = useTrashImage();
 
   if (isLoading) {
     return (
@@ -331,6 +333,49 @@ export function ImageDetailView({ id }: { id: string }) {
                 )}
               </Button>
             </div>
+
+            {/* M5 Trash — 소유자에게 "휴지통으로 이동" 노출. 조직 owner/admin
+                의 trash 는 라이브러리 카드/다중선택에서 처리 (여기는 개인
+                이미지 관리 뷰의 성격). */}
+            {image.isOwner && (
+              <div className="space-y-2 rounded-md border border-destructive/30 p-3">
+                <div className="flex items-center gap-2 text-destructive">
+                  <Trash2 className="h-4 w-4" />
+                  <span className="text-sm font-medium">휴지통으로 이동</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  이미지는 삭제되지 않으며, 언제든 다시 복원할 수 있습니다.
+                  이동한 이미지는 라이브러리에서 숨겨지고, 공유한 조직에서도
+                  일시적으로 숨겨져요.
+                </p>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="w-full"
+                  disabled={trashMutation.isPending}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        '이 이미지를 휴지통으로 이동할까요?\n삭제되지 않으며 언제든 복원할 수 있어요.',
+                      )
+                    )
+                      return;
+                    try {
+                      await trashMutation.mutateAsync({ id: image.id });
+                      toast.success('휴지통으로 이동했어요');
+                      router.back();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : '휴지통 이동 실패');
+                    }
+                  }}
+                >
+                  {trashMutation.isPending && (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  )}
+                  휴지통으로 이동
+                </Button>
+              </div>
+            )}
 
             {/* 고화질 다운로드 — 소유자만. 서버 provider (Lanczos / Replicate)
                 에 따라 실제 비용이 달라지므로 UI 는 비용 표시를 하지 않는다.

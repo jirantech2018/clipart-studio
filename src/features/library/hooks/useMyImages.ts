@@ -18,6 +18,8 @@ export type LibrarySort = 'newest' | 'oldest';
 /** Plan v0.2.7 §M3-2 (C 방향) — 조직 라이브러리 3-tab. 개인 라이브러리에는
  *  scope 를 넘기지 않고 서버가 'all' 로 처리. */
 export type LibraryScope = 'all' | 'created' | 'shared';
+/** M5 — 라이브러리 vs 휴지통 뷰. */
+export type LibraryTrash = 'active' | 'trashed';
 
 export interface LibraryImage extends Image {
   thumbnailUrl: string;
@@ -25,6 +27,12 @@ export interface LibraryImage extends Image {
   categories: string[];
   /** 서버가 채워주면 카드에 공유 조직 라벨 표시. 조직 라이브러리 응답에는 없다. */
   sharedOrgs?: { slug: string; name: string }[];
+  /** M5 — 휴지통 카드 표시용. ACTIVE 이면 null. */
+  trashStatus?: 'ACTIVE' | 'TRASHED';
+  trashedAt?: string | null;
+  trashedByEmail?: string | null;
+  trashReason?: string | null;
+  trashActorType?: 'USER' | 'ORG_ADMIN' | 'SUPER_ADMIN' | null;
 }
 
 export type { AspectRatio } from '@/types/domain';
@@ -44,6 +52,7 @@ async function fetchImagesPage(
   offset: number,
   organizationSlug?: string,
   scope?: LibraryScope,
+  trash: LibraryTrash = 'active',
 ): Promise<ListResponse> {
   const params = new URLSearchParams({
     filter,
@@ -53,6 +62,7 @@ async function fetchImagesPage(
   });
   if (organizationSlug) params.set('organizationSlug', organizationSlug);
   if (scope && scope !== 'all') params.set('scope', scope);
+  if (trash !== 'active') params.set('trash', trash);
   const res = await fetch(`/api/images?${params.toString()}`);
   if (!res.ok) throw new Error('이미지 목록을 불러오지 못했습니다');
   const json = (await res.json()) as { data: ListResponse };
@@ -64,24 +74,67 @@ export function useMyImages(
   sort: LibrarySort,
   organizationSlug?: string,
   scope: LibraryScope = 'all',
+  trash: LibraryTrash = 'active',
 ) {
   return useInfiniteQuery({
-    // organizationSlug + scope 를 queryKey 에 포함해 workspace/tab 전환 시
-    // 자동 refetch.
+    // organizationSlug + scope + trash 를 queryKey 에 포함해 workspace/tab
+    // 전환 시 자동 refetch.
     queryKey: [
       'images',
       filter,
       sort,
       organizationSlug ?? '__personal__',
       scope,
+      trash,
     ],
     queryFn: ({ pageParam }) =>
-      fetchImagesPage(filter, sort, pageParam as number, organizationSlug, scope),
+      fetchImagesPage(filter, sort, pageParam as number, organizationSlug, scope, trash),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const fetched = allPages.reduce((sum, p) => sum + p.images.length, 0);
       if (fetched >= lastPage.total) return undefined;
       return fetched;
+    },
+  });
+}
+
+// M5: trash / restore mutations.
+export function useTrashImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const res = await fetch(`/api/images/${id}/trash`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '휴지통 이동 실패');
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['images'] });
+    },
+  });
+}
+
+export function useRestoreImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/images/${id}/restore`, { method: 'POST' });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(json?.error?.message ?? '복원 실패');
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['images'] });
     },
   });
 }

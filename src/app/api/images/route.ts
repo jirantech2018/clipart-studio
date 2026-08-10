@@ -4,7 +4,7 @@
 import { z } from 'zod';
 
 import { apiError, apiOk } from '@/lib/api-error';
-import { createSupabaseServerClient } from '@/services/supabase/server';
+import { createSupabaseServerClient, createSupabaseServiceClient } from '@/services/supabase/server';
 import { publicUrl } from '@/services/r2/upload';
 
 import type { Image, ImageStatus, ImageVisibility } from '@/types/domain';
@@ -25,6 +25,9 @@ const querySchema = z.object({
   //             organization_id != X 로 자기 이미지 제외)
   // organizationSlug 미전달 시에는 무시.
   scope: z.enum(['all', 'created', 'shared']).default('all'),
+  // M5 Image Trash — 'active' (기본, 라이브러리) / 'trashed' (휴지통 뷰).
+  // trashed 는 organization_id = 그 workspace 인 이미지만 (공유받은 것 제외).
+  trash: z.enum(['active', 'trashed']).default('active'),
 });
 
 interface ImageWithMeta extends Image {
@@ -33,9 +36,18 @@ interface ImageWithMeta extends Image {
   categories: string[];
   /** 이 이미지가 공유된 조직 (개인 라이브러리 카드에 라벨 표시용). */
   sharedOrgs: { slug: string; name: string }[];
+  /** M5 Trash — 휴지통 뷰에서 카드 표시용. ACTIVE row 는 null. */
+  trashStatus: 'ACTIVE' | 'TRASHED';
+  trashedAt: string | null;
+  trashedByEmail: string | null;
+  trashReason: string | null;
+  trashActorType: 'USER' | 'ORG_ADMIN' | 'SUPER_ADMIN' | null;
 }
 
-function rowToImage(row: Record<string, unknown>): ImageWithMeta {
+function rowToImage(
+  row: Record<string, unknown>,
+  trashedByEmailMap?: Map<string, string>,
+): ImageWithMeta {
   const r2Key = row.r2_key as string;
   const thumbnailKey = (row.thumbnail_r2_key as string) ?? r2Key;
   const rawTags = (row.image_tags as Array<{ tag: string }> | null) ?? [];
@@ -76,6 +88,15 @@ function rowToImage(row: Record<string, unknown>): ImageWithMeta {
     tags: rawTags.map((t) => t.tag),
     categories: rawCats.map((c) => c.category),
     sharedOrgs,
+    trashStatus: (row.trash_status as 'ACTIVE' | 'TRASHED') ?? 'ACTIVE',
+    trashedAt: (row.trashed_at as string) ?? null,
+    trashedByEmail: (() => {
+      const uid = row.trashed_by as string | null;
+      if (!uid || !trashedByEmailMap) return null;
+      return trashedByEmailMap.get(uid) ?? null;
+    })(),
+    trashReason: (row.trash_reason as string) ?? null,
+    trashActorType: (row.trash_actor_type as ImageWithMeta['trashActorType']) ?? null,
   };
 }
 
@@ -93,6 +114,8 @@ export async function GET(request: Request) {
     limit: url.searchParams.get('limit') ?? undefined,
     offset: url.searchParams.get('offset') ?? undefined,
     organizationSlug: url.searchParams.get('organizationSlug') ?? undefined,
+    scope: url.searchParams.get('scope') ?? undefined,
+    trash: url.searchParams.get('trash') ?? undefined,
   });
   if (!parsed.success) {
     return apiError('VALIDATION_ERROR', '쿼리 파라미터가 올바르지 않습니다', {
@@ -100,7 +123,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const { filter, sort, limit, offset, organizationSlug, scope } = parsed.data;
+  const { filter, sort, limit, offset, organizationSlug, scope, trash } = parsed.data;
 
   // organizationSlug 가 있으면 그 조직 id 로 필터. Membership 검증까지 하려면
   // organization_members join 필요하지만 여기는 SELECT 만이고 organizations
@@ -130,12 +153,12 @@ export async function GET(request: Request) {
     );
 
   if (organizationId) {
-    // Plan v0.2.7 §M3-2 (C 방향): scope 별 워크스페이스 필터.
-    //   organizations.id 는 "만든 곳" 을 나타내고, image_organization_shares
-    //   는 "공유받은 곳" 을 나타낸다. 두 개념이 분리돼 있어 조합으로 3개 뷰를
-    //   만든다. 자기 이미지가 아닌 공유받은 이미지만 필터하기 위해 shared 는
-    //   organization_id != X 조건으로 자기 창작물을 제외한다.
-    if (scope === 'created') {
+    // M5 Trash: trashed 뷰는 shared 를 섞지 않고 오직 이 workspace 소속만
+    // 노출. 공유받은 이미지의 원본이 TRASHED 되어도 그 이미지는 이 조직의
+    // 것이 아니므로 여기서 관리하지 않음 (지시서 §14).
+    if (trash === 'trashed') {
+      query = query.eq('organization_id', organizationId);
+    } else if (scope === 'created') {
       query = query.eq('organization_id', organizationId);
     } else if (scope === 'shared') {
       // 이 조직으로 공유된 image_id 목록을 먼저 조회.
@@ -174,6 +197,8 @@ export async function GET(request: Request) {
 
   // All library images are 'saved' by policy (no pending/discarded lifecycle).
   query = query.eq('status', 'saved');
+  // M5 Image Trash: 기본 ACTIVE, trash=trashed 이면 휴지통.
+  query = query.eq('trash_status', trash === 'trashed' ? 'TRASHED' : 'ACTIVE');
   if (filter === 'public') query = query.eq('is_on_community', true);
 
   query = query
@@ -183,7 +208,32 @@ export async function GET(request: Request) {
   const { data, error, count } = await query;
   if (error) return apiError('INTERNAL_ERROR', '조회 실패');
 
-  const images = (data ?? []).map(rowToImage);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  // trash 뷰용: trashed_by 를 email 로 매핑해 카드에 "처리 주체" 를 표시.
+  let trashedByEmailMap: Map<string, string> | undefined;
+  if (trash === 'trashed') {
+    const trashedByIds = Array.from(
+      new Set(
+        rows
+          .map((r) => r.trashed_by as string | null)
+          .filter((v): v is string => !!v),
+      ),
+    );
+    if (trashedByIds.length > 0) {
+      const service = createSupabaseServiceClient();
+      const { data: profs } = await service
+        .from('profiles')
+        .select('id, email')
+        .in('id', trashedByIds);
+      trashedByEmailMap = new Map();
+      for (const p of (profs ?? []) as Array<{ id: string; email: string | null }>) {
+        if (p.email) trashedByEmailMap.set(p.id, p.email);
+      }
+    }
+  }
+
+  const images = rows.map((row) => rowToImage(row, trashedByEmailMap));
   return apiOk({
     images,
     total: count ?? images.length,

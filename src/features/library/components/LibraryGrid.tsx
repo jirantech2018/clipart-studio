@@ -5,7 +5,7 @@
 // P2a: 다중 선택 인프라 위에 [ZIP 다운로드] 액션을 하나만 노출. 나중에
 // [조직에 공유] 등의 액션이 추가되면 actions 배열에 항목을 얹기만 하면 됨.
 
-import { Download, Loader2, Users } from 'lucide-react';
+import { Download, Loader2, RotateCcw, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -19,6 +19,8 @@ import { LibraryFilters } from '@/features/library/components/LibraryFilters';
 import {
   downloadImagesAsZip,
   useMyImages,
+  useRestoreImage,
+  useTrashImage,
 } from '@/features/library/hooks/useMyImages';
 import { ShareToOrgDialog } from '@/features/organization/components/ShareToOrgDialog';
 import { useIntersection } from '@/lib/hooks/useIntersection';
@@ -28,6 +30,7 @@ import type {
   LibraryFilter,
   LibraryScope,
   LibrarySort,
+  LibraryTrash,
 } from '@/features/library/hooks/useMyImages';
 
 interface LibraryGridProps {
@@ -53,9 +56,15 @@ export function LibraryGrid({
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('newest');
   const [scope, setScope] = useState<LibraryScope>('all');
+  // M5: 라이브러리 vs 휴지통. 뷰 전환 시 3-tab (workspace scope) 은 숨김.
+  const [trashView, setTrashView] = useState<LibraryTrash>('active');
   const [zipPending, setZipPending] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [bulkTrashPending, setBulkTrashPending] = useState(false);
+  const [bulkRestorePending, setBulkRestorePending] = useState(false);
   const selection = useMultiSelection('library');
+  const trashMutation = useTrashImage();
+  const restoreMutation = useRestoreImage();
 
   // 페이지에서 벗어나면 선택 상태 초기화.
   useEffect(() => {
@@ -63,11 +72,11 @@ export function LibraryGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 필터·정렬·탭 변경 시에도 선택 초기화 (사용자 요구 B-2.5 §5).
+  // 필터·정렬·탭·뷰 변경 시에도 선택 초기화.
   useEffect(() => {
     selection.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, sort, scope]);
+  }, [filter, sort, scope, trashView]);
 
   const {
     data,
@@ -77,7 +86,12 @@ export function LibraryGrid({
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useMyImages(filter, sort, organizationSlug, scope);
+  } = useMyImages(filter, sort, organizationSlug, scope, trashView);
+
+  // 휴지통 개수 — 뷰 토글 라벨용. active 뷰일 때만 count 조회.
+  const trashCountQuery = useMyImages(filter, sort, organizationSlug, 'created', 'trashed');
+  const trashCount =
+    trashCountQuery.data?.pages[0]?.total ?? 0;
 
   const images = data?.pages.flatMap((p) => p.images) ?? [];
 
@@ -91,41 +105,140 @@ export function LibraryGrid({
     enabled: hasNextPage && !isFetchingNextPage,
   });
 
-  const actions: MultiSelectAction[] = [
-    {
-      key: 'download-zip',
-      label: zipPending ? 'ZIP 만드는 중…' : `ZIP 다운로드 (${selection.count})`,
-      icon: zipPending ? Loader2 : Download,
-      variant: 'default',
-      isPending: zipPending,
-      onClick: async (ids) => {
-        if (zipPending) return;
-        setZipPending(true);
-        try {
-          await downloadImagesAsZip(ids, 'library');
-          toast.success('다운로드를 시작했어요');
-          selection.clear();
-        } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'ZIP 다운로드 실패');
-        } finally {
-          setZipPending(false);
-        }
-      },
-    },
-    {
-      key: 'share-orgs',
-      label: `조직에 공유 (${selection.count})`,
-      icon: Users,
-      variant: 'outline',
-      onClick: () => {
-        setShareDialogOpen(true);
-      },
-    },
-  ];
+  // 뷰별 다중선택 액션.
+  const actions: MultiSelectAction[] = trashView === 'trashed'
+    ? [
+        {
+          key: 'bulk-restore',
+          label: bulkRestorePending ? '복원 중…' : `복원 (${selection.count})`,
+          icon: bulkRestorePending ? Loader2 : RotateCcw,
+          variant: 'default',
+          isPending: bulkRestorePending,
+          onClick: async (ids) => {
+            if (bulkRestorePending) return;
+            setBulkRestorePending(true);
+            try {
+              for (const id of ids) {
+                await restoreMutation.mutateAsync(id);
+              }
+              toast.success(`${ids.length}개 복원했어요`);
+              selection.clear();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : '복원 실패');
+            } finally {
+              setBulkRestorePending(false);
+            }
+          },
+        },
+      ]
+    : [
+        {
+          key: 'download-zip',
+          label: zipPending ? 'ZIP 만드는 중…' : `ZIP 다운로드 (${selection.count})`,
+          icon: zipPending ? Loader2 : Download,
+          variant: 'default',
+          isPending: zipPending,
+          onClick: async (ids) => {
+            if (zipPending) return;
+            setZipPending(true);
+            try {
+              await downloadImagesAsZip(ids, 'library');
+              toast.success('다운로드를 시작했어요');
+              selection.clear();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'ZIP 다운로드 실패');
+            } finally {
+              setZipPending(false);
+            }
+          },
+        },
+        {
+          key: 'share-orgs',
+          label: `조직에 공유 (${selection.count})`,
+          icon: Users,
+          variant: 'outline',
+          onClick: () => {
+            setShareDialogOpen(true);
+          },
+        },
+        {
+          key: 'bulk-trash',
+          label: bulkTrashPending ? '이동 중…' : `휴지통으로 이동 (${selection.count})`,
+          icon: bulkTrashPending ? Loader2 : Trash2,
+          variant: 'destructive',
+          isPending: bulkTrashPending,
+          onClick: async (ids) => {
+            if (bulkTrashPending) return;
+            if (
+              !window.confirm(
+                `${ids.length}개의 이미지를 휴지통으로 이동할까요?\n삭제되지 않으며 언제든 복원할 수 있어요.`,
+              )
+            )
+              return;
+            setBulkTrashPending(true);
+            try {
+              for (const id of ids) {
+                await trashMutation.mutateAsync({ id });
+              }
+              toast.success(`${ids.length}개 휴지통으로 이동했어요`);
+              selection.clear();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : '휴지통 이동 실패');
+            } finally {
+              setBulkTrashPending(false);
+            }
+          },
+        },
+      ];
 
   return (
     <div className="space-y-4">
-      {showWorkspaceTabs && (
+      {/* 라이브러리 / 휴지통 뷰 토글 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="tablist" aria-label="라이브러리 뷰" className="inline-flex rounded-md border p-0.5">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={trashView === 'active'}
+            onClick={() => setTrashView('active')}
+            className={
+              'inline-flex items-center gap-1 rounded px-3 py-1 text-sm transition-colors ' +
+              (trashView === 'active'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground')
+            }
+          >
+            라이브러리
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={trashView === 'trashed'}
+            onClick={() => setTrashView('trashed')}
+            className={
+              'inline-flex items-center gap-1 rounded px-3 py-1 text-sm transition-colors ' +
+              (trashView === 'trashed'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground')
+            }
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            휴지통
+            {trashCount > 0 && (
+              <span
+                className={
+                  'ml-1 rounded-full px-1.5 text-[10px] font-medium ' +
+                  (trashView === 'trashed' ? 'bg-primary-foreground/20' : 'bg-muted text-foreground')
+                }
+              >
+                {trashCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {showWorkspaceTabs && trashView === 'active' && (
         <div
           role="tablist"
           aria-label="라이브러리 범위"
@@ -184,13 +297,17 @@ export function LibraryGrid({
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">
             <p>
-              {filter === 'all'
-                ? '아직 저장한 이미지가 없어요.'
-                : '조건에 맞는 이미지가 없어요.'}
+              {trashView === 'trashed'
+                ? '휴지통이 비어 있어요.'
+                : filter === 'all'
+                  ? '아직 저장한 이미지가 없어요.'
+                  : '조건에 맞는 이미지가 없어요.'}
             </p>
-            <Link href="/generate" className={buttonVariants({ size: 'sm' })}>
-              AI로 만들어보기
-            </Link>
+            {trashView === 'active' && (
+              <Link href="/generate" className={buttonVariants({ size: 'sm' })}>
+                AI로 만들어보기
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -200,7 +317,11 @@ export function LibraryGrid({
               흐름으로 느꼈던 문제 해결 (CommunityGrid 와 동일 패턴). */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {images.map((image) => (
-              <LibraryCard key={image.id} image={image} />
+              <LibraryCard
+                key={image.id}
+                image={image}
+                trashMode={trashView === 'trashed'}
+              />
             ))}
             {isFetchingNextPage &&
               Array.from({ length: 4 }).map((_, i) => (

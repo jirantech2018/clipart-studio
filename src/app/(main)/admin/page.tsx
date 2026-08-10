@@ -3,7 +3,7 @@
 //   1. Token Dashboard (/admin/token-dashboard)
 //   2. Image Knowledge CMS (/admin/knowledge)
 
-import { BookOpen, ClipboardList, Coins } from 'lucide-react';
+import { BookOpen, ClipboardList, Coins, Images } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -43,6 +43,13 @@ export default async function AdminHomePage() {
           description="Workspace 별 크레딧 잔액과 사용량을 확인하고, 조직에 크레딧을 지급하거나 조정합니다. Ledger 이력을 함께 볼 수 있어요."
           icon={<Coins className="h-6 w-6" aria-hidden="true" />}
           accent="from-amber-100 to-amber-50 border-amber-200 text-amber-700"
+        />
+        <AdminBanner
+          href="/admin/image-review"
+          title="이미지 리뷰"
+          description="모든 Workspace 에서 생성된 이미지를 한곳에서 확인하고, 품질이 낮은 이미지를 휴지통으로 이동합니다. 실제 삭제는 하지 않아 언제든 복원할 수 있어요."
+          icon={<Images className="h-6 w-6" aria-hidden="true" />}
+          accent="from-rose-100 to-rose-50 border-rose-200 text-rose-700"
         />
         <AdminBanner
           href="/admin/knowledge"
