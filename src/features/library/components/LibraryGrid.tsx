@@ -74,7 +74,9 @@ function tabToQuery(tab: LibraryTab): { scope: LibraryScope; trash: LibraryTrash
 export function LibraryGrid({
   organizationSlug,
 }: LibraryGridProps = {}) {
-  const [filter, setFilter] = useState<LibraryFilter>('all');
+  // filter chips ('전체 | 공개 중') 은 UI 에서 제거. 서버는 항상 filter='all'
+  // 로 조회한다. sort 만 사용자 노출.
+  const filter: LibraryFilter = 'all';
   const [sort, setSort] = useState<LibrarySort>('newest');
   const [tab, setTab] = useState<LibraryTab>('all');
   const [zipPending, setZipPending] = useState(false);
@@ -250,7 +252,9 @@ export function LibraryGrid({
         <div
           role="tablist"
           aria-label="라이브러리 탭"
-          className="flex gap-1 overflow-x-auto whitespace-nowrap"
+          // Firefox: scrollbar-width:none · WebKit: ::-webkit-scrollbar 감춤.
+          // 스크롤 기능은 유지하되 스크롤바 UI 는 우측에 표시되지 않는다.
+          className="flex gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {(Object.keys(TAB_LABELS) as LibraryTab[]).map((key) => {
             const active = tab === key;
@@ -287,12 +291,7 @@ export function LibraryGrid({
         </div>
       </div>
 
-      <LibraryFilters
-        filter={filter}
-        sort={sort}
-        onFilterChange={setFilter}
-        onSortChange={setSort}
-      />
+      <LibraryFilters sort={sort} onSortChange={setSort} />
 
       {isLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">

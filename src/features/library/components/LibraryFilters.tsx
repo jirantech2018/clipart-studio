@@ -1,15 +1,12 @@
 'use client';
 
-// Design Ref: §5.4 Library Page — filter bar (전체/저장됨/Pending/공개중) + sort dropdown
+// 라이브러리 상단 정렬 드롭다운.
+//
+// 사용자 지시 (2026-08): 기존 [전체 | 공개 중] filter chips 제거. 정렬 옵션만
+// 노출한다. filter 는 항상 'all' 로 서버가 처리하므로 상태를 UI 에서 다루지
+// 않는다.
 
-import { cn } from '@/lib/utils';
-
-import type { LibraryFilter, LibrarySort } from '@/features/library/hooks/useMyImages';
-
-const FILTER_LABELS: Record<LibraryFilter, string> = {
-  all: '전체',
-  public: '공개 중',
-};
+import type { LibrarySort } from '@/features/library/hooks/useMyImages';
 
 const SORT_LABELS: Record<LibrarySort, string> = {
   newest: '최신순',
@@ -17,43 +14,13 @@ const SORT_LABELS: Record<LibrarySort, string> = {
 };
 
 interface LibraryFiltersProps {
-  filter: LibraryFilter;
   sort: LibrarySort;
-  onFilterChange: (next: LibraryFilter) => void;
   onSortChange: (next: LibrarySort) => void;
-  counts?: Partial<Record<LibraryFilter, number>>;
 }
 
-export function LibraryFilters({
-  filter,
-  sort,
-  onFilterChange,
-  onSortChange,
-  counts,
-}: LibraryFiltersProps) {
+export function LibraryFilters({ sort, onSortChange }: LibraryFiltersProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap gap-1.5">
-        {(Object.keys(FILTER_LABELS) as LibraryFilter[]).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onFilterChange(key)}
-            className={cn(
-              'h-8 rounded-full border px-3 text-sm transition-colors',
-              filter === key
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input bg-background hover:bg-accent',
-            )}
-          >
-            {FILTER_LABELS[key]}
-            {typeof counts?.[key] === 'number' && (
-              <span className="ml-1 tabular-nums opacity-70">{counts[key]}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
+    <div className="flex items-center justify-end">
       <select
         value={sort}
         onChange={(e) => onSortChange(e.target.value as LibrarySort)}
