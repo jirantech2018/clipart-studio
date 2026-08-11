@@ -73,8 +73,8 @@ export function HomeStepsSection() {
             <h3 className="text-base font-semibold">공유하기</h3>
           </div>
           <p className="flex-1 text-sm text-muted-foreground">
-            만든 이미지는 내 작업실과 각각의 워크스페이스로 공유하여 활용할 수
-            있습니다.
+            만든 이미지는 내 작업실과 각각의 우리학교 워크스페이스로 공유하여
+            활용할 수 있습니다.
           </p>
           <Link
             href="/organizations"
