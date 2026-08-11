@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-const SITE_URL = 'https://clipart.schoolp.co.kr';
+const SITE_URL = 'https://clipartstudio.schoolp.co.kr';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

@@ -75,7 +75,7 @@ export default async function HomePage() {
   // JSON-LD 구조화 데이터 (Organization + WebSite, @graph 로 연결).
   // Google 이 2024-11 sitelinks search box 를 폐지했으므로 SearchAction 은
   // 의도적으로 포함하지 않는다. 로고·publisher 관계는 @id 참조로 연결.
-  const SITE_URL = 'https://clipart.schoolp.co.kr';
+  const SITE_URL = 'https://clipartstudio.schoolp.co.kr';
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [

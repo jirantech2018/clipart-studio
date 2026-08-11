@@ -7,7 +7,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import type { PropsWithChildren } from 'react';
 
-const SITE_URL = 'https://clipart.schoolp.co.kr';
+const SITE_URL = 'https://clipartstudio.schoolp.co.kr';
 const SITE_NAME = 'ClipArt Studio';
 const SITE_DESC =
   '학교 현장을 위한 AI 클립아트 서비스. 원하는 이미지를 찾고, 없으면 만들고, 우리학교 워크스페이스에서 함께 활용하세요.';
