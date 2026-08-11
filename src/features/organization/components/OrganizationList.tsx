@@ -102,7 +102,7 @@ export function OrganizationList() {
             </p>
           </div>
           <Link href="/organizations/new" className={buttonVariants({ size: 'sm' })}>
-            <Plus className="mr-1 h-4 w-4" /> 새 조직
+            <Plus className="mr-1 h-4 w-4" /> 새 워크스페이스
           </Link>
         </div>
 

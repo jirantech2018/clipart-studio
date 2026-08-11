@@ -70,11 +70,11 @@ export function HomeStepsSection() {
         <CardContent className="flex h-full flex-col gap-3 p-4">
           <div className="flex items-center gap-2">
             <FolderOpen className="h-5 w-5 text-primary" />
-            <h3 className="text-base font-semibold">라이브러리</h3>
+            <h3 className="text-base font-semibold">공유하기</h3>
           </div>
           <p className="flex-1 text-sm text-muted-foreground">
-            만든 이미지는 내 라이브러리에 저장되고, 조직 라이브러리 → 공유
-            라이브러리로 공유하여 활용할 수 있습니다.
+            만든 이미지는 내 작업실과 각각의 워크스페이스로 공유하여 활용할 수
+            있습니다.
           </p>
           <Link
             href="/organizations"
