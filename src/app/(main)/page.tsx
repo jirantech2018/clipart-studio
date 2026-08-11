@@ -72,8 +72,41 @@ export default async function HomePage() {
       .slice(0, 60);
   }
 
+  // JSON-LD 구조화 데이터 (Organization + WebSite, @graph 로 연결).
+  // Google 이 2024-11 sitelinks search box 를 폐지했으므로 SearchAction 은
+  // 의도적으로 포함하지 않는다. 로고·publisher 관계는 @id 참조로 연결.
+  const SITE_URL = 'https://clipart.schoolp.co.kr';
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${SITE_URL}/#organization`,
+        name: '지란초 SchoolP',
+        url: SITE_URL,
+        logo: `${SITE_URL}/logo_blue.png`,
+        sameAs: ['https://schoolp.co.kr'],
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        name: 'ClipArt Studio',
+        alternateName: '우리학교 클립아트스튜디오',
+        url: SITE_URL,
+        inLanguage: 'ko-KR',
+        publisher: { '@id': `${SITE_URL}/#organization` },
+      },
+    ],
+  };
+
   return (
     <div>
+      <script
+        type="application/ld+json"
+        // JSON-LD 는 Next 가 자동 escape 하지 않으므로 dangerouslySetInnerHTML
+        // 로 삽입한다. jsonLd 는 상수 오브젝트로만 구성돼 XSS 위험 없음.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <TutorialOverlay />
       {/* 히어로 배너 — 화면 전체 폭 + 헤더 뒤까지 확장. main 이 p-6 이고
           AppHeader 가 sticky h-14 라서, -mx-6 로 좌우 padding 을 없애고
