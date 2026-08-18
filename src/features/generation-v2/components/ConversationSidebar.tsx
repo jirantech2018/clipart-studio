@@ -62,11 +62,24 @@ export function ConversationSidebar({
   // M3-2: 현재 workspace 의 대화만 리스트. organizationSlug 없는 legacy 대화
   // 는 GenerateV2Client 가 마운트 시 MY 로 backfill 하므로 이 시점에는 반드시
   // 값이 있음. 방어적으로 undefined 는 표시 제외.
+  //
+  // NOTE: title 이 null 인 대화도 표시한다 (confirmConversationTitle 이 첫
+  // 이미지 생성 성공 시점에 호출되므로, 프롬프트 입력만 하고 이탈한 대화는
+  // 영구히 title=null 로 남는다). 이 대화들도 살아있는 데이터이므로 사이드바
+  // 에서 접근할 수 있어야 한다. 표시명은 첫 Block prompt → 시각 순 fallback.
   const historyList = Object.values(conversations)
-    .filter((c) => c.title)
     .filter((c) => c.organizationSlug === organizationSlug)
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
     .slice(0, 20);
+
+  function displayName(c: Conversation): string {
+    if (c.title) return c.title;
+    const firstPrompt = c.blocks[0]?.prompt?.trim();
+    if (firstPrompt) {
+      return firstPrompt.length > 30 ? `${firstPrompt.slice(0, 30)}…` : firstPrompt;
+    }
+    return '(제목 없는 대화)';
+  }
 
   const projectedRemaining = Math.max(0, credits - currentDraftBatchSize);
   const insufficient = credits < currentDraftBatchSize;
@@ -158,10 +171,10 @@ export function ConversationSidebar({
                             ? 'bg-accent font-medium text-primary'
                             : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                         )}
-                        title={c.title ?? '새로운 대화'}
+                        title={displayName(c)}
                       >
                         <span className="truncate text-xs">
-                          {c.title ?? '새로운 대화'}
+                          {displayName(c)}
                         </span>
                         <span className="shrink-0 text-[11px] text-muted-foreground/80 tabular-nums">
                           {formatRelativeTime(c.updatedAt)}
