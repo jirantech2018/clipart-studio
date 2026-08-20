@@ -40,6 +40,45 @@ function isSchemaNotReadyError(code: string | undefined | null): boolean {
   return code === '42P01' || code === '42703';
 }
 
+/**
+ * Conversation server storage 링크 (conversation_id / message_id) 는 클라이언트가
+ * async fire-and-forget 로 conversation/message 를 upsert 하는 구조라, 사용자가
+ * 매우 빠르게 생성 버튼을 누르면 job insert 가 서버 등록보다 먼저 도착해서
+ * FK 위반 (23503) 이 발생할 수 있다. 특히 Package UI 는 이미 채워진 form 이라
+ * 재현률이 높다.
+ *
+ * 그래서 job insert 전에 두 id 가 실제로 서버에 존재하는지 확인하고, 없거나
+ * 소유권이 맞지 않으면 링크 없이 (NULL) job 을 만들어 최소 회귀만 방어한다.
+ * 링크는 UX 편의 (사이드바 재조회 시 어느 대화의 어느 메시지에서 나온 결과인지
+ * 추적) 이지, 이미지/크레딧/Job 자체의 필수 요소가 아님 — 지시서 §13.
+ */
+async function resolveConversationLink(
+  service: SupabaseClient,
+  userId: string,
+  conversationId: string | null | undefined,
+  messageId: string | null | undefined,
+): Promise<{ conversationId: string | null; messageId: string | null }> {
+  if (!conversationId) return { conversationId: null, messageId: null };
+  const { data: conv } = await service
+    .from('conversations')
+    .select('id')
+    .eq('id', conversationId)
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!conv) return { conversationId: null, messageId: null };
+
+  if (!messageId) return { conversationId, messageId: null };
+  const { data: msg } = await service
+    .from('conversation_messages')
+    .select('id')
+    .eq('id', messageId)
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+  if (!msg) return { conversationId, messageId: null };
+  return { conversationId, messageId };
+}
+
 export async function POST(request: Request) {
   const supabase = createSupabaseServerClient();
   const {
@@ -167,6 +206,15 @@ async function handleSingle(
     customReferenceR2Key = (orgRef as { r2_key: string }).r2_key;
   }
 
+  // Conversation 링크가 async 등록 완료 전이면 FK 실패하니 존재 확인 후 반영.
+  const linkService = createSupabaseServiceClient();
+  const resolvedLink = await resolveConversationLink(
+    linkService,
+    userId,
+    body.conversationId,
+    body.messageId,
+  );
+
   const { data: job, error: jobError } = await supabase
     .from('generation_jobs')
     .insert({
@@ -183,10 +231,10 @@ async function handleSingle(
       org_id: orgIdSnapshot,
       slot_prompts: body.slotPrompts ?? null,
       kind: 'single',
-      // Migration 076: 대화 컨텍스트 링크. 신규 클라이언트가 전달하면 저장,
-      // 구 클라이언트/외부 호출은 NULL 그대로 남는다.
-      conversation_id: body.conversationId ?? null,
-      message_id: body.messageId ?? null,
+      // Migration 076: 대화 컨텍스트 링크. resolveConversationLink 가 유효성
+      // 확인해 없는 값이면 NULL 로 fallback (링크 유실 허용, job 은 계속 성공).
+      conversation_id: resolvedLink.conversationId,
+      message_id: resolvedLink.messageId,
     })
     .select('id')
     .single();
@@ -331,6 +379,17 @@ async function handlePackage(
   };
 
   const jobService = createSupabaseServiceClient();
+
+  // Conversation 링크 유효성 확인 — Package 는 UI 가 채워진 form 이라 사용자가
+  // 즉시 submit 하는 경우 message POST 등록이 job insert 보다 늦게 도착해
+  // FK 위반이 발생하기 쉬웠음. 존재하지 않으면 NULL 로 저장.
+  const resolvedLink = await resolveConversationLink(
+    jobService,
+    userId,
+    body.conversationId,
+    body.messageId,
+  );
+
   const { data: job, error: jobError } = await jobService
     .from('generation_jobs')
     .insert({
@@ -348,9 +407,8 @@ async function handlePackage(
       slot_prompts: null,
       kind: 'package',
       package_plan: packagePlanSnapshot,
-      // Migration 076: 대화 컨텍스트 링크.
-      conversation_id: body.conversationId ?? null,
-      message_id: body.messageId ?? null,
+      conversation_id: resolvedLink.conversationId,
+      message_id: resolvedLink.messageId,
     })
     .select('id')
     .single();
