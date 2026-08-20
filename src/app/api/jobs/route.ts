@@ -183,6 +183,10 @@ async function handleSingle(
       org_id: orgIdSnapshot,
       slot_prompts: body.slotPrompts ?? null,
       kind: 'single',
+      // Migration 076: 대화 컨텍스트 링크. 신규 클라이언트가 전달하면 저장,
+      // 구 클라이언트/외부 호출은 NULL 그대로 남는다.
+      conversation_id: body.conversationId ?? null,
+      message_id: body.messageId ?? null,
     })
     .select('id')
     .single();
@@ -344,6 +348,9 @@ async function handlePackage(
       slot_prompts: null,
       kind: 'package',
       package_plan: packagePlanSnapshot,
+      // Migration 076: 대화 컨텍스트 링크.
+      conversation_id: body.conversationId ?? null,
+      message_id: body.messageId ?? null,
     })
     .select('id')
     .single();

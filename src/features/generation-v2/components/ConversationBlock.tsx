@@ -45,6 +45,12 @@ import { createJobSchema } from '@/types/schemas';
 
 import type { Block, BlockOptions } from '@/lib/store/conversationStore';
 
+// UUID v4 형식만 서버 링크로 전달. 구 store 의 timestamp-랜덤 형식은 제외.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v: string): boolean {
+  return UUID_RE.test(v);
+}
+
 interface ConversationBlockProps {
   block: Block;
   convId: string;
@@ -195,6 +201,11 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           slotPrompts: block.options.diversityCustomOn
             ? block.options.slotPrompts
             : null,
+          // Conversation server storage (Migration 076): block/conv 는 UUID 로
+          // 서버 저장돼 있으므로 그대로 링크. 구 스토어의 legacy id 는 서버
+          // Zod schema 가 uuid() 검증에서 실패 → 무시 (링크 없이 job 만 생성).
+          conversationId: isUuid(convId) ? convId : undefined,
+          messageId: isUuid(block.id) ? block.id : undefined,
         });
         if (!parsed.success) {
           const first = parsed.error.issues[0];
@@ -235,7 +246,10 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
           toast.error('워크스페이스 정보가 없어요. 페이지를 새로고침해주세요.');
           return;
         }
-        const result = await submitPackage(packagePlanState, block.options.orgSlug);
+        const result = await submitPackage(packagePlanState, block.options.orgSlug, {
+          conversationId: isUuid(convId) ? convId : undefined,
+          messageId: isUuid(block.id) ? block.id : undefined,
+        });
         markQueued(convId, block.id, result.jobId);
         // 대화 제목은 목적 + 주제 조합. 주제가 없으면 목적만.
         const titleSeed =

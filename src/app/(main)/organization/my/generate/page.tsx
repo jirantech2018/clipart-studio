@@ -83,6 +83,7 @@ export default async function MyGeneratePage({ searchParams }: Props) {
       parent={parent}
       orgSlug={myOrg.slug}
       myOrgSlug={myOrg.slug}
+      userId={user.id}
     />
   );
 }

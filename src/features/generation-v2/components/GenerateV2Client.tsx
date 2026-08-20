@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConversationBlock } from '@/features/generation-v2/components/ConversationBlock';
 import { ConversationSidebar } from '@/features/generation-v2/components/ConversationSidebar';
 import { UsageGuideBanners } from '@/features/generation-v2/components/UsageGuideBanners';
+import { useConversationServerSync } from '@/features/generation-v2/hooks/useConversationServerSync';
 import { computePackageTotalSlots } from '@/features/generation-v2/lib/packageSubmit';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useConversationStore } from '@/lib/store/conversationStore';
@@ -45,9 +46,19 @@ interface Props {
   /** 세션 유저의 MY organizationSlug. Legacy 대화 (organizationSlug 미보유)
    *  를 이 값으로 backfill 하기 위해 사용 (Plan v0.2.7 §M3-2). */
   myOrgSlug: string;
+  /** Conversation server storage (§M4): 서버 sync 훅에서 legacy migration
+   *  flag 를 유저별로 분리하기 위해 필요. 서버 컴포넌트에서 auth.getUser() 로
+   *  얻어 전달. */
+  userId: string;
 }
 
-export function GenerateV2Client({ initialCredits, parent, orgSlug, myOrgSlug }: Props) {
+export function GenerateV2Client({
+  initialCredits,
+  parent,
+  orgSlug,
+  myOrgSlug,
+  userId,
+}: Props) {
   const router = useRouter();
   const currentId = useConversationStore((s) => s.currentId);
   const conversations = useConversationStore((s) => s.conversations);
@@ -55,7 +66,6 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug, myOrgSlug }:
   const setCurrentConversation = useConversationStore(
     (s) => s.setCurrentConversation,
   );
-  const removeEmpty = useConversationStore((s) => s.removeEmptyConversation);
   const addBlock = useConversationStore((s) => s.addBlock);
   const updateOptions = useConversationStore((s) => s.updateBlockOptions);
   const confirmTitle = useConversationStore((s) => s.confirmConversationTitle);
@@ -70,6 +80,13 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug, myOrgSlug }:
     backfillLegacyOrgSlug(myOrgSlug);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // M4 (conversation-server-storage): Zustand 변경 → 서버 sync.
+  // - 마운트 시 legacy migration (idempotent 1회)
+  // - 신규 conversation / message 생성 시 POST
+  // - prompt/options 변경 시 1.5s debounce PATCH
+  // - status 전이 · title 확정 시 즉시 PATCH
+  useConversationServerSync({ userId, organizationSlug: orgSlug });
 
   // Plan v0.2.8 §M3-3: 화면 크레딧 = 이 workspace 의 pool.balance.
   // - MY workspace: profiles.credits 가 곧 MY pool.balance (RPC 가 sync 하므로
@@ -171,9 +188,10 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug, myOrgSlug }:
       );
       if (!confirmed) return;
     }
-    // 현재 대화가 비어있으면 히스토리에서 정리.
-    if (currentId) removeEmpty(currentId);
-    createConversation();
+    // M4 (conversation-server-storage): removeEmptyConversation 자동 정리
+    // 제거. 서버가 SoT 이므로 사용자가 명시적 삭제 UI 로만 삭제 (Soft Delete).
+    // 프롬프트만 입력하고 이탈해도 대화가 유지되어야 함 (지시서 §2 §14 A).
+    createConversation({ orgSlug }, orgSlug);
   }
 
   function handleOpenConversation(id: string) {
@@ -183,7 +201,6 @@ export function GenerateV2Client({ initialCredits, parent, orgSlug, myOrgSlug }:
       );
       if (!confirmed) return;
     }
-    if (currentId && currentId !== id) removeEmpty(currentId);
     setCurrentConversation(id);
   }
 

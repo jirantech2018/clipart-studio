@@ -74,6 +74,11 @@ export const createJobSchema = z
       .array(z.string().max(500, '슬롯 프롬프트는 500자 이내'))
       .nullable()
       .optional(),
+    // Conversation server storage (Migration 075/076): 신규 클라이언트는
+    // Conversation → Message → Job 링크를 서버에도 남기기 위해 두 값을 전달.
+    // 구 클라이언트/외부 호출 호환 위해 옵션.
+    conversationId: z.string().uuid().nullable().optional(),
+    messageId: z.string().uuid().nullable().optional(),
   })
   .refine((data) => !(data.referenceImageId && data.customReferenceId), {
     message: '라이브러리 참조와 업로드 참조는 동시에 사용할 수 없어요',
@@ -161,6 +166,9 @@ export const createPackageJobSchema = z
     /** 조직 컨텍스트 (선택). package 도 학교/조직 base_prompt 를 상속. */
     orgSlug: z.string().min(1).max(64).nullable().optional(),
     schoolProfileApplied: z.boolean().default(false),
+    /** Conversation server storage 링크 (Migration 075/076). 옵션 — 구 클라이언트 호환. */
+    conversationId: z.string().uuid().nullable().optional(),
+    messageId: z.string().uuid().nullable().optional(),
   })
   .refine(
     (data) => {

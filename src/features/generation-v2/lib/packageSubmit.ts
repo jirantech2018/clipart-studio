@@ -31,7 +31,11 @@ export class PackageSubmitError extends Error {
   }
 }
 
-export function buildPackageSubmitPayload(plan: PackagePlanState, orgSlug: string) {
+export function buildPackageSubmitPayload(
+  plan: PackagePlanState,
+  orgSlug: string,
+  link?: { conversationId?: string; messageId?: string },
+) {
   const visibleItems = selectVisibleItems(plan);
   const keywords = selectVisibleKeywords(plan);
   const enabled = visibleItems.filter((it) => it.enabled && it.quantity > 0);
@@ -63,6 +67,10 @@ export function buildPackageSubmitPayload(plan: PackagePlanState, orgSlug: strin
     },
     items,
     schoolProfileApplied: false,
+    // Migration 076: 대화 컨텍스트 링크. 신규 클라이언트만 채우고, 서버 Zod
+    // 스키마는 optional 이라 미전달 호출과 완전 호환.
+    ...(link?.conversationId ? { conversationId: link.conversationId } : {}),
+    ...(link?.messageId ? { messageId: link.messageId } : {}),
   };
 }
 
@@ -85,8 +93,9 @@ export function canSubmitPackage(plan: PackagePlanState): boolean {
 export async function submitPackage(
   plan: PackagePlanState,
   orgSlug: string,
+  link?: { conversationId?: string; messageId?: string },
 ): Promise<PackageSubmitResponse> {
-  const payload = buildPackageSubmitPayload(plan, orgSlug);
+  const payload = buildPackageSubmitPayload(plan, orgSlug, link);
   const res = await fetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

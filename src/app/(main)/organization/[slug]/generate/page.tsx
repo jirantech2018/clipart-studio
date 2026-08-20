@@ -92,6 +92,7 @@ export default async function OrganizationGeneratePage({ params, searchParams }:
       parent={parent}
       orgSlug={params.slug}
       myOrgSlug={myOrg.slug}
+      userId={user.id}
     />
   );
 }

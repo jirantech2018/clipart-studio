@@ -1,19 +1,23 @@
 'use client';
 
-// 우측 고정 Sidebar.
+// 우측 고정 Sidebar (Conversation Server Storage 반영, v0.2).
 //   1. 새로운 대화 CTA
-//   2. 사용 가이드 (짧은 안내)
-//   3. 크레딧 정보 (보유 · 이번 예상 사용량 · 예상 잔여) — 서버 실측 재사용
-//   4. 대화 히스토리 (localStorage 기반, 최신순, 상대 시간 표시)
-//
-// 지시 §Sidebar Polish 준수:
-//   - 기능 추가 없음, 시각적 밀도/타이포/간격만 정돈
-//   - 크레딧 충전 / 사용 내역 링크는 대응 페이지가 아직 없어 미도입
+//   2. 크레딧 정보
+//   3. 대화 히스토리
+//      - 서버 조회 (useConversationsList) 가 SoT
+//      - Zustand 로컬 store 는 optimistic 표시용 (신규 draft 즉시 반영)
+//      - Soft Delete 버튼 (hover 시 노출)
 
-import { Coins, MessageSquare, Plus } from 'lucide-react';
+import { Coins, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  useConversationsList,
+  useDeleteConversation,
+} from '@/features/generation-v2/hooks/useConversationsApi';
 import { useConversationStore } from '@/lib/store/conversationStore';
 import { cn } from '@/lib/utils';
 
@@ -25,12 +29,9 @@ interface ConversationSidebarProps {
   activeJobExists: boolean;
   onNewConversation: () => void;
   onOpenConversation: (id: string) => void;
-  /** M3-2: 현재 workspace slug. 이 값이 일치하는 대화만 히스토리에 표시. */
   organizationSlug: string;
 }
 
-// "N일 전" / "N시간 전" 등 상대 시간. 대화 히스토리 아이템 우측에 사용.
-// 별도 유틸을 만들지 않고 여기서 로컬로 계산 (재사용 대상 없음).
 function formatRelativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
@@ -48,6 +49,13 @@ function formatRelativeTime(iso: string): string {
   return `${months}개월 전`;
 }
 
+interface SidebarItem {
+  id: string;
+  title: string | null;
+  updatedAt: string;
+  firstPrompt: string | null; // 로컬 store 에서만 알 수 있는 fallback 표시명 원천
+}
+
 export function ConversationSidebar({
   credits,
   currentDraftBatchSize,
@@ -56,27 +64,48 @@ export function ConversationSidebar({
   onOpenConversation,
   organizationSlug,
 }: ConversationSidebarProps) {
-  const conversations = useConversationStore((s) => s.conversations);
+  const conversationsLocal = useConversationStore((s) => s.conversations);
   const currentId = useConversationStore((s) => s.currentId);
 
-  // M3-2: 현재 workspace 의 대화만 리스트. organizationSlug 없는 legacy 대화
-  // 는 GenerateV2Client 가 마운트 시 MY 로 backfill 하므로 이 시점에는 반드시
-  // 값이 있음. 방어적으로 undefined 는 표시 제외.
-  //
-  // NOTE: title 이 null 인 대화도 표시한다 (confirmConversationTitle 이 첫
-  // 이미지 생성 성공 시점에 호출되므로, 프롬프트 입력만 하고 이탈한 대화는
-  // 영구히 title=null 로 남는다). 이 대화들도 살아있는 데이터이므로 사이드바
-  // 에서 접근할 수 있어야 한다. 표시명은 첫 Block prompt → 시각 순 fallback.
-  const historyList = Object.values(conversations)
-    .filter((c) => c.organizationSlug === organizationSlug)
+  const serverQuery = useConversationsList(organizationSlug);
+  const deleteMutation = useDeleteConversation();
+
+  // 서버 목록 (SoT) + 아직 서버에 반영 안 된 로컬 draft (optimistic) 병합.
+  // 같은 id 는 서버 값이 우선. 표시명 fallback (첫 프롬프트) 은 로컬 store 에서만
+  // 알 수 있으므로 firstPrompt 를 별도로 함께 넣어둔다.
+  const localByWorkspace: Record<string, Conversation> = {};
+  for (const c of Object.values(conversationsLocal)) {
+    if (c.organizationSlug === organizationSlug) localByWorkspace[c.id] = c;
+  }
+  const merged: Record<string, SidebarItem> = {};
+  for (const c of Object.values(localByWorkspace)) {
+    merged[c.id] = {
+      id: c.id,
+      title: c.title,
+      updatedAt: c.updatedAt,
+      firstPrompt: c.blocks[0]?.prompt?.trim() ?? null,
+    };
+  }
+  for (const c of serverQuery.data?.conversations ?? []) {
+    const local = localByWorkspace[c.id];
+    merged[c.id] = {
+      id: c.id,
+      title: c.title,
+      updatedAt: c.lastActivityAt,
+      firstPrompt: local?.blocks[0]?.prompt?.trim() ?? null,
+    };
+  }
+
+  const historyList = Object.values(merged)
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
     .slice(0, 20);
 
-  function displayName(c: Conversation): string {
-    if (c.title) return c.title;
-    const firstPrompt = c.blocks[0]?.prompt?.trim();
-    if (firstPrompt) {
-      return firstPrompt.length > 30 ? `${firstPrompt.slice(0, 30)}…` : firstPrompt;
+  function displayName(item: SidebarItem): string {
+    if (item.title) return item.title;
+    if (item.firstPrompt) {
+      return item.firstPrompt.length > 30
+        ? `${item.firstPrompt.slice(0, 30)}…`
+        : item.firstPrompt;
     }
     return '(제목 없는 대화)';
   }
@@ -88,10 +117,6 @@ export function ConversationSidebar({
     <aside
       className={cn(
         'hidden w-[280px] shrink-0 flex-col gap-2',
-        // 스크롤 시에도 화면 우측에 고정. top 값은 AppHeader (h-14=56px) 아래
-        // + 여백 24px 을 감안해 80px. max-h 로 화면 밖 침범을 막되 overflow 는
-        // 카드 그림자가 잘리지 않도록 visible 유지. 넘친 히스토리는 아래
-        // 대화 히스토리 카드 내부에서 자체 clip.
         'lg:sticky lg:top-20 lg:flex lg:max-h-[calc(100vh-6rem)]',
       )}
     >
@@ -138,11 +163,6 @@ export function ConversationSidebar({
         </CardContent>
       </Card>
 
-      {/* 대화 히스토리 wrapper — flex-1 로 sidebar 남은 세로 공간을 확보하되
-          카드 자체는 자연 크기(shrink-to-fit) 로 렌더. 컨텐츠가 wrapper 를
-          넘길 때만 max-h-full + overflow-hidden 이 발동해 잘림.
-          이렇게 하면 히스토리 항목이 적을 때 카드가 필요 이상 커지지 않고,
-          가득 찼을 때만 화면 하단에서 잘리게 된다. */}
       <div className="flex min-h-0 flex-1 flex-col">
         <Card className="flex max-h-full flex-col overflow-hidden">
           <CardHeader className="shrink-0 pb-2">
@@ -152,43 +172,99 @@ export function ConversationSidebar({
             </CardTitle>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 space-y-1 overflow-hidden">
-            {historyList.length === 0 ? (
+            {serverQuery.isError ? (
+              <p className="text-xs text-destructive">
+                대화 목록을 불러오지 못했어요.
+              </p>
+            ) : historyList.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 아직 저장된 대화가 없어요.
               </p>
             ) : (
               <ul>
-                {historyList.map((c: Conversation) => {
-                  const active = currentId === c.id;
-                  return (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        onClick={() => onOpenConversation(c.id)}
-                        className={cn(
-                          'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left transition-colors',
-                          active
-                            ? 'bg-accent font-medium text-primary'
-                            : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-                        )}
-                        title={displayName(c)}
-                      >
-                        <span className="truncate text-xs">
-                          {displayName(c)}
-                        </span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground/80 tabular-nums">
-                          {formatRelativeTime(c.updatedAt)}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
+                {historyList.map((item) => (
+                  <ConversationRow
+                    key={item.id}
+                    item={item}
+                    active={currentId === item.id}
+                    label={displayName(item)}
+                    onOpen={() => onOpenConversation(item.id)}
+                    onDelete={async () => {
+                      if (!window.confirm('이 대화를 휴지통으로 옮길까요?')) return;
+                      try {
+                        await deleteMutation.mutateAsync(item.id);
+                        toast.success('대화를 삭제했어요');
+                      } catch (err) {
+                        toast.error(
+                          err instanceof Error ? err.message : '대화 삭제 실패',
+                        );
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                  />
+                ))}
               </ul>
             )}
           </CardContent>
         </Card>
       </div>
     </aside>
+  );
+}
+
+function ConversationRow({
+  item,
+  active,
+  label,
+  onOpen,
+  onDelete,
+  disabled,
+}: {
+  item: SidebarItem;
+  active: boolean;
+  label: string;
+  onOpen: () => void;
+  onDelete: () => void;
+  disabled: boolean;
+}) {
+  const [hovering, setHovering] = useState(false);
+  return (
+    <li
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      className={cn(
+        'group relative flex items-center gap-1 rounded-md px-2 py-1 transition-colors',
+        active
+          ? 'bg-accent font-medium text-primary'
+          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+      )}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+        title={label}
+      >
+        <span className="truncate text-xs">{label}</span>
+        {!hovering && (
+          <span className="shrink-0 text-[11px] text-muted-foreground/80 tabular-nums">
+            {formatRelativeTime(item.updatedAt)}
+          </span>
+        )}
+      </button>
+      {hovering && (
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={disabled}
+          className="shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+          aria-label="대화 삭제"
+          title="대화 삭제"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </li>
   );
 }
 
