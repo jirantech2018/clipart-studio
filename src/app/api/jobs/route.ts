@@ -240,6 +240,23 @@ async function handleSingle(
     .single();
 
   if (jobError || !job) {
+    // handlePackage 와 동일하게 원본 supabase 에러를 그대로 로그로 남긴다.
+    // 42P01 / 42703 (schema not ready) 은 사용자에게도 알기 쉽게 별도 코드로
+    // 응답 — 다음 배포 사이클에서 정확한 원인을 확보하기 위함.
+    console.error('[jobs POST single] job insert failed', {
+      code: jobError?.code,
+      message: jobError?.message,
+      hint: jobError?.hint,
+      details: jobError?.details,
+      conversationId: resolvedLink.conversationId,
+      messageId: resolvedLink.messageId,
+    });
+    if (jobError && isSchemaNotReadyError(jobError.code)) {
+      return apiError(
+        'INTERNAL_ERROR',
+        'DB 스키마 준비 중이에요. 잠시 후 다시 시도해주세요.',
+      );
+    }
     return apiError('INTERNAL_ERROR', 'Job 생성 실패');
   }
 
