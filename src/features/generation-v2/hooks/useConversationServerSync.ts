@@ -50,6 +50,34 @@ export function useConversationServerSync({ userId, organizationSlug }: Args) {
   // 지금까지 서버에 성공적으로 등록했다고 확인된 id 집합. 재요청 방지용.
   const registeredConversationsRef = useRef<Set<string>>(new Set());
   const registeredMessagesRef = useRef<Set<string>>(new Set());
+  // 각 conversation 의 서버 등록 Promise. 후속 message POST · title PATCH · status
+  // PATCH 는 이 Promise 를 await 한 뒤 실행해 race condition (message 라우트가
+  // conversation 존재를 확인하는 지점) 을 피한다.
+  const conversationReadyRef = useRef<Map<string, Promise<void>>>(new Map());
+
+  // conversation POST 를 발화하고 Promise 를 등록한다. 이미 시작됐으면 재사용.
+  function ensureConversationRegistered(
+    id: string,
+    organizationSlug: string,
+  ): Promise<void> {
+    const existing = conversationReadyRef.current.get(id);
+    if (existing) return existing;
+    const p = fetch('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, organizationSlug }),
+    }).then((res) => {
+      if (!res.ok) throw new Error(`conversation register failed: ${res.status}`);
+    });
+    conversationReadyRef.current.set(id, p);
+    p.catch((err) => {
+      console.warn('[conv-sync] create conversation failed', id, err);
+      // 재시도 가능하도록 상태 정리.
+      registeredConversationsRef.current.delete(id);
+      conversationReadyRef.current.delete(id);
+    });
+    return p;
+  }
 
   // 이전 상태 스냅샷 — 변경 감지 diff 용.
   const prevRef = useRef<{
@@ -142,6 +170,10 @@ export function useConversationServerSync({ userId, organizationSlug }: Args) {
     for (const [id, conv] of Object.entries(initial)) {
       if (!isUuid(id)) continue;
       registeredConversationsRef.current.add(id);
+      // 초기 상태는 서버 hydration 결과이거나 legacy migration 대상 — 어느 쪽이든
+      // 서버에 이미 존재한다고 가정. 후속 message/status/title 업데이트가
+      // conversation 존재를 대기해야 하므로 즉시 resolve 된 Promise 를 세팅.
+      conversationReadyRef.current.set(id, Promise.resolve());
       for (const b of conv.blocks) {
         if (isUuid(b.id)) registeredMessagesRef.current.add(b.id);
       }
@@ -156,31 +188,30 @@ export function useConversationServerSync({ userId, organizationSlug }: Args) {
       for (const [id, conv] of Object.entries(state.conversations)) {
         if (!isUuid(id) || !conv.organizationSlug) continue;
 
-        // (2) 새 conversation 등록 필요?
+        // (2) 새 conversation 등록 필요? Promise 는 이 대화의 후속 요청 순서
+        // 보장에 사용된다.
+        let convReady: Promise<void>;
         if (!registeredConversationsRef.current.has(id)) {
           registeredConversationsRef.current.add(id);
-          fetch('/api/conversations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id,
-              organizationSlug: conv.organizationSlug,
-            }),
-          }).catch((err) => {
-            console.warn('[conv-sync] create conversation failed', id, err);
-            // 다음 diff cycle 에서 재시도 (registered 에서 제거).
-            registeredConversationsRef.current.delete(id);
-          });
+          convReady = ensureConversationRegistered(id, conv.organizationSlug);
+        } else {
+          convReady =
+            conversationReadyRef.current.get(id) ?? Promise.resolve();
         }
 
-        // (6) title 변경 감지 → PATCH.
+        // (6) title 변경 감지 → conversation 등록 완료 후 PATCH.
         const prevConv = prev.conversations[id];
         if (prevConv && prevConv.title !== conv.title && conv.title) {
-          fetch(`/api/conversations/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: conv.title }),
-          }).catch(() => undefined);
+          const newTitle = conv.title;
+          convReady
+            .then(() =>
+              fetch(`/api/conversations/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle }),
+              }),
+            )
+            .catch(() => undefined);
         }
 
         // Block diff — 각 block 이 새로 생성됐는지, prompt/options/status 가
@@ -189,24 +220,33 @@ export function useConversationServerSync({ userId, organizationSlug }: Args) {
           if (!isUuid(b.id)) continue;
           const wasRegistered = registeredMessagesRef.current.has(b.id);
           if (!wasRegistered) {
-            // (3) 새 message 등록. conversation 서버 등록이 미완이어도 서버 측
-            // FK RLS 가 잡아주므로 실패해도 재시도 대상.
+            // (3) 새 message 등록 — conversation 등록 완료 후에 발화.
             registeredMessagesRef.current.add(b.id);
-            fetch(`/api/conversations/${id}/messages`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: b.id,
-                role: 'user',
-                prompt: b.prompt,
-                options: b.options,
-                status: mapBlockStatus(b.status),
-                orderIndex: conv.blocks.indexOf(b),
-              }),
-            }).catch((err) => {
-              console.warn('[conv-sync] create message failed', b.id, err);
-              registeredMessagesRef.current.delete(b.id);
-            });
+            const messagePayload = {
+              id: b.id,
+              role: 'user' as const,
+              prompt: b.prompt,
+              options: b.options,
+              status: mapBlockStatus(b.status),
+              orderIndex: conv.blocks.indexOf(b),
+            };
+            convReady
+              .then(() =>
+                fetch(`/api/conversations/${id}/messages`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(messagePayload),
+                }),
+              )
+              .then((res) => {
+                if (!res || !res.ok) {
+                  registeredMessagesRef.current.delete(b.id);
+                }
+              })
+              .catch((err) => {
+                console.warn('[conv-sync] create message failed', b.id, err);
+                registeredMessagesRef.current.delete(b.id);
+              });
             continue;
           }
 
@@ -226,19 +266,27 @@ export function useConversationServerSync({ userId, organizationSlug }: Args) {
               draftAutosave.schedule(b.id, patch);
             }
 
-            // (5) status 전이 → 즉시 PATCH (debounce 없이).
+            // (5) status 전이 → conversation + message 등록 완료 후 PATCH.
             if (prevBlock.status !== b.status) {
               const nextStatus = mapBlockStatus(b.status);
               if (nextStatus) {
-                patchMessage({
-                  id: b.id,
-                  status: nextStatus,
-                  jobId: b.jobId ?? null,
-                }).catch(() => undefined);
+                const nextJobId = b.jobId ?? null;
+                convReady
+                  .then(() =>
+                    patchMessage({
+                      id: b.id,
+                      status: nextStatus,
+                      jobId: nextJobId,
+                    }),
+                  )
+                  .catch(() => undefined);
               }
             } else if (prevBlock.jobId !== b.jobId && b.jobId) {
               // status 는 그대로지만 jobId 만 부여된 경우.
-              patchMessage({ id: b.id, jobId: b.jobId }).catch(() => undefined);
+              const nextJobId = b.jobId;
+              convReady
+                .then(() => patchMessage({ id: b.id, jobId: nextJobId }))
+                .catch(() => undefined);
             }
           }
         }
