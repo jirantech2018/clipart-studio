@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { AIGeneratedBadge } from '@/components/ui/AIGeneratedBadge';
+import { downloadPackageZip } from '@/features/generation-v2/lib/downloadPackageZip';
 import { downloadImageFile } from '@/features/library/hooks/useMyImages';
 import { cn } from '@/lib/utils';
 import { ASPECT_RATIO_DIMENSIONS } from '@/types/domain';
@@ -30,6 +31,7 @@ export function CompletedStep({ block }: CompletedStepProps) {
   const dims = ASPECT_RATIO_DIMENSIONS[block.options.aspectRatio];
   const aspectStyle = { aspectRatio: `${dims.width} / ${dims.height}` };
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   // 실패만 있으면 기본 탭을 failed 로, 그 외엔 done 으로.
   const [tab, setTab] = useState<Tab>(succeeded > 0 ? 'done' : 'failed');
 
@@ -44,6 +46,19 @@ export function CompletedStep({ block }: CompletedStepProps) {
       toast.error(err instanceof Error ? err.message : '다운로드에 실패했어요');
     } finally {
       setPendingId(null);
+    }
+  }
+
+  async function handleDownloadAll() {
+    if (downloadingAll) return;
+    setDownloadingAll(true);
+    try {
+      await downloadPackageZip(block.succeeded);
+      toast.success('전체 이미지 다운로드를 시작했어요.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'ZIP 다운로드 실패');
+    } finally {
+      setDownloadingAll(false);
     }
   }
 
@@ -69,23 +84,42 @@ export function CompletedStep({ block }: CompletedStepProps) {
               : `${succeeded}장의 클립아트가 생성되었어요`}
           </h3>
         </div>
-        <div
-          role="tablist"
-          aria-label="완료 결과 필터"
-          className="flex items-center gap-1"
-        >
-          <TabButton
-            active={tab === 'done'}
-            onClick={() => setTab('done')}
-            label="완료"
-            count={succeeded}
-          />
-          <TabButton
-            active={tab === 'failed'}
-            onClick={() => setTab('failed')}
-            label="실패"
-            count={failed}
-          />
+        <div className="flex items-center gap-2">
+          {succeeded > 0 && (
+            <button
+              type="button"
+              onClick={handleDownloadAll}
+              disabled={downloadingAll}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70',
+              )}
+            >
+              {downloadingAll ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              <span>전체 다운로드</span>
+            </button>
+          )}
+          <div
+            role="tablist"
+            aria-label="완료 결과 필터"
+            className="flex items-center gap-1"
+          >
+            <TabButton
+              active={tab === 'done'}
+              onClick={() => setTab('done')}
+              label="완료"
+              count={succeeded}
+            />
+            <TabButton
+              active={tab === 'failed'}
+              onClick={() => setTab('failed')}
+              label="실패"
+              count={failed}
+            />
+          </div>
         </div>
       </header>
 
