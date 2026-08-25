@@ -203,12 +203,18 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
         const parentRef = block.options.parentImageId;
         const personalRef = block.options.personalReferenceIds[0] ?? null;
         const orgRef = block.options.orgReferenceIds[0] ?? null;
+        // 필드 매핑 규칙:
+        //   - referenceImageId  ← chaining parent (images.id)
+        //   - customReferenceId ← 개인 참조 클립아트 (reference_images.id, 업로드 슬롯)
+        //   - orgReferenceId    ← 조직 참조 (organization_reference_images.id)
+        // 이전엔 personalRef 를 referenceImageId 로 잘못 넘겨 매번 FK 23503 이
+        // 발생했다. 서버 검증은 각 필드별 테이블을 개별 조회한다.
         const parsed = createJobSchema.safeParse({
           prompt: trimmed,
           batchSize: block.options.batchSize,
           diversityLevel: 0,
-          referenceImageId: parentRef ?? personalRef,
-          customReferenceId: null,
+          referenceImageId: parentRef,
+          customReferenceId: personalRef,
           schoolProfileApplied: block.options.schoolProfileApplied,
           generationMode: parentRef || personalRef || orgRef ? 'img2img' : 'text2img',
           aspectRatio: block.options.aspectRatio,
