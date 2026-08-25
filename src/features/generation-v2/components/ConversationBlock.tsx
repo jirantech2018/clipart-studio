@@ -67,6 +67,16 @@ interface CreateJobResponse {
   streamUrl: string;
 }
 
+class SubmitJobError extends Error {
+  code: string;
+  fieldErrors?: Record<string, string[]>;
+  constructor(code: string, message: string, fieldErrors?: Record<string, string[]>) {
+    super(message);
+    this.code = code;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
 async function submitJob(payload: unknown): Promise<CreateJobResponse> {
   const res = await fetch('/api/jobs', {
     method: 'POST',
@@ -75,11 +85,17 @@ async function submitJob(payload: unknown): Promise<CreateJobResponse> {
   });
   const json = (await res.json()) as
     | { data: CreateJobResponse }
-    | { error: { code: string; message: string; details?: Record<string, unknown> } };
+    | {
+        error: {
+          code: string;
+          message: string;
+          details?: { fieldErrors?: Record<string, string[]> };
+        };
+      };
   if (!res.ok || 'error' in json) {
     const err =
       'error' in json ? json.error : { code: 'INTERNAL_ERROR', message: '요청 실패' };
-    throw new Error(err.message);
+    throw new SubmitJobError(err.code, err.message, err.details?.fieldErrors);
   }
   return json.data;
 }
@@ -219,7 +235,28 @@ export const ConversationBlock = forwardRef<HTMLDivElement, ConversationBlockPro
       } catch (err) {
         const message = err instanceof Error ? err.message : '생성 요청 실패';
         toast.error(message);
-        markFailed(convId, block.id, message);
+        // 서버가 참조 이미지 유실 (FK 위반) 을 알려주면 draft option 에서 참조
+        // 관련 필드를 자동으로 clear — 다음 재시도 시 같은 stale id 로 계속
+        // 실패하는 것을 방지. 사용자가 원한다면 다시 선택할 수 있다.
+        if (
+          err instanceof SubmitJobError &&
+          err.code === 'VALIDATION_ERROR' &&
+          err.fieldErrors?.referenceImageId
+        ) {
+          updateOptions(convId, block.id, {
+            personalReferenceIds: [],
+            parentImageId: null,
+            parentImageThumbnailUrl: null,
+            parentImagePrompt: null,
+          });
+        }
+        // 참조 유실은 사용자 조치 (재선택) 가 필요하므로 block 을 failed 로
+        // 확정하지 않고 draft 유지 → 사용자가 바로 다시 시도 가능.
+        if (
+          !(err instanceof SubmitJobError && err.code === 'VALIDATION_ERROR')
+        ) {
+          markFailed(convId, block.id, message);
+        }
       } finally {
         setSubmitting(false);
       }
