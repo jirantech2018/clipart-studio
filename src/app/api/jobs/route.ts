@@ -182,6 +182,24 @@ async function handleSingle(
   }
 
   let customReferenceR2Key: string | null = null;
+  // Chaining reference (images 테이블 기준). 클라이언트 store 에 남아있던
+  // 이미지가 이후 트래시/삭제됐거나 접근 권한이 없어진 경우 FK 위반 (23503) 이
+  // 발생하므로 명시적 사전 검증. RLS 를 통과해서 조회되는 이미지만 허용.
+  if (body.referenceImageId) {
+    const { data: refImage } = await supabase
+      .from('images')
+      .select('id')
+      .eq('id', body.referenceImageId)
+      .maybeSingle();
+    if (!refImage) {
+      return apiError(
+        'VALIDATION_ERROR',
+        '선택한 참조 이미지를 찾을 수 없어요. 다시 선택해주세요.',
+        { fieldErrors: { referenceImageId: ['이미지가 삭제되었거나 접근 권한이 없어요.'] } },
+      );
+    }
+  }
+
   if (body.customReferenceId) {
     const { data: ref } = await supabase
       .from('reference_images')
