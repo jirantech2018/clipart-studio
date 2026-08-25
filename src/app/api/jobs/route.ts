@@ -182,24 +182,11 @@ async function handleSingle(
   }
 
   let customReferenceR2Key: string | null = null;
-  // Chaining reference (images 테이블 기준). 클라이언트 store 에 남아있던
-  // 이미지가 이후 트래시/삭제됐거나 접근 권한이 없어진 경우 FK 위반 (23503) 이
-  // 발생하므로 명시적 사전 검증. RLS 를 통과해서 조회되는 이미지만 허용.
-  if (body.referenceImageId) {
-    const { data: refImage } = await supabase
-      .from('images')
-      .select('id')
-      .eq('id', body.referenceImageId)
-      .maybeSingle();
-    if (!refImage) {
-      return apiError(
-        'VALIDATION_ERROR',
-        '선택한 참조 이미지를 찾을 수 없어요. 다시 선택해주세요.',
-        { fieldErrors: { referenceImageId: ['이미지가 삭제되었거나 접근 권한이 없어요.'] } },
-      );
-    }
-  }
-
+  // NOTE: referenceImageId 의 사전 검증은 하지 않는다. 유저 컨텍스트 supabase
+  //   client 는 images 테이블 RLS 를 그대로 적용해, 공유받은 조직 이미지·
+  //   조직 컨텍스트에서만 보이는 이미지 등을 false negative 로 걸러낼 수 있다.
+  //   실제 FK (generation_jobs_reference_image_id_fkey) 는 RLS 무시하고 row 존재
+  //   여부만 확인하므로, INSERT 시 23503 이 뜨면 그때 친절한 메시지로 매핑한다.
   if (body.customReferenceId) {
     const { data: ref } = await supabase
       .from('reference_images')
@@ -258,9 +245,6 @@ async function handleSingle(
     .single();
 
   if (jobError || !job) {
-    // handlePackage 와 동일하게 원본 supabase 에러를 그대로 로그로 남긴다.
-    // 42P01 / 42703 (schema not ready) 은 사용자에게도 알기 쉽게 별도 코드로
-    // 응답 — 다음 배포 사이클에서 정확한 원인을 확보하기 위함.
     console.error('[jobs POST single] job insert failed', {
       code: jobError?.code,
       message: jobError?.message,
@@ -274,6 +258,24 @@ async function handleSingle(
         'INTERNAL_ERROR',
         'DB 스키마 준비 중이에요. 잠시 후 다시 시도해주세요.',
       );
+    }
+    // FK 위반 (23503) 중 참조 이미지 관련은 사용자 조치가 가능하므로 별도 안내.
+    // messages 에 constraint 이름이 들어오므로 그것으로 판별.
+    if (jobError?.code === '23503') {
+      const msg = jobError.message ?? '';
+      if (msg.includes('reference_image_id')) {
+        return apiError(
+          'VALIDATION_ERROR',
+          '선택한 참조 이미지를 찾을 수 없어요. 다시 선택해주세요.',
+          {
+            fieldErrors: {
+              referenceImageId: [
+                '이미지가 삭제되었거나 접근 권한이 없어요.',
+              ],
+            },
+          },
+        );
+      }
     }
     return apiError('INTERNAL_ERROR', 'Job 생성 실패');
   }
