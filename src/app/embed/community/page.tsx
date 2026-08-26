@@ -5,8 +5,6 @@
 // 자체 카드 그리드를 렌더. 각 카드는 /embed/image/[id] 로 이동해서 iframe
 // 안에서 상세 뷰를 계속 이어갈 수 있게 한다.
 
-import Link from 'next/link';
-
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 
@@ -62,9 +60,11 @@ export default async function EmbedCommunityPage() {
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           {images.map((img) => (
-            <Link
+            <a
               key={img.id}
               href={`/embed/image/${img.id}`}
+              target="_blank"
+              rel="noopener"
               className="group relative block overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow hover:shadow-md"
               style={{ aspectRatio: `${img.width} / ${img.height}` }}
               title={img.prompt}
@@ -77,7 +77,7 @@ export default async function EmbedCommunityPage() {
                 loading="lazy"
                 className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
               />
-            </Link>
+            </a>
           ))}
         </div>
       )}

@@ -87,10 +87,27 @@ export default async function EmbedImageDetailPage({
         </Link>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,320px)_1fr]">
-        {/* 좌측: metadata + 액션 */}
-        <aside className="space-y-4">
-          <section className="space-y-2 rounded-md border p-4">
+      {/* 좌 = 이미지, 우 = metadata + 액션. 우측 컬럼은 상자 없이 자연스러운
+          flow. 섹션 간 간격만 있고 border/padding 없음. */}
+      <div className="grid gap-6 md:grid-cols-[1fr_minmax(0,320px)]">
+        {/* 좌측: 이미지 */}
+        <div>
+          <div
+            className="overflow-hidden rounded-lg border bg-muted"
+            style={{ aspectRatio: `${image.width} / ${image.height}` }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image.fullUrl}
+              alt={image.prompt}
+              className="h-full w-full object-contain"
+            />
+          </div>
+        </div>
+
+        {/* 우측: metadata + 액션. 상자 없이 섹션만. */}
+        <aside className="space-y-5">
+          <section className="space-y-1.5">
             <h3 className="text-sm font-semibold text-primary">
               만들고 싶었던 내용
             </h3>
@@ -100,7 +117,7 @@ export default async function EmbedImageDetailPage({
           </section>
 
           {image.categories.length > 0 && (
-            <section className="space-y-2 rounded-md border p-4">
+            <section className="space-y-1.5">
               <h3 className="text-sm font-semibold text-primary">분류</h3>
               <p className="text-sm text-muted-foreground">
                 {image.categories.join(', ')}
@@ -109,7 +126,7 @@ export default async function EmbedImageDetailPage({
           )}
 
           {image.tags.length > 0 && (
-            <section className="space-y-2 rounded-md border p-4">
+            <section className="space-y-1.5">
               <h3 className="text-sm font-semibold text-primary">관련 키워드</h3>
               <div className="flex flex-wrap gap-1.5">
                 {image.tags.map((tag) => (
@@ -124,7 +141,7 @@ export default async function EmbedImageDetailPage({
             </section>
           )}
 
-          <section className="space-y-2 rounded-md border p-4">
+          <section className="space-y-2">
             <h3 className="text-sm font-semibold text-primary">더 활용하기</h3>
             <a
               href={remakeUrl}
@@ -158,21 +175,6 @@ export default async function EmbedImageDetailPage({
             </p>
           </section>
         </aside>
-
-        {/* 우측: 이미지 */}
-        <div>
-          <div
-            className="overflow-hidden rounded-lg border bg-muted"
-            style={{ aspectRatio: `${image.width} / ${image.height}` }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={image.fullUrl}
-              alt={image.prompt}
-              className="h-full w-full object-contain"
-            />
-          </div>
-        </div>
       </div>
     </div>
   );
