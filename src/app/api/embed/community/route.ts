@@ -18,6 +18,7 @@ import { createSupabaseServiceClient } from '@/services/supabase/server';
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(60).default(24),
   offset: z.coerce.number().int().min(0).default(0),
+  sort: z.enum(['newest', 'popular']).default('newest'),
 });
 
 interface EmbedCommunityImage {
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
   const parsed = querySchema.safeParse({
     limit: url.searchParams.get('limit') ?? undefined,
     offset: url.searchParams.get('offset') ?? undefined,
+    sort: url.searchParams.get('sort') ?? undefined,
   });
   if (!parsed.success) {
     return apiError('VALIDATION_ERROR', '쿼리 파라미터가 올바르지 않습니다', {
@@ -40,14 +42,24 @@ export async function GET(request: Request) {
     });
   }
 
-  const { limit, offset } = parsed.data;
+  const { limit, offset, sort } = parsed.data;
 
   const service = createSupabaseServiceClient();
-  const { data, count, error } = await service
+  let query = service
     .from('community_images')
-    .select('id, prompt, width, height, r2_key, thumbnail_r2_key', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+    .select('id, prompt, width, height, r2_key, thumbnail_r2_key, download_count', {
+      count: 'exact',
+    });
+
+  if (sort === 'popular') {
+    query = query
+      .order('download_count', { ascending: false })
+      .order('created_at', { ascending: false });
+  } else {
+    query = query.order('created_at', { ascending: false });
+  }
+
+  const { data, count, error } = await query.range(offset, offset + limit - 1);
 
   if (error) {
     console.error('[api/embed/community] query failed', error);
