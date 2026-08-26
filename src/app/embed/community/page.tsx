@@ -67,17 +67,6 @@ export default async function EmbedCommunityPage() {
         initialTotal={initialTotal}
         batchSize={LOAD_MORE_BATCH}
       />
-
-      <footer className="pt-2 text-center">
-        <a
-          href="https://clipartstudio.schoolp.co.kr/"
-          target="_blank"
-          rel="noopener"
-          className="inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
-        >
-          우리학교 클립아트스튜디오 바로가기 →
-        </a>
-      </footer>
     </div>
   );
 }

@@ -105,27 +105,27 @@ export function CommunityEmbedGrid({
       </div>
 
       {hasMore && (
-        <div className="flex justify-center pt-2">
+        <div className="flex justify-center pt-4">
           <button
             type="button"
             onClick={handleLoadMore}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex items-center gap-2 bg-transparent text-lg font-semibold text-primary transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-70"
           >
             {loading ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                 불러오는 중…
               </>
             ) : (
-              <>더 보기 ({remaining}장 더)</>
+              <>더보기 →</>
             )}
           </button>
         </div>
       )}
 
       {!hasMore && images.length >= 24 && (
-        <p className="pt-1 text-center text-xs text-muted-foreground">
+        <p className="pt-2 text-center text-sm text-muted-foreground">
           모든 이미지를 표시했어요.
         </p>
       )}
