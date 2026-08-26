@@ -6,7 +6,6 @@
 
 import { Download, Link2, Sparkles } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 
 import { publicUrl } from '@/services/r2/upload';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
@@ -79,12 +78,16 @@ export default async function EmbedImageDetailPage({
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-3">
-        <Link
-          href="/embed/community"
+        {/* 이 상세 페이지는 embed community 카드에서 새 창으로 열린 상태이므로
+            "공유 라이브러리" 로 돌아가는 것 = 마케팅 홈 (clipart.schoolp.co.kr)
+            으로 이동하는 것을 의미. Next Link 대신 절대 URL a 태그로 현재 창
+            (_self) 이동. */}
+        <a
+          href="https://clipart.schoolp.co.kr/"
           className="text-sm text-muted-foreground hover:text-foreground"
         >
           ← 공유 라이브러리
-        </Link>
+        </a>
       </div>
 
       {/* 좌 = 이미지, 우 = metadata + 액션. 우측 컬럼은 상자 없이 자연스러운
