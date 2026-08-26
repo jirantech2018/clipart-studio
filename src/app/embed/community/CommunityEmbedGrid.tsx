@@ -118,7 +118,7 @@ export function CommunityEmbedGrid({
                 불러오는 중…
               </>
             ) : (
-              <>더보기 →</>
+              <>우리학교 선생님들이 직접 만든 클립아트 더보기 →</>
             )}
           </button>
         </div>
