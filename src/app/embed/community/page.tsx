@@ -17,7 +17,12 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-const INITIAL_BATCH = 24;
+// 첫 SSR 로 노출하는 이미지 개수. lazy loading 이 걸려 있어 화면 밖 이미지는
+// 스크롤에 맞춰 지연 로드되므로 60 이라도 first paint 는 여전히 빠르다.
+// 상한은 /api/embed/community 의 limit max (60) 과 일치.
+const INITIAL_BATCH = 60;
+// "더 보기" 클릭 시 한 번에 추가 로드하는 이미지 개수. SSR 배치와 독립.
+const LOAD_MORE_BATCH = 24;
 
 export default async function EmbedCommunityPage() {
   const service = createSupabaseServiceClient();
@@ -60,7 +65,7 @@ export default async function EmbedCommunityPage() {
       <CommunityEmbedGrid
         initialImages={initialImages}
         initialTotal={initialTotal}
-        batchSize={INITIAL_BATCH}
+        batchSize={LOAD_MORE_BATCH}
       />
 
       <footer className="pt-2 text-center">
