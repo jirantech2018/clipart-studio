@@ -76,7 +76,7 @@ export default async function EmbedImageDetailPage({
   const detailUrl = loginUrl(`/image/${image.id}`);
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-[1200px]">
       <div className="mb-3">
         {/* 이 상세 페이지는 두 컨텍스트로 열릴 수 있다:
               1) 마케팅 sub 페이지 (clipart.schoolp.co.kr/sub) 안의 iframe

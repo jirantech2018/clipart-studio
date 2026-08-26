@@ -83,7 +83,7 @@ export default async function EmbedCommunityPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-[1200px]">
       <EmbedCommunitySection
         initialImages={initialImages}
         initialTotal={initialTotal}

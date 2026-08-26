@@ -146,7 +146,7 @@ export default async function EmbedSearchPage({
   const noHitsForValidQuery = !useFallback && rawQuery && !hasResults;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="mx-auto max-w-[1200px] space-y-4">
       <SearchForm defaultValue={displayQuery} />
 
       {noHitsForValidQuery && (
