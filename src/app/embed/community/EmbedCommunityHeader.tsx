@@ -55,14 +55,16 @@ export function EmbedCommunityHeader({ tags, sort, onSortChange }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* 검색창 — 중앙 정렬, 최대 폭 제한. */}
+      {/* 검색창 — 중앙 정렬, 최대 폭 제한. 브랜드 인디고 (#373d8e) 3px 테두리
+          + 동일 색 돋보기 아이콘. */}
       <form
         onSubmit={handleSearchSubmit}
         className="mx-auto w-full max-w-xl"
       >
         <label className="relative block">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+            style={{ color: '#373d8e' }}
             aria-hidden="true"
           />
           <input
@@ -70,7 +72,8 @@ export function EmbedCommunityHeader({ tags, sort, onSortChange }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="찾고 싶은 이미지를 검색해보세요"
-            className="h-10 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 w-full rounded-full bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none"
+            style={{ border: '3px solid #373d8e' }}
           />
         </label>
       </form>

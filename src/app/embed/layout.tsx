@@ -9,9 +9,11 @@ import { EmbedHeightReporter } from '@/app/embed/EmbedHeightReporter';
 
 import type { PropsWithChildren } from 'react';
 
+// bg-white 로 root layout body 의 gradient 배경을 덮어 iframe 안이 깔끔한
+// 흰 캔버스가 되게 한다 — 마케팅 사이트의 배경/컨테이너와 자연스럽게 이어짐.
 export default function EmbedLayout({ children }: PropsWithChildren) {
   return (
-    <div className="min-h-screen p-4 md:p-6">
+    <div className="min-h-screen bg-white p-4 md:p-6">
       <EmbedHeightReporter />
       {children}
     </div>
