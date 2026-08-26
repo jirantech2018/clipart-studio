@@ -52,16 +52,7 @@ export default async function EmbedCommunityPage() {
   const initialTotal = count ?? initialImages.length;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <header className="flex flex-col gap-1 md:flex-row md:items-baseline md:gap-3">
-        <h2 className="shrink-0 text-xl font-semibold tracking-tight">
-          공유 라이브러리
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          우리학교 클립아트스튜디오에서 공개된 이미지를 둘러보세요.
-        </p>
-      </header>
-
+    <div className="mx-auto max-w-6xl">
       <CommunityEmbedGrid
         initialImages={initialImages}
         initialTotal={initialTotal}
