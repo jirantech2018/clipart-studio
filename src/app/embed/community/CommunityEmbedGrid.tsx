@@ -81,7 +81,11 @@ export function CommunityEmbedGrid({
         {images.map((img) => (
           <a
             key={img.id}
-            href={`/embed/image/${img.id}`}
+            // 마케팅 사이트가 자체 /sub 페이지로 감싸서 iframe 으로 우리
+            // embed 상세를 삽입한다 (마케팅 헤더·네비 유지 목적). 카드 클릭 시
+            // 마케팅 sub 페이지로 새 창 이동, sub 페이지가 iframe src 로
+            // /embed/image/[id] 를 열도록 규약.
+            href={`https://clipart.schoolp.co.kr/sub?id=${img.id}`}
             target="_blank"
             rel="noopener"
             className="group relative block overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow hover:shadow-md"

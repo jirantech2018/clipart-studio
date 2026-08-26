@@ -78,12 +78,15 @@ export default async function EmbedImageDetailPage({
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-3">
-        {/* 이 상세 페이지는 embed community 카드에서 새 창으로 열린 상태이므로
-            "공유 라이브러리" 로 돌아가는 것 = 마케팅 홈 (clipart.schoolp.co.kr)
-            으로 이동하는 것을 의미. Next Link 대신 절대 URL a 태그로 현재 창
-            (_self) 이동. */}
+        {/* 이 상세 페이지는 두 컨텍스트로 열릴 수 있다:
+              1) 마케팅 sub 페이지 (clipart.schoolp.co.kr/sub) 안의 iframe
+              2) 직접 열림 (embed URL 을 사용자가 붙여넣은 경우)
+            어느 쪽이든 "돌아가기" 는 마케팅 홈으로 향한다. target="_top" 을
+            지정하면 iframe 컨텍스트일 때는 부모 창 전체가 이동하고, 아니면
+            현재 창이 그대로 이동해서 두 경우 모두 자연스럽다. */}
         <a
           href="https://clipart.schoolp.co.kr/"
+          target="_top"
           className="text-sm text-muted-foreground hover:text-foreground"
         >
           ← 공유 라이브러리
