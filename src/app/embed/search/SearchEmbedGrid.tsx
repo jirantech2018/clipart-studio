@@ -32,7 +32,9 @@ export function SearchEmbedGrid({
   const [error, setError] = useState<string | null>(null);
 
   const remaining = Math.max(0, total - images.length);
-  const hasMore = remaining > 0;
+  // query 가 없는 fallback 표시 (공유 라이브러리 최근 60장) 에서는 "더 보기"
+  // 를 노출하지 않는다 — 검색 API 가 아니라 다른 소스라 페이지네이션 대상 X.
+  const hasMore = remaining > 0 && Boolean(query);
 
   async function handleLoadMore() {
     if (loading || !hasMore) return;
@@ -70,9 +72,11 @@ export function SearchEmbedGrid({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        <strong className="text-foreground">“{query}”</strong> 검색 결과 {total}건
-      </p>
+      {query && (
+        <p className="text-sm text-muted-foreground">
+          <strong className="text-foreground">“{query}”</strong> 검색 결과 {total}건
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         {images.map((img) => (

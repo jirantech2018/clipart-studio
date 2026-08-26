@@ -2,8 +2,13 @@
 //
 // 마케팅 사이트의 /search?q=<q> 페이지가 iframe 으로 이 페이지를 넣어 검색
 // 결과를 표시. 상단 검색창은 EmbedCommunityHeader 와 동일 스타일로 여기서도
-// 유지 (다시 검색 가능). 태그 마퀴는 검색 결과 페이지 성격상 생략, 대신
-// "← 공유 라이브러리 로 돌아가기" 링크만 노출.
+// 유지 (다시 검색 가능).
+//
+// Fallback:
+//   - q 가 비었거나 placeholder (`{...}`) 이거나 결과가 0건이면 최근 공유
+//     라이브러리 이미지를 자동으로 노출해 방문자가 항상 유용한 콘텐츠를 본다.
+//   - 이는 마케팅 사이트가 iframe src 의 {q} 치환을 놓친 상태에서도
+//     "검색 결과 없음" 만 표시되는 사각지대를 방지한다.
 
 import { Search } from 'lucide-react';
 
@@ -16,41 +21,37 @@ export const dynamic = 'force-dynamic';
 
 const INITIAL_BATCH = 24;
 const LOAD_MORE_BATCH = 24;
+const FALLBACK_BATCH = 60;
 
-export default async function EmbedSearchPage({
-  searchParams,
-}: {
-  searchParams: { q?: string };
-}) {
-  const query = (searchParams.q ?? '').trim();
+/** 마케팅 사이트가 템플릿 치환을 놓쳤을 때 그대로 넘어오는 placeholder 감지. */
+function isPlaceholderQuery(q: string): boolean {
+  if (!q) return true;
+  if (q.startsWith('{') && q.endsWith('}')) return true;
+  if (q.includes('여기에') || q.includes('삽입')) return true;
+  return false;
+}
 
-  if (!query) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-4">
-        <SearchForm defaultValue="" />
-        <p className="rounded-md border bg-background/60 p-6 text-center text-sm text-muted-foreground">
-          검색어를 입력해주세요.
-        </p>
-      </div>
-    );
-  }
+interface Loaded {
+  images: EmbedSearchImage[];
+  total: number;
+}
 
+async function loadSearchResults(q: string): Promise<Loaded> {
   const service = createSupabaseServiceClient();
 
-  // 세 소스에서 candidate id 수집.
   const [ftsRes, tagRes, catRes] = await Promise.all([
     service
       .from('images')
       .select('id')
       .eq('status', 'saved')
       .eq('is_on_community', true)
-      .textSearch('search_vector', query, { type: 'websearch', config: 'simple' })
+      .textSearch('search_vector', q, { type: 'websearch', config: 'simple' })
       .limit(500),
-    service.from('image_tags').select('image_id').eq('tag', query).limit(500),
+    service.from('image_tags').select('image_id').eq('tag', q).limit(500),
     service
       .from('image_categories')
       .select('image_id')
-      .eq('category', query)
+      .eq('category', q)
       .limit(500),
   ]);
 
@@ -59,46 +60,106 @@ export default async function EmbedSearchPage({
   for (const row of tagRes.data ?? []) candidateIds.add(row.image_id as string);
   for (const row of catRes.data ?? []) candidateIds.add(row.image_id as string);
 
-  let initialImages: EmbedSearchImage[] = [];
-  let initialTotal = 0;
+  if (candidateIds.size === 0) return { images: [], total: 0 };
 
-  if (candidateIds.size > 0) {
-    const ids = Array.from(candidateIds);
-    const { data, count } = await service
-      .from('images')
-      .select('id, prompt, width, height, r2_key, thumbnail_r2_key', {
-        count: 'exact',
-      })
-      .in('id', ids)
-      .eq('status', 'saved')
-      .eq('is_on_community', true)
-      .order('created_at', { ascending: false })
-      .range(0, INITIAL_BATCH - 1);
+  const ids = Array.from(candidateIds);
+  const { data, count } = await service
+    .from('images')
+    .select('id, prompt, width, height, r2_key, thumbnail_r2_key', {
+      count: 'exact',
+    })
+    .in('id', ids)
+    .eq('status', 'saved')
+    .eq('is_on_community', true)
+    .order('created_at', { ascending: false })
+    .range(0, INITIAL_BATCH - 1);
 
-    initialImages = ((data ?? []) as Array<{
-      id: string;
-      prompt: string;
-      width: number | null;
-      height: number | null;
-      r2_key: string;
-      thumbnail_r2_key: string | null;
-    }>).map((row) => ({
-      id: row.id,
-      prompt: row.prompt,
-      width: row.width ?? 1024,
-      height: row.height ?? 1024,
-      thumbnailUrl: publicUrl(row.thumbnail_r2_key ?? row.r2_key),
-    }));
-    initialTotal = count ?? initialImages.length;
+  const images = shapeImages(data);
+  return { images, total: count ?? images.length };
+}
+
+async function loadFallbackLibrary(): Promise<Loaded> {
+  const service = createSupabaseServiceClient();
+  const { data, count } = await service
+    .from('community_images')
+    .select('id, prompt, width, height, r2_key, thumbnail_r2_key', {
+      count: 'exact',
+    })
+    .order('created_at', { ascending: false })
+    .range(0, FALLBACK_BATCH - 1);
+  const images = shapeImages(data);
+  return { images, total: count ?? images.length };
+}
+
+function shapeImages(rows: unknown): EmbedSearchImage[] {
+  return ((rows ?? []) as Array<{
+    id: string;
+    prompt: string;
+    width: number | null;
+    height: number | null;
+    r2_key: string;
+    thumbnail_r2_key: string | null;
+  }>).map((row) => ({
+    id: row.id,
+    prompt: row.prompt,
+    width: row.width ?? 1024,
+    height: row.height ?? 1024,
+    thumbnailUrl: publicUrl(row.thumbnail_r2_key ?? row.r2_key),
+  }));
+}
+
+export default async function EmbedSearchPage({
+  searchParams,
+}: {
+  searchParams: { q?: string };
+}) {
+  const rawQuery = (searchParams.q ?? '').trim();
+
+  // 유효한 검색어면 search API 흐름, 아니면 fallback 라이브러리.
+  const useFallback = isPlaceholderQuery(rawQuery);
+
+  let images: EmbedSearchImage[] = [];
+  let total = 0;
+  let displayQuery = ''; // 상단 form 의 초깃값 · SearchEmbedGrid 의 헤딩용
+
+  if (!useFallback) {
+    const searchLoaded = await loadSearchResults(rawQuery);
+    if (searchLoaded.total > 0) {
+      images = searchLoaded.images;
+      total = searchLoaded.total;
+      displayQuery = rawQuery;
+    } else {
+      // 유효한 검색어였지만 결과 0건 → fallback 라이브러리로 대체.
+      const fallback = await loadFallbackLibrary();
+      images = fallback.images;
+      total = fallback.total;
+      displayQuery = rawQuery; // 검색어는 form 에 유지해 사용자가 다시 시도 가능
+    }
+  } else {
+    const fallback = await loadFallbackLibrary();
+    images = fallback.images;
+    total = fallback.total;
+    displayQuery = '';
   }
+
+  const hasResults = !useFallback && rawQuery && images.length > 0 && displayQuery === rawQuery && total > 0;
+  const noHitsForValidQuery = !useFallback && rawQuery && !hasResults;
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <SearchForm defaultValue={query} />
+      <SearchForm defaultValue={displayQuery} />
+
+      {noHitsForValidQuery && (
+        <p className="rounded-md border bg-background/60 p-4 text-sm text-muted-foreground">
+          <strong className="text-foreground">“{rawQuery}”</strong> 검색 결과가 없어요.
+          다른 검색어로 시도해보세요. 아래는 최근 공유된 클립아트입니다.
+        </p>
+      )}
+
       <SearchEmbedGrid
-        query={query}
-        initialImages={initialImages}
-        initialTotal={initialTotal}
+        query={hasResults ? rawQuery : ''}
+        initialImages={images}
+        initialTotal={total}
         batchSize={LOAD_MORE_BATCH}
       />
     </div>
@@ -111,11 +172,12 @@ function SearchForm({ defaultValue }: { defaultValue: string }) {
     <form
       method="get"
       action="/embed/search"
-      className="mx-auto w-full max-w-xl"
+      className="w-full max-w-xl"
     >
       <label className="relative block">
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
+          style={{ color: '#373d8e' }}
           aria-hidden="true"
         />
         <input
@@ -123,7 +185,8 @@ function SearchForm({ defaultValue }: { defaultValue: string }) {
           name="q"
           defaultValue={defaultValue}
           placeholder="찾고 싶은 이미지를 검색해보세요"
-          className="h-10 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-14 w-full rounded-full bg-background pl-12 pr-4 text-base placeholder:text-muted-foreground focus:outline-none"
+          style={{ border: '3px solid #373d8e' }}
         />
       </label>
     </form>
