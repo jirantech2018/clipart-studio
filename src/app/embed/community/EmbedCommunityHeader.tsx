@@ -14,7 +14,10 @@ import { useState } from 'react';
 
 import type { EmbedCommunitySort } from './CommunityEmbedGrid';
 
-const SERVICE_ORIGIN = 'https://clipartstudio.schoolp.co.kr';
+// 검색·태그 클릭은 마케팅 사이트의 /search 페이지로 이동한다. 마케팅 사이트가
+// 그 안에서 iframe 으로 우리 /embed/search?q=<q> 를 표시하는 규약이므로,
+// 우리 서비스 사이트가 아닌 마케팅 origin 을 사용.
+const MARKETING_ORIGIN = 'https://clipart.schoolp.co.kr';
 const TAG_PAGE_SIZE = 6;
 
 const SORT_LABELS: Record<EmbedCommunitySort, string> = {
@@ -44,7 +47,7 @@ export function EmbedCommunityHeader({ tags, sort, onSortChange }: Props) {
     if (!trimmed) return;
     // 새 창에서 서비스 사이트 검색 페이지 열림.
     window.open(
-      `${SERVICE_ORIGIN}/search?q=${encodeURIComponent(trimmed)}`,
+      `${MARKETING_ORIGIN}/search?q=${encodeURIComponent(trimmed)}`,
       '_blank',
       'noopener',
     );
@@ -89,7 +92,7 @@ export function EmbedCommunityHeader({ tags, sort, onSortChange }: Props) {
             visibleTags.map((tag) => (
               <a
                 key={tag}
-                href={`${SERVICE_ORIGIN}/search?q=${encodeURIComponent(tag)}`}
+                href={`${MARKETING_ORIGIN}/search?q=${encodeURIComponent(tag)}`}
                 target="_blank"
                 rel="noopener"
                 className="inline-flex shrink-0 items-center rounded-full border border-input bg-background px-3 py-1 text-sm transition-colors hover:border-primary hover:bg-accent"

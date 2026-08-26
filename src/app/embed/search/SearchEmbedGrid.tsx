@@ -1,0 +1,125 @@
+'use client';
+
+// Embed 검색 결과 그리드 — SSR 첫 24장 + "더 보기" 24장씩 append.
+
+import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+
+export interface EmbedSearchImage {
+  id: string;
+  prompt: string;
+  width: number;
+  height: number;
+  thumbnailUrl: string;
+}
+
+interface Props {
+  query: string;
+  initialImages: EmbedSearchImage[];
+  initialTotal: number;
+  batchSize?: number;
+}
+
+export function SearchEmbedGrid({
+  query,
+  initialImages,
+  initialTotal,
+  batchSize = 24,
+}: Props) {
+  const [images, setImages] = useState<EmbedSearchImage[]>(initialImages);
+  const [total, setTotal] = useState(initialTotal);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const remaining = Math.max(0, total - images.length);
+  const hasMore = remaining > 0;
+
+  async function handleLoadMore() {
+    if (loading || !hasMore) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        limit: String(batchSize),
+        offset: String(images.length),
+      });
+      const res = await fetch(`/api/embed/search?${params}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('불러오지 못했어요');
+      const json = (await res.json()) as {
+        data: { images: EmbedSearchImage[]; total: number };
+      };
+      setImages((prev) => [...prev, ...json.data.images]);
+      setTotal(json.data.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '불러오지 못했어요');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (images.length === 0) {
+    return (
+      <p className="rounded-md border bg-background/60 p-6 text-center text-sm text-muted-foreground">
+        검색 결과가 없어요. 다른 검색어로 시도해보세요.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        <strong className="text-foreground">“{query}”</strong> 검색 결과 {total}건
+      </p>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        {images.map((img) => (
+          <a
+            key={img.id}
+            href={`https://clipart.schoolp.co.kr/sub?id=${img.id}`}
+            target="_blank"
+            rel="noopener"
+            className="group relative block overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow hover:shadow-md"
+            style={{ aspectRatio: `${img.width} / ${img.height}` }}
+            title={img.prompt}
+            aria-label={img.prompt}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={img.thumbnailUrl}
+              alt={img.prompt}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+            />
+          </a>
+        ))}
+      </div>
+
+      {hasMore && (
+        <div className="flex justify-center pt-4">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loading}
+            className="inline-flex items-center gap-2 bg-transparent text-lg font-semibold text-primary transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-70"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                불러오는 중…
+              </>
+            ) : (
+              <>더보기 →</>
+            )}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-center text-xs text-destructive">{error}</p>
+      )}
+    </div>
+  );
+}
