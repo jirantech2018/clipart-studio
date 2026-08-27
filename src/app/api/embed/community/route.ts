@@ -27,6 +27,7 @@ interface EmbedCommunityImage {
   width: number;
   height: number;
   thumbnailUrl: string;
+  viewCount: number;
 }
 
 export async function GET(request: Request) {
@@ -47,9 +48,10 @@ export async function GET(request: Request) {
   const service = createSupabaseServiceClient();
   let query = service
     .from('community_images')
-    .select('id, prompt, width, height, r2_key, thumbnail_r2_key, download_count', {
-      count: 'exact',
-    });
+    .select(
+      'id, prompt, width, height, r2_key, thumbnail_r2_key, download_count, view_count',
+      { count: 'exact' },
+    );
 
   if (sort === 'popular') {
     query = query
@@ -73,6 +75,7 @@ export async function GET(request: Request) {
     height: number | null;
     r2_key: string;
     thumbnail_r2_key: string | null;
+    view_count: number | null;
   }>;
 
   const images: EmbedCommunityImage[] = rows.map((row) => ({
@@ -81,6 +84,7 @@ export async function GET(request: Request) {
     width: row.width ?? 1024,
     height: row.height ?? 1024,
     thumbnailUrl: publicUrl(row.thumbnail_r2_key ?? row.r2_key),
+    viewCount: Number(row.view_count ?? 0),
   }));
 
   return apiOk({

@@ -2,7 +2,7 @@
 
 // Embed 검색 결과 그리드 — SSR 첫 24장 + "더 보기" 24장씩 append.
 
-import { Loader2 } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 
 export interface EmbedSearchImage {
@@ -11,6 +11,18 @@ export interface EmbedSearchImage {
   width: number;
   height: number;
   thumbnailUrl: string;
+  viewCount: number;
+}
+
+function reportView(id: string): void {
+  try {
+    fetch(`/api/embed/images/${id}/view`, {
+      method: 'POST',
+      keepalive: true,
+    });
+  } catch {
+    // 익명 카운트 실패는 조용히 무시.
+  }
 }
 
 interface Props {
@@ -85,6 +97,10 @@ export function SearchEmbedGrid({
             href={`https://clipart.schoolp.co.kr/sub?id=${img.id}`}
             target="_blank"
             rel="noopener"
+            onClick={() => reportView(img.id)}
+            onAuxClick={(e) => {
+              if (e.button === 1) reportView(img.id);
+            }}
             className="group relative block overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow hover:shadow-md"
             style={{ aspectRatio: `${img.width} / ${img.height}` }}
             title={img.prompt}
@@ -97,6 +113,13 @@ export function SearchEmbedGrid({
               loading="lazy"
               className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
             />
+            <span
+              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white shadow-sm backdrop-blur-sm"
+              title={`${img.viewCount}회 조회`}
+            >
+              <Eye className="h-3 w-3" aria-hidden="true" />
+              {img.viewCount}
+            </span>
           </a>
         ))}
       </div>

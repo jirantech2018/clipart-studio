@@ -28,12 +28,13 @@ const TAG_DISPLAY_LIMIT = 60;
 export default async function EmbedCommunityPage() {
   const service = createSupabaseServiceClient();
 
-  // 초기 이미지 60장 (최신순) + 총 개수.
+  // 초기 이미지 60장 (최신순) + 총 개수. view_count 포함.
   const imagesQuery = service
     .from('community_images')
-    .select('id, prompt, width, height, r2_key, thumbnail_r2_key', {
-      count: 'exact',
-    })
+    .select(
+      'id, prompt, width, height, r2_key, thumbnail_r2_key, view_count',
+      { count: 'exact' },
+    )
     .order('created_at', { ascending: false })
     .range(0, INITIAL_BATCH - 1);
 
@@ -56,12 +57,14 @@ export default async function EmbedCommunityPage() {
     height: number | null;
     r2_key: string;
     thumbnail_r2_key: string | null;
+    view_count: number | null;
   }>).map((row) => ({
     id: row.id,
     prompt: row.prompt,
     width: row.width ?? 1024,
     height: row.height ?? 1024,
     thumbnailUrl: publicUrl(row.thumbnail_r2_key ?? row.r2_key),
+    viewCount: Number(row.view_count ?? 0),
   }));
   const initialTotal = imagesResult.count ?? initialImages.length;
 

@@ -8,7 +8,7 @@
 // iframe 높이는 root EmbedHeightReporter 가 body 크기 변화 감지 → postMessage
 // 로 부모에 자동 전달하므로 여기서는 별도 처리 없음.
 
-import { Loader2 } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 export type EmbedCommunitySort = 'newest' | 'popular';
@@ -19,6 +19,20 @@ export interface EmbedCommunityImage {
   width: number;
   height: number;
   thumbnailUrl: string;
+  viewCount: number;
+}
+
+// 이미지 카드 클릭 시 fire-and-forget 으로 view 이벤트 기록. 새 창 열림
+// 자체를 막지 않도록 preventDefault 안 함. 실패는 조용히 무시.
+function reportView(id: string): void {
+  try {
+    fetch(`/api/embed/images/${id}/view`, {
+      method: 'POST',
+      keepalive: true,
+    });
+  } catch {
+    // 익명 카운트라 실패해도 사용자 UX 영향 없음.
+  }
 }
 
 interface Props {
@@ -133,6 +147,11 @@ export function CommunityEmbedGrid({
             href={`https://clipart.schoolp.co.kr/sub?id=${img.id}`}
             target="_blank"
             rel="noopener"
+            onClick={() => reportView(img.id)}
+            onAuxClick={(e) => {
+              // 마우스 middle-click / cmd/ctrl+click 도 새 탭 열림 → 카운트.
+              if (e.button === 1) reportView(img.id);
+            }}
             className="group relative block overflow-hidden rounded-lg border bg-muted shadow-sm transition-shadow hover:shadow-md"
             style={{ aspectRatio: `${img.width} / ${img.height}` }}
             title={img.prompt}
@@ -145,6 +164,14 @@ export function CommunityEmbedGrid({
               loading="lazy"
               className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
             />
+            {/* 우측 상단 클릭수 뱃지 — 항상 노출, tabular-nums 로 정렬 안정. */}
+            <span
+              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white shadow-sm backdrop-blur-sm"
+              title={`${img.viewCount}회 조회`}
+            >
+              <Eye className="h-3 w-3" aria-hidden="true" />
+              {img.viewCount}
+            </span>
           </a>
         ))}
       </div>

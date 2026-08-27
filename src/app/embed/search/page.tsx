@@ -74,7 +74,9 @@ async function loadSearchResults(q: string): Promise<Loaded> {
     .order('created_at', { ascending: false })
     .range(0, INITIAL_BATCH - 1);
 
-  const images = shapeImages(data);
+  const pageIds = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  const viewCounts = await computeViewCounts(pageIds);
+  const images = shapeImages(data, viewCounts);
   return { images, total: count ?? images.length };
 }
 
@@ -82,16 +84,21 @@ async function loadFallbackLibrary(): Promise<Loaded> {
   const service = createSupabaseServiceClient();
   const { data, count } = await service
     .from('community_images')
-    .select('id, prompt, width, height, r2_key, thumbnail_r2_key', {
-      count: 'exact',
-    })
+    .select(
+      'id, prompt, width, height, r2_key, thumbnail_r2_key, view_count',
+      { count: 'exact' },
+    )
     .order('created_at', { ascending: false })
     .range(0, FALLBACK_BATCH - 1);
+  // community_images 뷰가 view_count 를 직접 제공하므로 viewCountMap 불필요.
   const images = shapeImages(data);
   return { images, total: count ?? images.length };
 }
 
-function shapeImages(rows: unknown): EmbedSearchImage[] {
+function shapeImages(
+  rows: unknown,
+  viewCountMap?: Map<string, number>,
+): EmbedSearchImage[] {
   return ((rows ?? []) as Array<{
     id: string;
     prompt: string;
@@ -99,13 +106,32 @@ function shapeImages(rows: unknown): EmbedSearchImage[] {
     height: number | null;
     r2_key: string;
     thumbnail_r2_key: string | null;
+    view_count?: number | null;
   }>).map((row) => ({
     id: row.id,
     prompt: row.prompt,
     width: row.width ?? 1024,
     height: row.height ?? 1024,
     thumbnailUrl: publicUrl(row.thumbnail_r2_key ?? row.r2_key),
+    viewCount:
+      viewCountMap?.get(row.id) ?? Number(row.view_count ?? 0),
   }));
+}
+
+// SSR 이 images 테이블에서 조회한 결과에 대해 별도로 download_events(view) 집계.
+async function computeViewCounts(ids: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (ids.length === 0) return map;
+  const service = createSupabaseServiceClient();
+  const { data } = await service
+    .from('download_events')
+    .select('image_id')
+    .eq('event_type', 'view')
+    .in('image_id', ids);
+  for (const ev of (data ?? []) as { image_id: string }[]) {
+    map.set(ev.image_id, (map.get(ev.image_id) ?? 0) + 1);
+  }
+  return map;
 }
 
 export default async function EmbedSearchPage({

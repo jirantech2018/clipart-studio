@@ -24,6 +24,7 @@ interface EmbedSearchImage {
   width: number;
   height: number;
   thumbnailUrl: string;
+  viewCount: number;
 }
 
 export async function GET(request: Request) {
@@ -89,19 +90,37 @@ export async function GET(request: Request) {
     return apiError('INTERNAL_ERROR', '검색 실패');
   }
 
-  const images: EmbedSearchImage[] = ((data ?? []) as Array<{
+  const rows = (data ?? []) as Array<{
     id: string;
     prompt: string;
     width: number | null;
     height: number | null;
     r2_key: string;
     thumbnail_r2_key: string | null;
-  }>).map((row) => ({
+  }>;
+
+  // view_count 집계 — 결과 페이지의 id 만 대상으로 download_events 를 조회 후
+  // in-memory 로 GROUP BY (Supabase JS 는 native GROUP BY 미지원).
+  const pageIds = rows.map((r) => r.id);
+  const viewCountMap = new Map<string, number>();
+  if (pageIds.length > 0) {
+    const { data: evRows } = await service
+      .from('download_events')
+      .select('image_id')
+      .eq('event_type', 'view')
+      .in('image_id', pageIds);
+    for (const ev of (evRows ?? []) as { image_id: string }[]) {
+      viewCountMap.set(ev.image_id, (viewCountMap.get(ev.image_id) ?? 0) + 1);
+    }
+  }
+
+  const images: EmbedSearchImage[] = rows.map((row) => ({
     id: row.id,
     prompt: row.prompt,
     width: row.width ?? 1024,
     height: row.height ?? 1024,
     thumbnailUrl: publicUrl(row.thumbnail_r2_key ?? row.r2_key),
+    viewCount: viewCountMap.get(row.id) ?? 0,
   }));
 
   return apiOk({
