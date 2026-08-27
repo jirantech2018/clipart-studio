@@ -8,7 +8,7 @@
 // iframe 높이는 root EmbedHeightReporter 가 body 크기 변화 감지 → postMessage
 // 로 부모에 자동 전달하므로 여기서는 별도 처리 없음.
 
-import { Eye, Loader2 } from 'lucide-react';
+import { Heart, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 export type EmbedCommunitySort = 'newest' | 'popular';
@@ -169,7 +169,7 @@ export function CommunityEmbedGrid({
               className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white shadow-sm backdrop-blur-sm"
               title={`${img.viewCount}회 조회`}
             >
-              <Eye className="h-3 w-3" aria-hidden="true" />
+              <Heart className="h-3 w-3" aria-hidden="true" />
               {img.viewCount}
             </span>
           </a>
