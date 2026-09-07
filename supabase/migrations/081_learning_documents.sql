@@ -36,43 +36,73 @@ CREATE INDEX IF NOT EXISTS idx_learning_documents_user_created
 -- ============================================================
 -- RLS
 -- ============================================================
+-- ENABLE ROW LEVEL SECURITY 자체는 이미 활성이면 no-op (Postgres 15 는 IF NOT EXISTS
+-- 미지원이지만 재실행해도 오류가 아닌 "already enabled" 안내 수준).
 ALTER TABLE public.learning_documents ENABLE ROW LEVEL SECURITY;
 
--- 조직 활성 멤버만 조직 문서 조회
-CREATE POLICY learning_documents_select_by_org_member
-  ON public.learning_documents
-  FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.organization_members om
-      WHERE om.organization_id = learning_documents.organization_id
-        AND om.user_id = (SELECT auth.uid())
-        AND om.status = 'active'
-    )
-  );
+-- 정책 재실행 안전성 (사용자 지시, 2026-09-07):
+--   CREATE POLICY 는 IF NOT EXISTS 를 지원하지 않으므로, 각 정책별로 pg_policies 를
+--   확인해 없을 때만 생성한다. 기존 정책을 무조건 DROP 후 재생성하는 방식은 사용
+--   금지 (레이스 컨디션 · 감사 로그 손실 위험).
+DO $$
+BEGIN
+  -- 1) 조직 활성 멤버만 조직 문서 조회
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'learning_documents'
+      AND policyname = 'learning_documents_select_by_org_member'
+  ) THEN
+    CREATE POLICY learning_documents_select_by_org_member
+      ON public.learning_documents
+      FOR SELECT
+      TO authenticated
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.organization_members om
+          WHERE om.organization_id = learning_documents.organization_id
+            AND om.user_id = (SELECT auth.uid())
+            AND om.status = 'active'
+        )
+      );
+  END IF;
 
--- 조직 활성 멤버만 자기 이름으로 INSERT
-CREATE POLICY learning_documents_insert_by_org_member
-  ON public.learning_documents
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    user_id = (SELECT auth.uid())
-    AND EXISTS (
-      SELECT 1 FROM public.organization_members om
-      WHERE om.organization_id = learning_documents.organization_id
-        AND om.user_id = (SELECT auth.uid())
-        AND om.status = 'active'
-    )
-  );
+  -- 2) 조직 활성 멤버만 자기 이름으로 INSERT
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'learning_documents'
+      AND policyname = 'learning_documents_insert_by_org_member'
+  ) THEN
+    CREATE POLICY learning_documents_insert_by_org_member
+      ON public.learning_documents
+      FOR INSERT
+      TO authenticated
+      WITH CHECK (
+        user_id = (SELECT auth.uid())
+        AND EXISTS (
+          SELECT 1 FROM public.organization_members om
+          WHERE om.organization_id = learning_documents.organization_id
+            AND om.user_id = (SELECT auth.uid())
+            AND om.status = 'active'
+        )
+      );
+  END IF;
 
--- 소유자만 삭제 (M1 은 삭제 UI 없음, RLS 만 준비)
-CREATE POLICY learning_documents_delete_by_owner
-  ON public.learning_documents
-  FOR DELETE
-  TO authenticated
-  USING (user_id = (SELECT auth.uid()));
+  -- 3) 소유자만 삭제 (M1 은 삭제 UI 없음, RLS 만 준비)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'learning_documents'
+      AND policyname = 'learning_documents_delete_by_owner'
+  ) THEN
+    CREATE POLICY learning_documents_delete_by_owner
+      ON public.learning_documents
+      FOR DELETE
+      TO authenticated
+      USING (user_id = (SELECT auth.uid()));
+  END IF;
+END $$;
 
 GRANT SELECT, INSERT, DELETE ON public.learning_documents TO authenticated;
 

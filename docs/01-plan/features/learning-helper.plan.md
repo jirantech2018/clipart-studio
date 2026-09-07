@@ -187,7 +187,7 @@ interface LearningDocument {
 
 ## 5. 데이터 모델 매핑
 
-### 5.1 신설 테이블 (Migration 078~082 예상)
+### 5.1 신설 테이블 (Migration 078~083)
 
 | 테이블 | 역할 | 예상 규모 |
 |---|---|---|
@@ -344,7 +344,7 @@ Renderer 는 Phase 0.7 완료 (`services/learning-renderer/`). 렌더러 외 모
 - [ ] Migration 081: `learning_documents` (문서 저장 + RLS)
 
 *Job 파이프라인 (기존 확장)*
-- [ ] `generation_jobs.kind` enum 에 **`'learning_doc'` 추가** (Migration 082 예상)
+- [ ] `generation_jobs.kind` enum 에 **`'learning_doc'` 추가** (Migration 082 = enum ADD VALUE 트랜잭션 분리, Migration 083 = FK 컬럼 + kind별 unique index 안전 교체)
 - [ ] payload/result JSON schema 를 kind 별로 분리 (이미지 생성 로직과 학습자료 생성 로직이 섞이지 않도록 handler 분리)
   - `services/jobs/handlers/image-gen.ts` (기존 이미지 생성 로직 이동)
   - `services/jobs/handlers/learning-doc.ts` (신규)
