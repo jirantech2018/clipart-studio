@@ -1,0 +1,35 @@
+# Railway (Nixpacks) build configuration
+#
+# 목적: learning-helper 의 PDF 렌더러가 @sparticuz/chromium 을 실행할 수 있도록
+# Chromium 이 요구하는 shared libraries 를 이미지에 설치한다. 없으면 런타임에:
+#   /tmp/chromium: error while loading shared libraries: libnspr4.so: cannot open
+#   shared object file: No such file or directory
+# 오류로 puppeteer.launch 가 실패한다.
+#
+# 참고:
+#   - @sparticuz/chromium 은 Chromium 바이너리 자체는 tar.br 로 제공하지만
+#     libnss/libnspr/libatk 등 시스템 shared libs 는 여전히 OS 에 있어야 한다.
+#   - Puppeteer 공식 troubleshooting: https://pptr.dev/troubleshooting
+
+[phases.setup]
+aptPkgs = [
+  # Chromium 실행에 필요한 shared libs (Debian/Ubuntu 패키지명)
+  "libnss3",
+  "libnspr4",
+  "libatk1.0-0",
+  "libatk-bridge2.0-0",
+  "libcups2",
+  "libdrm2",
+  "libxkbcommon0",
+  "libxcomposite1",
+  "libxdamage1",
+  "libxfixes3",
+  "libxrandr2",
+  "libgbm1",
+  "libpango-1.0-0",
+  "libcairo2",
+  "libasound2",
+  "libatspi2.0-0",
+  # 폰트 (한글 표시용) — 서버 렌더링 시 Noto Sans KR fallback 보장
+  "fonts-noto-cjk",
+]
