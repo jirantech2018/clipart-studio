@@ -27,5 +27,7 @@ ON CONFLICT (code) DO NOTHING;
 
 -- 마스터 데이터 SELECT 허용 (RLS 미적용).
 GRANT SELECT ON public.learning_subjects TO anon, authenticated;
+-- server-side API 는 service role client 로 조회하므로 service_role 에도 SELECT.
+GRANT SELECT ON public.learning_subjects TO service_role;
 
 NOTIFY pgrst, 'reload schema';

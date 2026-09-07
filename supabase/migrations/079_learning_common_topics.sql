@@ -30,6 +30,8 @@ CREATE INDEX IF NOT EXISTS idx_learning_common_topics_grade_subject
   WHERE active = TRUE;
 
 GRANT SELECT ON public.learning_common_topics TO anon, authenticated;
+-- server-side API (recommendations) 는 service role client 로 조회.
+GRANT SELECT ON public.learning_common_topics TO service_role;
 
 -- ============================================================
 -- Seed: 1학년 국어 (2022 개정 교육과정 참고, 대표 단원·주제)

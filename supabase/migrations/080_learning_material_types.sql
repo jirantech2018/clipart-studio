@@ -29,5 +29,7 @@ INSERT INTO public.learning_material_types (code, name_ko, description, default_
 ON CONFLICT (code) DO NOTHING;
 
 GRANT SELECT ON public.learning_material_types TO anon, authenticated;
+-- server-side API 는 service role client 로 조회할 수 있음.
+GRANT SELECT ON public.learning_material_types TO service_role;
 
 NOTIFY pgrst, 'reload schema';

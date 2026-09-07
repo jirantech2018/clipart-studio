@@ -106,4 +106,9 @@ END $$;
 
 GRANT SELECT, INSERT, DELETE ON public.learning_documents TO authenticated;
 
+-- Server-side API route 는 service role client (createSupabaseServiceClient) 로
+-- INSERT 하므로 service_role 에도 명시적 GRANT 필요. GRANT 없으면 RLS 우회와
+-- 무관하게 "permission denied for table" 오류 발생.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.learning_documents TO service_role;
+
 NOTIFY pgrst, 'reload schema';
