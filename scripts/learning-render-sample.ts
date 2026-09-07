@@ -14,6 +14,22 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 
+// EBUSY 대응: 파일이 다른 프로세스(예: Word/PowerPoint 미리보기)에 잠긴 경우
+// 잠깐 대기 후 재시도.
+async function writeFileWithRetry(p: string, buf: Buffer, retries = 5): Promise<void> {
+  for (let i = 0; i < retries; i += 1) {
+    try {
+      await writeFile(p, buf);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'EBUSY' && code !== 'EPERM') throw err;
+      if (i === retries - 1) throw err;
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }
+}
+
 import { renderDocx } from '../src/services/learning-renderer/docx';
 import { renderPdf } from '../src/services/learning-renderer/pdf';
 import { renderPptx, splitIntoSlides } from '../src/services/learning-renderer/pptx';
@@ -47,7 +63,7 @@ async function main() {
       });
       const ms = Math.round(performance.now() - t0);
       const p = path.join(OUT_DIR, `${name}.pdf`);
-      await writeFile(p, buf);
+      await writeFileWithRetry(p, buf);
       results.push({ name, format: 'pdf', ms, bytes: buf.length });
       console.log(`  ✓ pdf  ${buf.length} bytes / ${ms} ms → ${p}`);
     } catch (err) {
@@ -60,7 +76,7 @@ async function main() {
       const buf = await renderDocx(doc);
       const ms = Math.round(performance.now() - t0);
       const p = path.join(OUT_DIR, `${name}.docx`);
-      await writeFile(p, buf);
+      await writeFileWithRetry(p, buf);
       results.push({ name, format: 'docx', ms, bytes: buf.length });
       console.log(`  ✓ docx ${buf.length} bytes / ${ms} ms → ${p}`);
     } catch (err) {
@@ -73,7 +89,7 @@ async function main() {
       const buf = await renderPptx(doc);
       const ms = Math.round(performance.now() - t0);
       const p = path.join(OUT_DIR, `${name}.pptx`);
-      await writeFile(p, buf);
+      await writeFileWithRetry(p, buf);
       results.push({ name, format: 'pptx', ms, bytes: buf.length });
       console.log(`  ✓ pptx ${buf.length} bytes / ${ms} ms → ${p}`);
     } catch (err) {

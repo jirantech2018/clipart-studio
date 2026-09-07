@@ -1,21 +1,29 @@
 // PDF 렌더러 — Puppeteer(-core) + (선택) @sparticuz/chromium.
 //
-// LearningDocument → HTML → Chromium 페이지 렌더 → PDF Buffer.
-// Phase 0 검증 목표: 한글 폰트(Pretendard), 표·이미지 배치, 페이지 자동 분할,
-// A4 인쇄 규격, Railway 콜드 스타트/메모리 실측.
-//
-// 로컬(Windows/Mac): useLocalChrome=true + localChromePath 로 시스템 크롬 사용.
-// Railway(Node): useLocalChrome=false → @sparticuz/chromium 자동 사용.
+// v2 (Phase 0.5) 개선:
+//   - 고아 페이지 방지: heading 뒤에 최소 콘텐츠 유지, answer-key 통째로 유지,
+//     question / activity 는 절대 분할 X, orphans/widows 3 이상.
+//   - 학생용 / 교사용 / combined 세 variant 지원 (RenderOptions.answerVariant).
+//   - 이미지 원본 비율 유지 (loadImage 가 반환하는 width/height 활용).
+//   - 캡션·최대 크기·정렬 규칙 반영.
 
 import puppeteer, { type Browser } from 'puppeteer-core';
 
-import { loadImage } from './image-loader';
+import { fitDimensions, loadImage } from './image-loader';
 import type { LearningDocument, Section } from './schema';
+
+export type AnswerVariant = 'student' | 'teacher' | 'combined';
 
 export interface RenderPdfOptions {
   /** 로컬 개발 시 시스템 크롬 사용. Railway 배포는 false 로 두어 @sparticuz/chromium 로드. */
   useLocalChrome?: boolean;
   localChromePath?: string;
+  /**
+   * - 'student'   : answer-key 섹션 제외 + question.answer 숨김
+   * - 'teacher'   : answer-key 만 (짧은 정답·해설지)
+   * - 'combined'  : 기본. 학생 문제 + 뒤에 정답·해설
+   */
+  answerVariant?: AnswerVariant;
 }
 
 async function launchBrowser(options: RenderPdfOptions): Promise<Browser> {
@@ -30,8 +38,6 @@ async function launchBrowser(options: RenderPdfOptions): Promise<Browser> {
       headless: true,
     });
   }
-  // Railway / Linux serverless — @sparticuz/chromium 로드 (dynamic import 로
-  // 로컬 개발 환경에서 미설치 상태여도 로드 시점에만 요구되도록).
   const { default: chromium } = await import('@sparticuz/chromium');
   return puppeteer.launch({
     args: chromium.args,
@@ -44,15 +50,12 @@ export async function renderPdf(
   doc: LearningDocument,
   options: RenderPdfOptions = {},
 ): Promise<Buffer> {
-  const html = await documentToHtml(doc);
+  const variant = options.answerVariant ?? 'combined';
+  const html = await documentToHtml(doc, variant);
   const browser = await launchBrowser(options);
   try {
     const page = await browser.newPage();
-    // localhost 자원이 아니라 CDN 폰트 + 인라인 base64 이미지만 사용하므로
-    // networkidle0 대신 domcontentloaded 로 충분. 페이지 로드 대기 늘리려면
-    // 폰트 로드 확인 로직을 추가.
     await page.setContent(html, { waitUntil: 'load' });
-    // 폰트가 로드될 때까지 잠깐 대기 (Pretendard woff2 fetch).
     await page.evaluate(async () => {
       if ('fonts' in document) {
         await (document as unknown as { fonts: { ready: Promise<void> } }).fonts.ready;
@@ -71,13 +74,29 @@ export async function renderPdf(
 
 // ============================================================
 // LearningDocument → HTML 문자열 변환.
-// Phase 0 은 시각 검증 목적이므로 CSS 는 인라인 style 로만 유지 (외부 CSS 파일 X).
-// Pretendard woff2 는 CDN 링크로 삽입. 이미지 section 은 base64 data URL 로
-// 인라인 (외부 네트워크 의존 최소화).
 // ============================================================
-export async function documentToHtml(doc: LearningDocument): Promise<string> {
-  const parts = await Promise.all(doc.sections.map(sectionToHtml));
+export async function documentToHtml(
+  doc: LearningDocument,
+  variant: AnswerVariant,
+): Promise<string> {
+  // variant 별 sections 필터링:
+  //  - student  : answer-key 제외
+  //  - teacher  : answer-key 만 (제목·헤더는 유지)
+  //  - combined : 전부
+  const sections = filterSections(doc.sections, variant);
+
+  const parts = await Promise.all(
+    sections.map((s) => sectionToHtml(s, variant)),
+  );
   const body = parts.join('\n');
+
+  const variantBadge =
+    variant === 'student'
+      ? '학생용 (정답 제외)'
+      : variant === 'teacher'
+        ? '교사용 정답·해설'
+        : '학생용 + 정답·해설';
+
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -102,46 +121,136 @@ export async function documentToHtml(doc: LearningDocument): Promise<string> {
     color: #1a1a1a;
     line-height: 1.6;
     font-size: 12pt;
+    orphans: 3;
+    widows: 3;
   }
-  h1 { font-size: 20pt; margin: 0 0 8pt; color: #2d2f77; }
-  h2 { font-size: 14pt; margin: 16pt 0 6pt; color: #2d2f77; }
-  h3 { font-size: 12pt; margin: 12pt 0 4pt; color: #2d2f77; }
-  p { margin: 4pt 0; }
-  table { width: 100%; border-collapse: collapse; margin: 8pt 0; }
+  /* 제목 계열은 뒤 콘텐츠와 분리되지 않도록 강제. */
+  h1, h2, h3 {
+    color: #2d2f77;
+    page-break-after: avoid;
+    break-after: avoid-page;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+  }
+  h1 { font-size: 20pt; margin: 0 0 8pt; }
+  h2 { font-size: 14pt; margin: 16pt 0 6pt; }
+  h3 { font-size: 12pt; margin: 12pt 0 4pt; }
+  p { margin: 4pt 0; orphans: 3; widows: 3; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8pt 0;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+  }
   th, td { border: 1px solid #cbd5e1; padding: 6pt 8pt; text-align: left; vertical-align: top; }
   th { background: #eef1ff; font-weight: 700; }
-  .meta-bar { border-top: 2px solid #2d2f77; border-bottom: 1px solid #cbd5e1; padding: 8pt 0; margin-bottom: 12pt; font-size: 10pt; color: #64748b; }
-  .callout { border-left: 4px solid #2d2f77; background: #f5f7ff; padding: 8pt 10pt; margin: 8pt 0; }
+  .meta-bar {
+    border-top: 2px solid #2d2f77;
+    border-bottom: 1px solid #cbd5e1;
+    padding: 8pt 0;
+    margin-bottom: 12pt;
+    font-size: 10pt;
+    color: #64748b;
+    page-break-after: avoid;
+    break-after: avoid-page;
+  }
+  .variant-badge {
+    display: inline-block;
+    background: #eef1ff;
+    color: #2d2f77;
+    padding: 2pt 8pt;
+    border-radius: 4pt;
+    font-weight: 700;
+    margin-left: 6pt;
+  }
+  .callout {
+    border-left: 4px solid #2d2f77;
+    background: #f5f7ff;
+    padding: 8pt 10pt;
+    margin: 8pt 0;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+  }
   .callout.warn { border-color: #ef4444; background: #fef2f2; }
   .callout.tip { border-color: #059669; background: #f0fdf4; }
-  .question { margin: 10pt 0; page-break-inside: avoid; }
+  /* 문항·활동 블록은 절대 분할 금지. */
+  .question, .activity {
+    margin: 10pt 0;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+    orphans: 4;
+    widows: 4;
+  }
   .question .stem { font-weight: 600; }
   .question ol.choices { padding-left: 20pt; margin: 4pt 0; }
   .question .hint { font-size: 10pt; color: #64748b; margin-top: 4pt; }
-  .activity { border: 1px solid #cbd5e1; border-radius: 6pt; padding: 8pt 10pt; margin: 8pt 0; page-break-inside: avoid; }
+  .question .inline-answer { font-size: 10pt; color: #059669; margin-top: 4pt; font-weight: 700; }
+  .activity {
+    border: 1px solid #cbd5e1;
+    border-radius: 6pt;
+    padding: 8pt 10pt;
+  }
   .activity .title { font-weight: 700; color: #2d2f77; }
   .activity ol { padding-left: 20pt; }
-  .answer-key { margin-top: 24pt; padding-top: 12pt; border-top: 2px dashed #cbd5e1; page-break-before: auto; }
+  /* 정답·해설 통째 유지 시도 — 짧으면 이전 콘텐츠와 함께, 길면 자연 분할. */
+  .answer-key {
+    margin-top: 24pt;
+    padding-top: 12pt;
+    border-top: 2px dashed #cbd5e1;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+  }
+  .answer-key.forced-new-page {
+    page-break-before: always;
+    break-before: page;
+  }
   .rubric-cell { font-size: 10pt; }
-  figure { margin: 8pt 0; text-align: center; page-break-inside: avoid; }
+  figure {
+    margin: 8pt auto;
+    text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+  }
   figure img { max-width: 100%; }
-  figure figcaption { font-size: 10pt; color: #64748b; margin-top: 4pt; }
+  figure figcaption {
+    font-size: 10pt;
+    color: #64748b;
+    margin-top: 4pt;
+    font-style: italic;
+  }
 </style>
 </head>
 <body>
 <div class="meta-bar">
-  ${escapeHtml(doc.meta.title)}
-  &nbsp;·&nbsp; ${doc.meta.grade}학년 · ${SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject}
-  ${doc.meta.estimatedMinutes ? `&nbsp;·&nbsp; 예상 ${doc.meta.estimatedMinutes}분` : ''}
+  <strong>${escapeHtml(doc.meta.title)}</strong>
+  <span class="variant-badge">${escapeHtml(variantBadge)}</span>
   <br />
-  <span>AI 초안이며 교사 검토가 필요합니다.</span>
+  ${doc.meta.grade}학년 · ${SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject}
+  ${doc.meta.estimatedMinutes ? `· 예상 ${doc.meta.estimatedMinutes}분` : ''}
+  · AI 초안이며 교사 검토가 필요합니다.
 </div>
 ${body}
 </body>
 </html>`;
 }
 
-async function sectionToHtml(section: Section): Promise<string> {
+// variant 별 sections 필터링.
+function filterSections(sections: Section[], variant: AnswerVariant): Section[] {
+  if (variant === 'combined') return sections;
+  if (variant === 'student') return sections.filter((s) => s.kind !== 'answer-key');
+  // teacher: heading 을 유지해 문서 맥락을 살리되 학생용 활동/문항 본문은 제외.
+  // 대신 answer-key + rubric + heading level 1 만 남긴다.
+  return sections.filter(
+    (s) =>
+      s.kind === 'answer-key' ||
+      s.kind === 'rubric' ||
+      (s.kind === 'heading' && s.level === 1) ||
+      s.kind === 'callout',
+  );
+}
+
+async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<string> {
   switch (section.kind) {
     case 'heading':
       return `<h${section.level}>${escapeHtml(section.text)}</h${section.level}>`;
@@ -160,7 +269,12 @@ async function sectionToHtml(section: Section): Promise<string> {
       const hint = section.hint
         ? `<div class="hint">💡 ${escapeHtml(section.hint)}</div>`
         : '';
-      return `<div class="question">${stem}${choices}${hint}</div>`;
+      // combined 만 인라인 답 표시 (교사가 함께 보는 인쇄용). student 는 숨김.
+      const inlineAnswer =
+        variant === 'combined' && section.answer
+          ? `<div class="inline-answer">정답: ${escapeHtml(section.answer)}</div>`
+          : '';
+      return `<div class="question">${stem}${choices}${hint}${inlineAnswer}</div>`;
     }
     case 'activity': {
       const title = section.title
@@ -195,15 +309,16 @@ async function sectionToHtml(section: Section): Promise<string> {
       return `<table>${caption}${head}<tbody>${body}</tbody></table>`;
     }
     case 'image': {
-      // Phase 0: image-loader 가 로컬 파일 또는 http URL 을 base64 data URL 로 변환.
-      // Phase 1: source==='clipart' 인 경우 R2 URL 조회 후 로드.
       try {
         const img = await loadImage(section.assetRef);
+        // 페이지 폭 (A4 - margin) 대비 widthPct 로 목표 폭 결정.
+        // 최대 80% 로 상한.
+        const capped = Math.min(section.widthPct ?? 60, 80);
         const caption = section.caption
           ? `<figcaption>${escapeHtml(section.caption)}</figcaption>`
           : '';
-        return `<figure><img src="${img.dataUrl}" style="width:${section.widthPct ?? 60}%" alt="" />${caption}</figure>`;
-      } catch (err) {
+        return `<figure><img src="${img.dataUrl}" style="width:${capped}%; height:auto;" alt="" />${caption}</figure>`;
+      } catch {
         return `<figure><em>[이미지 로드 실패: ${escapeHtml(section.assetRef)}]</em></figure>`;
       }
     }
@@ -228,7 +343,6 @@ async function sectionToHtml(section: Section): Promise<string> {
       return `<table>${rows}</table>`;
     }
     case 'slide-break':
-      // PDF 에는 페이지 분할 힌트로만 사용 (강제 개행 없음, pptx 전용).
       return '<!-- slide-break -->';
     default:
       return '';

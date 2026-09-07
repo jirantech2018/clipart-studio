@@ -1,8 +1,10 @@
 // DOCX 렌더러 — `docx` npm.
 //
-// LearningDocument → Word 문서 Buffer.
-// Phase 0 검증: 한글 폰트(문서 내 지정만, embed 없음 → 열람 환경 폰트 사용),
-// 표·이미지, 실제 Word/한컴오피스 편집 가능 여부.
+// v2 (Phase 0.5) 개선:
+//   - 한글 fallback: styles.default.document.run.font 에 { name, hint: 'eastAsia' }
+//     로 지정 → MS Word / 한컴오피스에서 Pretendard 없어도 시스템 한글 폰트 fallback.
+//   - 이미지 원본 비율 유지 (loadImage 가 반환하는 width/height 활용).
+//   - answerVariant 옵션 지원 (student / teacher / combined).
 
 import {
   AlignmentType,
@@ -19,12 +21,39 @@ import {
   convertMillimetersToTwip,
 } from 'docx';
 
-import { loadImage } from './image-loader';
+import { fitDimensions, loadImage } from './image-loader';
 import type { LearningDocument, Section } from './schema';
 
-export async function renderDocx(doc: LearningDocument): Promise<Buffer> {
-  const nested = await Promise.all(doc.sections.map(sectionToDocxChildren));
+export type AnswerVariant = 'student' | 'teacher' | 'combined';
+
+export interface RenderDocxOptions {
+  answerVariant?: AnswerVariant;
+}
+
+// Word/한컴오피스가 열 때 폰트 우선순위:
+//   1) Pretendard (사용자 컴퓨터에 설치돼 있으면)
+//   2) 없으면 문서 내 지정한 폰트가 없다는 이유로 시스템 기본 한글 폰트 사용
+// docx 라이브러리는 fonts 필드를 { ascii, eastAsia } 로 나눠 지정할 수 있다.
+const FONT_STACK = { name: 'Pretendard' } as const;
+
+export async function renderDocx(
+  doc: LearningDocument,
+  options: RenderDocxOptions = {},
+): Promise<Buffer> {
+  const variant = options.answerVariant ?? 'combined';
+  const sections = filterSections(doc.sections, variant);
+
+  const nested = await Promise.all(
+    sections.map((s) => sectionToDocxChildren(s, variant)),
+  );
   const children = nested.flat();
+
+  const variantBadge =
+    variant === 'student'
+      ? '학생용 (정답 제외)'
+      : variant === 'teacher'
+        ? '교사용 정답·해설'
+        : '학생용 + 정답·해설';
 
   const document = new Document({
     creator: '우리학교 클립아트스튜디오',
@@ -32,7 +61,9 @@ export async function renderDocx(doc: LearningDocument): Promise<Buffer> {
     styles: {
       default: {
         document: {
-          run: { font: 'Pretendard' },
+          run: {
+            font: FONT_STACK,
+          },
         },
       },
     },
@@ -52,19 +83,29 @@ export async function renderDocx(doc: LearningDocument): Promise<Buffer> {
           new Paragraph({
             children: [
               new TextRun({
-                text: `${doc.meta.title} · ${doc.meta.grade}학년 · ${SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject}`,
+                text: doc.meta.title,
                 bold: true,
                 color: '2D2F77',
+                size: 28,
+                font: FONT_STACK,
+              }),
+              new TextRun({
+                text: `  [${variantBadge}]`,
+                bold: true,
+                color: '2D2F77',
+                size: 20,
+                font: FONT_STACK,
               }),
             ],
           }),
           new Paragraph({
             children: [
               new TextRun({
-                text: 'AI 초안이며 교사 검토가 필요합니다.',
+                text: `${doc.meta.grade}학년 · ${SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject}${doc.meta.estimatedMinutes ? ` · 예상 ${doc.meta.estimatedMinutes}분` : ''} · AI 초안이며 교사 검토가 필요합니다.`,
                 italics: true,
                 color: '64748B',
                 size: 18,
+                font: FONT_STACK,
               }),
             ],
             spacing: { after: 200 },
@@ -79,9 +120,24 @@ export async function renderDocx(doc: LearningDocument): Promise<Buffer> {
   return Buffer.from(buffer);
 }
 
+function filterSections(sections: Section[], variant: AnswerVariant): Section[] {
+  if (variant === 'combined') return sections;
+  if (variant === 'student') return sections.filter((s) => s.kind !== 'answer-key');
+  return sections.filter(
+    (s) =>
+      s.kind === 'answer-key' ||
+      s.kind === 'rubric' ||
+      (s.kind === 'heading' && s.level === 1) ||
+      s.kind === 'callout',
+  );
+}
+
 type DocxChild = Paragraph | Table;
 
-async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
+async function sectionToDocxChildren(
+  section: Section,
+  variant: AnswerVariant,
+): Promise<DocxChild[]> {
   switch (section.kind) {
     case 'heading': {
       const level =
@@ -93,74 +149,137 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
       return [
         new Paragraph({
           heading: level,
-          children: [new TextRun({ text: section.text, bold: true, color: '2D2F77' })],
+          children: [
+            new TextRun({
+              text: section.text,
+              bold: true,
+              color: '2D2F77',
+              font: FONT_STACK,
+            }),
+          ],
           spacing: { before: 240, after: 120 },
+          keepNext: true, // 뒤 콘텐츠와 붙어 있도록.
         }),
       ];
     }
 
     case 'paragraph':
       return [
-        new Paragraph({ children: [new TextRun(section.text)], spacing: { after: 100 } }),
+        new Paragraph({
+          children: [new TextRun({ text: section.text, font: FONT_STACK })],
+          spacing: { after: 100 },
+        }),
       ];
 
     case 'callout':
       return [
         new Paragraph({
-          children: [new TextRun({ text: section.text, italics: true })],
+          children: [
+            new TextRun({ text: section.text, italics: true, font: FONT_STACK }),
+          ],
           spacing: { before: 100, after: 100 },
         }),
       ];
 
     case 'question': {
       const number = section.number ? `${section.number}. ` : '';
-      const stemPara = new Paragraph({
-        children: [new TextRun({ text: `${number}${section.stem}`, bold: true })],
-        spacing: { before: 120, after: 60 },
-      });
-      const choicePs = (section.choices ?? []).map(
-        (c, i) =>
-          new Paragraph({
-            children: [new TextRun(`${i + 1}) ${c}`)],
-            spacing: { after: 40 },
-          }),
-      );
-      const hintP = section.hint
-        ? [
-            new Paragraph({
-              children: [new TextRun({ text: `💡 ${section.hint}`, italics: true, color: '64748B' })],
-              spacing: { after: 100 },
+      const paragraphs: Paragraph[] = [
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `${number}${section.stem}`,
+              bold: true,
+              font: FONT_STACK,
             }),
-          ]
-        : [];
-      return [stemPara, ...choicePs, ...hintP];
+          ],
+          spacing: { before: 120, after: 60 },
+          keepNext: true, // 문제와 선택지 붙어있게.
+        }),
+      ];
+      (section.choices ?? []).forEach((c, i) => {
+        paragraphs.push(
+          new Paragraph({
+            children: [new TextRun({ text: `${i + 1}) ${c}`, font: FONT_STACK })],
+            spacing: { after: 40 },
+            keepLines: true,
+          }),
+        );
+      });
+      if (section.hint) {
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `💡 ${section.hint}`,
+                italics: true,
+                color: '64748B',
+                font: FONT_STACK,
+              }),
+            ],
+            spacing: { after: 100 },
+          }),
+        );
+      }
+      if (variant === 'combined' && section.answer) {
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `정답: ${section.answer}`,
+                bold: true,
+                color: '059669',
+                font: FONT_STACK,
+              }),
+            ],
+            spacing: { after: 100 },
+          }),
+        );
+      }
+      return paragraphs;
     }
 
     case 'activity': {
-      const titleP = section.title
-        ? [
-            new Paragraph({
-              children: [new TextRun({ text: section.title, bold: true, color: '2D2F77' })],
-              spacing: { before: 120, after: 60 },
-            }),
-          ]
-        : [];
-      const stepPs = section.steps.map(
-        (s, i) =>
+      const paragraphs: Paragraph[] = [];
+      if (section.title) {
+        paragraphs.push(
           new Paragraph({
-            children: [new TextRun(`${i + 1}. ${s}`)],
-            spacing: { after: 40 },
+            children: [
+              new TextRun({
+                text: section.title,
+                bold: true,
+                color: '2D2F77',
+                font: FONT_STACK,
+              }),
+            ],
+            spacing: { before: 120, after: 60 },
+            keepNext: true,
           }),
-      );
-      const matsP = section.materials?.length
-        ? [
-            new Paragraph({
-              children: [new TextRun({ text: `준비물: ${section.materials.join(', ')}`, italics: true })],
-              spacing: { after: 60 },
-            }),
-          ]
-        : [];
-      return [...titleP, ...stepPs, ...matsP];
+        );
+      }
+      section.steps.forEach((s, i) => {
+        paragraphs.push(
+          new Paragraph({
+            children: [new TextRun({ text: `${i + 1}. ${s}`, font: FONT_STACK })],
+            spacing: { after: 40 },
+            keepLines: true,
+          }),
+        );
+      });
+      if (section.materials?.length) {
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `준비물: ${section.materials.join(', ')}`,
+                italics: true,
+                font: FONT_STACK,
+              }),
+            ],
+            spacing: { after: 60 },
+          }),
+        );
+      }
+      return paragraphs;
     }
 
     case 'table': {
@@ -173,7 +292,9 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
                 new TableCell({
                   children: [
                     new Paragraph({
-                      children: [new TextRun({ text: h, bold: true })],
+                      children: [
+                        new TextRun({ text: h, bold: true, font: FONT_STACK }),
+                      ],
                     }),
                   ],
                 }),
@@ -188,30 +309,37 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
             children: row.map(
               (c) =>
                 new TableCell({
-                  children: [new Paragraph({ children: [new TextRun(c)] })],
+                  children: [
+                    new Paragraph({
+                      children: [new TextRun({ text: c, font: FONT_STACK })],
+                    }),
+                  ],
                 }),
             ),
           }),
         );
       }
-      const table = new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        rows,
-      });
-      return [table, new Paragraph({ text: '', spacing: { after: 120 } })];
+      return [
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }),
+        new Paragraph({ text: '', spacing: { after: 120 } }),
+      ];
     }
 
     case 'image': {
-      // Phase 0: image-loader 로 로컬 파일 buffer 로드. Phase 1 에서는
-      // source==='clipart' 인 경우 R2 URL fetch 로 확장.
       try {
         const img = await loadImage(section.assetRef);
-        // docx ImageRun 은 픽셀 크기 지정. widthPct 를 A4 본문 폭 기준으로 환산.
-        // A4 - margin 좌우 18mm = 174mm ≈ 493 EMU. 여기선 화면 픽셀 620px 기준.
-        const targetWidthPx = Math.round(620 * ((section.widthPct ?? 60) / 100));
-        // 원본 비율 유지를 위한 근사값 — 4:3 가정 (샘플 클립아트).
-        const targetHeightPx = Math.round((targetWidthPx * 3) / 4);
-        const imageType = img.mime === 'image/jpeg' ? 'jpg' : img.mime === 'image/webp' ? 'png' : 'png';
+        // A4 - margin 좌우 18mm = 174mm ≈ 620px 로 가정. widthPct 로 target 폭 결정.
+        // 최대 80% 로 상한.
+        const cappedPct = Math.min(section.widthPct ?? 60, 80);
+        const targetWidthPx = Math.round(620 * (cappedPct / 100));
+        const dims = fitDimensions(
+          { width: img.width, height: img.height },
+          targetWidthPx,
+          // 이미지가 페이지 세로를 절반 이상 차지하지 않도록 max height 지정.
+          800,
+        );
+        const imageType =
+          img.mime === 'image/jpeg' ? 'jpg' : img.mime === 'image/webp' ? 'png' : 'png';
         const paragraphs: DocxChild[] = [
           new Paragraph({
             alignment: AlignmentType.CENTER,
@@ -219,10 +347,12 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
             children: [
               new ImageRun({
                 data: img.buffer,
-                transformation: { width: targetWidthPx, height: targetHeightPx },
+                transformation: { width: dims.width, height: dims.height },
                 type: imageType as 'png' | 'jpg',
               }),
             ],
+            keepNext: Boolean(section.caption),
+            keepLines: true,
           }),
         ];
         if (section.caption) {
@@ -235,6 +365,7 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
                   italics: true,
                   color: '64748B',
                   size: 18,
+                  font: FONT_STACK,
                 }),
               ],
               spacing: { after: 120 },
@@ -250,6 +381,7 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
                 text: `[이미지 로드 실패: ${section.assetRef}]`,
                 italics: true,
                 color: '9CA3AF',
+                font: FONT_STACK,
               }),
             ],
             alignment: AlignmentType.CENTER,
@@ -262,20 +394,36 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
     case 'answer-key': {
       const header = new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: '정답과 해설', bold: true, color: '2D2F77' })],
+        children: [
+          new TextRun({
+            text: '정답과 해설',
+            bold: true,
+            color: '2D2F77',
+            font: FONT_STACK,
+          }),
+        ],
         spacing: { before: 240, after: 120 },
+        keepNext: true,
       });
       const items = section.entries.map(
         (e) =>
           new Paragraph({
             children: [
-              new TextRun({ text: `${e.ref}. `, bold: true }),
-              new TextRun(`${e.answer}`),
+              new TextRun({ text: `${e.ref}. `, bold: true, font: FONT_STACK }),
+              new TextRun({ text: e.answer, font: FONT_STACK }),
               ...(e.rationale
-                ? [new TextRun({ text: ` — ${e.rationale}`, italics: true, color: '64748B' })]
+                ? [
+                    new TextRun({
+                      text: ` — ${e.rationale}`,
+                      italics: true,
+                      color: '64748B',
+                      font: FONT_STACK,
+                    }),
+                  ]
                 : []),
             ],
             spacing: { after: 60 },
+            keepLines: true,
           }),
       );
       return [header, ...items];
@@ -286,13 +434,23 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
         new TableRow({
           children: [
             new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: '평가 기준', bold: true })] })],
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: '평가 기준', bold: true, font: FONT_STACK }),
+                  ],
+                }),
+              ],
             }),
             ...(section.criteria[0]?.levels ?? []).map(
               (_, i) =>
                 new TableCell({
                   children: [
-                    new Paragraph({ children: [new TextRun({ text: `수준 ${i + 1}`, bold: true })] }),
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: `수준 ${i + 1}`, bold: true, font: FONT_STACK }),
+                      ],
+                    }),
                   ],
                 }),
             ),
@@ -304,12 +462,22 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
             new TableRow({
               children: [
                 new TableCell({
-                  children: [new Paragraph({ children: [new TextRun({ text: c.criterion, bold: true })] })],
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: c.criterion, bold: true, font: FONT_STACK }),
+                      ],
+                    }),
+                  ],
                 }),
                 ...c.levels.map(
                   (l) =>
                     new TableCell({
-                      children: [new Paragraph({ children: [new TextRun(l)] })],
+                      children: [
+                        new Paragraph({
+                          children: [new TextRun({ text: l, font: FONT_STACK })],
+                        }),
+                      ],
                     }),
                 ),
               ],
@@ -323,7 +491,6 @@ async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
     }
 
     case 'slide-break':
-      // docx 는 슬라이드 개념 없음 — 무시.
       return [];
 
     default:
