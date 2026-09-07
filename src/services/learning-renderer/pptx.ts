@@ -30,6 +30,7 @@ const FONT_BODY = 20;
 const FONT_CAPTION = 14;
 const FONT_FOOTER = 11;
 const COLOR_PRIMARY = '2D2F77';
+const COLOR_ACCENT = '059669';
 const COLOR_MUTED = '64748B';
 const COLOR_BG_SOFT = 'F5F7FF';
 // Phase 0.6 폰트 정책: Windows 기본 한글 폰트 '맑은 고딕' → PowerPoint / Keynote /
@@ -211,16 +212,13 @@ export async function renderPptx(
   return buf;
 }
 
+// Phase 0.7 재정의:
+//   - student  : answer-key 제외 (인라인 정답 X)
+//   - teacher  : 전체 유지 (인라인 정답 O, answer-key 도 유지)
+//   - combined : 전체 유지 (인라인 정답 X, 마지막 answer-key 슬라이드)
 function filterSections(sections: Section[], variant: AnswerVariant): Section[] {
-  if (variant === 'combined') return sections;
   if (variant === 'student') return sections.filter((s) => s.kind !== 'answer-key');
-  return sections.filter(
-    (s) =>
-      s.kind === 'answer-key' ||
-      s.kind === 'rubric' ||
-      (s.kind === 'heading' && s.level === 1) ||
-      s.kind === 'callout',
-  );
+  return sections;
 }
 
 // ============================================================
@@ -346,7 +344,19 @@ async function drawBody(
           valign: 'top',
         });
       }
-      // Phase 0.6: 인라인 정답 제거. 마지막 answer-key 슬라이드만 표시.
+      // Phase 0.7: teacher variant 만 인라인 정답 표시.
+      if (variant === 'teacher' && q.answer) {
+        anySlide.addText(`정답: ${q.answer}`, {
+          x: S.x,
+          y: 6.4,
+          w: S.w,
+          h: 0.4,
+          fontSize: FONT_BODY,
+          bold: true,
+          color: COLOR_ACCENT,
+          fontFace: FONT_STACK,
+        });
+      }
       if (q.hint) {
         anySlide.addText(`💡 ${q.hint}`, {
           x: S.x,

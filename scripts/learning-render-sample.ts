@@ -1,18 +1,23 @@
-// Phase 0.6 sample 실행 스크립트.
+// Phase 0.6/0.7 sample 실행 스크립트.
 //
 // 실행 (Windows PowerShell 또는 Git Bash):
-//   pnpm tsx scripts/learning-render-sample.ts
+//   pnpm tsx scripts/learning-render-sample.ts           # 전체 10개
+//   pnpm tsx scripts/learning-render-sample.ts --phase07 # 5개만 (재실증)
 //
-// 산출물 (총 10개):
+// 산출물 (전체 10개):
 //   ./tmp/phase-0/
 //     workbook-student.pdf         workbook-student.docx         workbook-student.pptx
 //     workbook-teacher.pdf         workbook-teacher.docx         workbook-teacher.pptx
 //     lessonPlan.pdf               lessonPlan.docx               lessonPlan.pptx
 //     openingSlides.pptx
 //
-// - workbook: 학생용(정답 제외) + 교사용(정답·해설만) 두 벌.
-// - lessonPlan: 교사 편집용 단일본 (combined).
-// - openingSlides: 발표용 PPT 단일본 (combined).
+// Phase 0.7 재실증 5개 (--phase07):
+//   lessonPlan.pdf, workbook-student.pdf,
+//   workbook-teacher.{pdf,docx,pptx}
+//
+// - student  : 문항·활동만 (정답 X)
+// - teacher  : 전체 문항·활동 + 인라인 정답 + 뒤 정답·해설
+// - combined : 학생용 문제지 뒤에 정답·해설 페이지 (인라인 X, 페이지 브레이크)
 //
 // 로컬 크롬 경로가 필요합니다. Windows 기본 위치를 자동 감지하며 없으면 환경변수:
 //   PPTR_LOCAL_CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"
@@ -102,6 +107,16 @@ interface Result {
   variant: AnswerVariant;
   ms: number;
   bytes: number;
+  pages?: number;
+}
+
+// PDF 페이지 수 대략 카운트 (pdfinfo 미의존).
+// PDF 표준: /Type /Page (Pages 아님) 오브젝트 개수 = 페이지 수.
+// PDF 는 latin1 안전.
+function countPdfPages(buf: Buffer): number {
+  const text = buf.toString('latin1');
+  const matches = text.match(/\/Type\s*\/Page(?!s)/g);
+  return matches ? matches.length : 0;
 }
 
 async function renderJob(
@@ -124,11 +139,38 @@ async function renderJob(
   return { buf, ms: Math.round(performance.now() - t0) };
 }
 
+// Phase 0.7 재실증 필터 — 사용자가 요청한 5개 파일만.
+const PHASE07_FILES = new Set([
+  'lessonPlan.pdf',
+  'workbook-student.pdf',
+  'workbook-teacher.pdf',
+  'workbook-teacher.docx',
+  'workbook-teacher.pptx',
+]);
+
+function selectJobs(phase07: boolean): Job[] {
+  if (!phase07) return JOBS;
+  return JOBS.map((job) => ({
+    ...job,
+    formats: job.formats.filter((f) => PHASE07_FILES.has(`${job.fileBase}.${f}`)),
+  })).filter((j) => j.formats.length > 0);
+}
+
 async function main() {
+  const phase07 = process.argv.includes('--phase07');
+  const jobs = selectJobs(phase07);
+  const totalPlanned = jobs.reduce((a, j) => a + j.formats.length, 0);
+
   await mkdir(OUT_DIR, { recursive: true });
   const results: Result[] = [];
 
-  for (const job of JOBS) {
+  if (phase07) {
+    console.log(`\n[Phase 0.7] 재실증 모드 — 5개만 재생성`);
+  } else {
+    console.log(`\n[Phase 0.6] 전체 모드 — ${totalPlanned}개 산출물 생성`);
+  }
+
+  for (const job of jobs) {
     console.log(
       `\n=== ${job.fileBase}  (variant=${job.variant}) — ${job.doc.meta.title} ===`,
     );
@@ -140,11 +182,20 @@ async function main() {
         const filename = `${job.fileBase}.${format}`;
         const p = path.join(OUT_DIR, filename);
         await writeFileWithRetry(p, buf);
-        results.push({ file: filename, format, variant: job.variant, ms, bytes: buf.length });
+        const pages = format === 'pdf' ? countPdfPages(buf) : undefined;
+        results.push({
+          file: filename,
+          format,
+          variant: job.variant,
+          ms,
+          bytes: buf.length,
+          pages,
+        });
+        const pagesSuffix = pages !== undefined ? ` / ${pages}p` : '';
         console.log(
           `  ✓ ${format.padEnd(4)} ${buf.length.toString().padStart(7)} bytes / ${ms
             .toString()
-            .padStart(5)} ms → ${p}`,
+            .padStart(5)} ms${pagesSuffix} → ${p}`,
         );
       } catch (err) {
         console.error(

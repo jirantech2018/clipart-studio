@@ -1,7 +1,27 @@
-# Learning Helper — Phase 0 실증 결과 (v3, 2026-09-07)
+# Learning Helper — Phase 0 실증 결과 (v4, 2026-09-07)
 
-> Phase 0.6 개선: 사용자 검토 후 5가지 구조·정책 문제 수정. 학생용/교사용 실물 분리
-> 산출 + PPT 과분할 해소 + 뷰어 기본 폰트 재설계.
+> Phase 0.7 개선: 사용자 검토 후 2가지 필수 수정 반영. lessonPlan.pdf **1페이지**
+> 달성 + teacher variant 를 "전체 문항 + 정답·해설" 로 재정의.
+>
+> Phase 0.6: 5가지 구조·정책 문제 수정 (학생/교사 분리 시도, PPT 과분할 해소, 폰트 정책).
+
+---
+
+## v4 개선 요약 (Phase 0.7 필수 2항목)
+
+| # | 요청 | 반영 |
+|---|---|---|
+| 1 | lessonPlan PDF 고아 페이지 재수정 | CSS 밀도 조정: body `line-height: 1.6→1.45`, `font-size: 12pt→11pt`, h1/h2/h3 · table · cell padding · callout · question 여백 일괄 축소. **lessonPlan.pdf 를 1페이지로 압축** (정규식 기반 페이지 카운트 검증) |
+| 2 | 교사용 문항 복원 | teacher variant 재정의: 학생용 문제지 **전체** + 문항 아래 **인라인 정답** + 뒤 정답·해설. 3렌더러 모두 반영. student 는 정답 완전 제외 유지 |
+| — | combined 페이지 분리 | 학생용 문제지와 정답·해설을 물리적 분리: PDF `.answer-key.forced-new-page` 활성, DOCX `pageBreakBefore` 활성 (Phase 0.7 추가) |
+
+### 사용자 확인 매트릭스 (Phase 0.7 승인 기준)
+
+| variant | 문항·활동 | 인라인 정답 | 정답·해설 페이지 |
+|---|:-:|:-:|:-:|
+| `student` | ✅ | ❌ | ❌ |
+| `teacher` | ✅ | ✅ | ✅ |
+| `combined` | ✅ | ❌ | ✅ (새 페이지) |
 
 ---
 
@@ -42,30 +62,38 @@
 
 ---
 
-## 생성된 10개 파일 (v3, 최신)
+## 생성된 파일 — Phase 0.7 재실증 5개 (최신)
+
+Phase 0.7 승인 기준으로 사용자가 요청한 5개만 재생성 (`pnpm tsx scripts/learning-render-sample.ts --phase07`). 나머지 5개는 Phase 0.6 산출물 유지.
+
+| # | 파일 | 포맷 | variant | 크기 (bytes) | 시간 (ms) | 페이지/슬라이드 |
+|--:|---|---|---|---:|---:|---:|
+| 1 | `workbook-student.pdf` | pdf | student | 62,674 | 1,539 | **1p** |
+| 2 | `workbook-teacher.pdf` | pdf | teacher | 70,271 | 1,782 | **1p** |
+| 3 | `workbook-teacher.docx` | docx | teacher | 9,885 | 65 | — |
+| 4 | `workbook-teacher.pptx` | pptx | teacher | 138,913 | 60 | 8 슬라이드 |
+| 5 | `lessonPlan.pdf` | pdf | combined | 198,842 | 2,538 | **1p** (v3: 2p) |
+
+**관찰 (v3 대비)**
+- `lessonPlan.pdf`: **2p → 1p 달성** — CSS 밀도 조정 (line-height 1.6→1.45, font-size 12pt→11pt, h2 여백 16→10pt, table cell padding 6/8→3/5pt, callout 8/10→5/8pt) 로 준비물 heading + 본문이 이전 섹션들과 함께 1페이지에 수렴
+- `workbook-teacher.pdf`: 22KB → **70KB** (student 62KB 보다 큼) — 전체 문항·활동 + 인라인 정답 + answer-key 모두 포함됨을 크기로 검증
+- `workbook-teacher.pptx`: 83KB → 138KB — 3 슬라이드 (Phase 0.6, answer-key 만) → 8 슬라이드 (문항·활동 슬라이드 복원)
+
+## Phase 0.6 산출물 (변경 없음, 참고)
 
 | # | 파일 | 포맷 | variant | 크기 (bytes) | 시간 (ms) | 슬라이드 수 |
 |--:|---|---|---|---:|---:|---:|
-| 1 | `workbook-student.pdf` | pdf | student | 62,322 | 1,492 | — |
-| 2 | `workbook-student.docx` | docx | student | 9,654 | 24 | — |
-| 3 | `workbook-student.pptx` | pptx | student | 108,482 | 14 | 5 |
-| 4 | `workbook-teacher.pdf` | pdf | teacher | 22,112 | 1,248 | — |
-| 5 | `workbook-teacher.docx` | docx | teacher | 9,349 | 7 | — |
-| 6 | `workbook-teacher.pptx` | pptx | teacher | 83,462 | 5 | 3 |
-| 7 | `lessonPlan.pdf` | pdf | combined | 199,184 | 1,590 | — |
-| 8 | `lessonPlan.docx` | docx | combined | 189,483 | 33 | — |
-| 9 | `lessonPlan.pptx` | pptx | combined | 340,368 | 22 | 8 |
-| 10 | `openingSlides.pptx` | pptx | combined | 99,414 | 3 | **5** |
+| 1 | `workbook-student.docx` | docx | student | 9,654 | 24 | — |
+| 2 | `workbook-student.pptx` | pptx | student | 108,482 | 14 | 5 |
+| 3 | `lessonPlan.docx` | docx | combined | 189,483 | 33 | — |
+| 4 | `lessonPlan.pptx` | pptx | combined | 340,368 | 22 | 8 |
+| 5 | `openingSlides.pptx` | pptx | combined | 99,414 | 3 | 5 |
 
-**관찰 (v2 대비)**
-- `openingSlides.pptx`: **9 → 5 슬라이드** (section-cover 4개 제거 효과 확인)
-- `workbook.pptx`: 9 → 5 (표지 + 문항 3 + 활동 1 + text 없음, section-cover 폐지)
-- `workbook-student.pdf` 62KB / `workbook-teacher.pdf` 22KB → 학생용은 학습지 전체 / 교사용은 answer-key + heading 만 (사이즈 격차가 정상적으로 분리 확인)
-- 문항이 학생용에서 인라인 정답 없이 순수 문제만 표시됨
+> teacher variant 로직 변경이 있으므로 필요시 `pnpm tsx scripts/learning-render-sample.ts` (인자 없음) 로 전체 10개 재생성 가능.
 
 ---
 
-## v3 렌더러 세부 규칙
+## v4 렌더러 세부 규칙
 
 ### PDF (`src/services/learning-renderer/pdf.ts`)
 
@@ -76,13 +104,19 @@
   3. `Malgun Gothic` (Windows 로컬)
   4. `Apple SD Gothic Neo` (macOS 로컬)
   5. `HCR Dotum` (한컴 함초롬돋움) → `sans-serif`
-- **고아 페이지 방지 (Phase 0.6)**:
-  - `groupIntoSectionBlocks()` — heading + 뒤 non-heading 섹션을 하나의 `<div class="section-block">` 로 묶음
-  - `.section-block { break-inside: avoid-page }` → 짧은 블록이 페이지 잔여 높이에 못 들어가면 이전 섹션과 함께 이동
-  - `answer-key` 는 자체 처리 (standalone group)
-  - 추가로 heading `break-after: avoid-page`, question/activity `break-inside: avoid-page`, `orphans/widows: 3`
+- **밀도 조정 (Phase 0.7)**:
+  - body `line-height: 1.45` (v3: 1.6), `font-size: 11pt` (v3: 12pt)
+  - h1 18pt · h2 13pt · h3 11.5pt (여백 축소)
+  - table cell padding 3/5pt (v3: 6/8pt), table margin 4pt (v3: 8pt)
+  - callout padding 5/8pt (v3: 8/10pt), margin 4pt (v3: 8pt)
+  - .question/.activity margin 6pt (v3: 10pt)
+  - .activity padding 5/8pt (v3: 8/10pt)
+- **고아 페이지 방지 (Phase 0.6+0.7)**:
+  - `groupIntoSectionBlocks()` — heading + 뒤 non-heading 섹션을 `<div class="section-block">` 로 묶음
+  - `.section-block { break-inside: avoid-page }`
+  - `answer-key` 는 standalone group. **combined variant 일 때 `.forced-new-page` 클래스 활성** → 학생용 문제지와 정답·해설을 물리적 분리
 - 이미지: 원본 비율 유지, 최대 폭 80%, 캡션 이탤릭 회색
-- **인라인 정답 제거**: variant 무관하게 문항 내부에는 정답 표시 X. `answer-key` 섹션만 사용
+- **인라인 정답 (Phase 0.7)**: `teacher` variant 만 문항 하단에 표시. `student`/`combined` 는 숨김
 
 ### DOCX (`src/services/learning-renderer/docx.ts`)
 
@@ -94,8 +128,9 @@
   - `hint: 'eastAsia'` 로 CJK 문자에 명시 매핑
 - **`keepNext` / `keepLines`**: heading 뒤 콘텐츠 · 문항 stem 과 선택지 붙어있게
 - 이미지: `sharp` 원본 dimensions → `fitDimensions(w=목표px, maxH=800px)` 로 비율 유지
-- **인라인 정답 제거**: `combined` 도 마지막 `정답과 해설` heading + 목록만 사용
-- 학생/교사 variant 지원
+- **인라인 정답 (Phase 0.7)**: `teacher` variant 만 문항 하단에 초록색 굵은 글자로 표시
+- **정답·해설 페이지 브레이크 (Phase 0.7)**: `combined` variant 는 정답과 해설 heading 앞에 `pageBreakBefore: true` 로 새 페이지 시작
+- 학생/교사 variant 지원 (student=문제만, teacher=전체+인라인, combined=전체+뒤 페이지)
 
 ### PPTX (`src/services/learning-renderer/pptx.ts`)
 
@@ -113,24 +148,35 @@
 - **최소 폰트**: 본문 20pt / 제목 32pt / 문항 24pt / 선택지 22pt
 - 이미지: sharp 원본 dimensions + `fitDimensions(maxHeight=4.8in)`, 중앙 정렬, 캡션
 - **AI `slide-break` 힌트**: 텍스트 버퍼 flush 만 트리거
-- **인라인 정답 제거**: variant 무관
-- 학생/교사 variant 지원
+- **인라인 정답 (Phase 0.7)**: `teacher` variant 만 문항 슬라이드 하단 (y=6.4) 에 초록 굵은 글자
+- 학생/교사 variant 지원 (student=문제만, teacher=전체+인라인, combined=전체+마지막 answer-key 슬라이드)
 
 ---
 
-## Answer Variant 옵션 (실행 확인)
+## Answer Variant 옵션 (Phase 0.7 재정의)
 
 세 렌더러 모두 `RenderOptions.answerVariant?: 'student' | 'teacher' | 'combined'` 지원.
 
-| variant | 학생용 문제 | 인라인 정답 | answer-key 섹션 | 산출 예시 |
-|---|:-:|:-:|:-:|---|
-| `combined` (기본) | ✅ | ❌ (v3 제거) | ✅ 문서 뒤 | `lessonPlan.*`, `openingSlides.pptx` |
-| `student` | ✅ | ❌ 제거 | ❌ 제외 | `workbook-student.*` |
-| `teacher` | ❌ heading + callout 만 | (해당 없음) | ✅ 별도 문서 | `workbook-teacher.*` |
+| variant | 학생용 문항·활동 | 인라인 정답 | answer-key 섹션 | 페이지 분리 | 산출 예시 |
+|---|:-:|:-:|:-:|:-:|---|
+| `student` | ✅ | ❌ | ❌ 제외 | — | `workbook-student.*` |
+| `teacher` | ✅ | ✅ 문항 아래 | ✅ 뒤에 표시 | — | `workbook-teacher.*` |
+| `combined` | ✅ | ❌ | ✅ 뒤에 표시 | ✅ 새 페이지 | `lessonPlan.pdf` (answer-key 없어 실제로는 발생 X) |
 
 ---
 
-## 사용자 검증 항목 (v3 재검토)
+## Phase 0.7 승인 기준 (필수)
+
+- [x] **lessonPlan.pdf 가 1페이지** — 정규식 기반 페이지 카운트로 검증 (실사용 시 Adobe/브라우저에서 재확인 권장)
+- [x] **workbook-teacher 에 모든 문항 포함** — 파일 크기 22KB(v3) → 70KB(v4) 로 검증, teacher variant 는 전체 섹션 + 인라인 정답
+- [x] **workbook-student 에 정답 노출 없음** — answer-key 섹션 필터 제외 + 인라인 정답 표시 조건 `variant === 'teacher'`
+- [ ] **DOCX/PPTX 를 Windows Office 에서 열었을 때 한글 정상 표시** — 사용자 스크린샷 대기 (MS Word / 한컴 / PowerPoint / Google Slides 또는 LibreOffice)
+
+승인 기준 충족 시 Phase 1 (UI · API · R2 · 클립아트 연동) 착수.
+
+---
+
+## 사용자 검증 항목 (v3 → v4 확장)
 
 ### B-1 세 포맷 내용 일치
 - [ ] `workbook-student`: pdf/docx/pptx 텍스트 순서·문항 번호 일치
@@ -166,10 +212,12 @@
 - [ ] 한컴 로 `workbook-teacher.docx` 편집
 - [ ] PowerPoint 로 `openingSlides.pptx` 편집 (슬라이드 순서 변경, 도형 편집)
 
-### B-7 학생용 / 교사용 분리 (v3 신규)
-- [ ] `workbook-student.pdf` 에 정답·해설이 **전혀 없음**
-- [ ] `workbook-teacher.pdf` 에 학생용 문제 본문이 **전혀 없음** (정답·해설만)
-- [ ] `workbook-student.pptx` 마지막 슬라이드가 `정답과 해설` 이 **아님** (활동 or text 로 끝)
+### B-7 학생용 / 교사용 분리 (v4 재정의)
+- [ ] `workbook-student.pdf` 에 정답·해설이 **전혀 없음** (인라인 X, answer-key X)
+- [ ] `workbook-teacher.pdf` 에 학생용 문제 본문이 **모두 포함** + 각 문항 아래 초록색 정답 표시 + 뒤에 정답·해설
+- [ ] `workbook-student.pptx` 마지막 슬라이드가 `정답과 해설` 이 **아님**
+- [ ] `workbook-teacher.pptx` 문항 슬라이드 하단에 초록색 `정답: X` 표시
+- [ ] `lessonPlan.pdf` combined variant 는 answer-key 섹션이 없어 1페이지
 
 ---
 
@@ -181,8 +229,12 @@
 | 2 | Fixed v3 | combined variant 이중 정답 (인라인 + 마지막 answer-key) | 인라인 정답 3렌더러 모두 제거 |
 | 3 | Fixed v3 | 뷰어 폰트 Pretendard 만 지정 (실제로는 fallback 아님) | DOCX/PPTX 는 `맑은 고딕` + `hint: eastAsia`, PDF 는 Noto Sans KR CDN 추가 |
 | 4 | Fixed v3 | PPT 과분할 (openingSlides 9 슬라이드) | section-cover 폐지, heading L1 은 다음 슬라이드 타이틀로 흡수 → 5 슬라이드 |
-| 5 | Info | Windows 파일 잠금 (Word/PPT 열려있으면 재저장 실패) | 스크립트 재시도 로직 유지 (5회 × 800ms) |
-| 6 | 계획 | Railway 실증 & R2 파이프라인 | 로컬 검증 승인 후 별도 스텝 |
+| 5 | Fixed v4 | lessonPlan.pdf 2페이지 (준비물이 v3 이후에도 다음 페이지로 분리) | CSS 밀도 조정 (line-height/font-size/여백/셀패딩) → 1페이지 |
+| 6 | Fixed v4 | teacher variant 에 문항이 사라지고 정답만 있음 (v3 오해) | teacher = 전체 문항·활동 + 인라인 정답 + answer-key 로 재정의 |
+| 7 | Fixed v4 | combined variant 학생용 문제와 정답이 붙어 있음 | PDF `.forced-new-page`, DOCX `pageBreakBefore` 로 분리 |
+| 8 | Info | Windows 파일 잠금 (Word/PPT 열려있으면 재저장 실패) | 스크립트 재시도 로직 유지 (5회 × 800ms) |
+| 9 | Info | pdfinfo 미의존 페이지 카운트 | 스크립트 내부 `countPdfPages()` 정규식 (`/Type /Page`) 사용. 실사용 검증은 사용자가 뷰어에서 재확인 |
+| 10 | 계획 | Railway 실증 & R2 파이프라인 | 로컬 검증 승인 후 별도 스텝 |
 
 ---
 
@@ -217,6 +269,6 @@
 - 스키마: `src/services/learning-renderer/schema.ts`
 - Sample: `src/services/learning-renderer/sample.ts`
 - 이미지 로더: `src/services/learning-renderer/image-loader.ts`
-- 렌더러: `src/services/learning-renderer/{pdf,docx,pptx}.ts` (v3)
-- 실행 스크립트: `scripts/learning-render-sample.ts` (v3, 10개 jobs)
+- 렌더러: `src/services/learning-renderer/{pdf,docx,pptx}.ts` (v4)
+- 실행 스크립트: `scripts/learning-render-sample.ts` (v4, `--phase07` 플래그로 5개만 재생성)
 - Sample 삽입 이미지: `public/generate-v2_intro_01.png`

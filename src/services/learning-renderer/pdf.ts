@@ -141,11 +141,13 @@ export async function documentToHtml(
     font-display: swap;
   }
   * { box-sizing: border-box; }
+  /* Phase 0.7 밀도 조정: line-height 1.6 → 1.45, font-size 12pt → 11pt
+     로 lessonPlan 1페이지 목표 (평가계획 · 준비물이 한 페이지에 들어가도록). */
   body {
     font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', 'HCR Dotum', sans-serif;
     color: #1a1a1a;
-    line-height: 1.6;
-    font-size: 12pt;
+    line-height: 1.45;
+    font-size: 11pt;
     orphans: 3;
     widows: 3;
   }
@@ -164,18 +166,18 @@ export async function documentToHtml(
     page-break-inside: avoid;
     break-inside: avoid-page;
   }
-  h1 { font-size: 20pt; margin: 0 0 8pt; }
-  h2 { font-size: 14pt; margin: 16pt 0 6pt; }
-  h3 { font-size: 12pt; margin: 12pt 0 4pt; }
-  p { margin: 4pt 0; orphans: 3; widows: 3; }
+  h1 { font-size: 18pt; margin: 0 0 6pt; }
+  h2 { font-size: 13pt; margin: 10pt 0 4pt; }
+  h3 { font-size: 11.5pt; margin: 8pt 0 3pt; }
+  p { margin: 2pt 0; orphans: 3; widows: 3; }
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 8pt 0;
+    margin: 4pt 0;
     page-break-inside: avoid;
     break-inside: avoid-page;
   }
-  th, td { border: 1px solid #cbd5e1; padding: 6pt 8pt; text-align: left; vertical-align: top; }
+  th, td { border: 1px solid #cbd5e1; padding: 3pt 5pt; text-align: left; vertical-align: top; }
   th { background: #eef1ff; font-weight: 700; }
   .meta-bar {
     border-top: 2px solid #2d2f77;
@@ -199,8 +201,8 @@ export async function documentToHtml(
   .callout {
     border-left: 4px solid #2d2f77;
     background: #f5f7ff;
-    padding: 8pt 10pt;
-    margin: 8pt 0;
+    padding: 5pt 8pt;
+    margin: 4pt 0;
     page-break-inside: avoid;
     break-inside: avoid-page;
   }
@@ -208,7 +210,7 @@ export async function documentToHtml(
   .callout.tip { border-color: #059669; background: #f0fdf4; }
   /* 문항·활동 블록은 절대 분할 금지. */
   .question, .activity {
-    margin: 10pt 0;
+    margin: 6pt 0;
     page-break-inside: avoid;
     break-inside: avoid-page;
     orphans: 4;
@@ -221,7 +223,7 @@ export async function documentToHtml(
   .activity {
     border: 1px solid #cbd5e1;
     border-radius: 6pt;
-    padding: 8pt 10pt;
+    padding: 5pt 8pt;
   }
   .activity .title { font-weight: 700; color: #2d2f77; }
   .activity ol { padding-left: 20pt; }
@@ -309,19 +311,14 @@ function groupIntoSectionBlocks(sections: Section[]): SectionGroup[] {
   return groups;
 }
 
-// variant 별 sections 필터링.
+// variant 별 sections 필터링 (Phase 0.7 재정의):
+//   - combined : 학생용 문제지 + 뒤에 정답·해설 (인라인 정답 X)
+//   - student  : 학생용 문제지만 (answer-key 제외, 인라인 정답 X)
+//   - teacher  : 학생용 문제지 전체 + 인라인 정답 표시 + 뒤 정답·해설도 유지
+//                (교사가 수업 중 참고하는 완전판)
 function filterSections(sections: Section[], variant: AnswerVariant): Section[] {
-  if (variant === 'combined') return sections;
   if (variant === 'student') return sections.filter((s) => s.kind !== 'answer-key');
-  // teacher: heading 을 유지해 문서 맥락을 살리되 학생용 활동/문항 본문은 제외.
-  // 대신 answer-key + rubric + heading level 1 만 남긴다.
-  return sections.filter(
-    (s) =>
-      s.kind === 'answer-key' ||
-      s.kind === 'rubric' ||
-      (s.kind === 'heading' && s.level === 1) ||
-      s.kind === 'callout',
-  );
+  return sections;
 }
 
 async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<string> {
@@ -343,8 +340,13 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       const hint = section.hint
         ? `<div class="hint">💡 ${escapeHtml(section.hint)}</div>`
         : '';
-      // Phase 0.6: 인라인 정답 완전 제거. combined 는 마지막 answer-key 섹션만 사용.
-      return `<div class="question">${stem}${choices}${hint}</div>`;
+      // Phase 0.7: teacher variant 만 인라인 정답 표시 (수업 중 참고용).
+      // student 는 숨김, combined 는 마지막 answer-key 섹션만 사용.
+      const inlineAnswer =
+        variant === 'teacher' && section.answer
+          ? `<div class="inline-answer">정답: ${escapeHtml(section.answer)}</div>`
+          : '';
+      return `<div class="question">${stem}${choices}${hint}${inlineAnswer}</div>`;
     }
     case 'activity': {
       const title = section.title
@@ -399,7 +401,9 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
             `<li><strong>${escapeHtml(e.ref)}</strong>: ${escapeHtml(e.answer)}${e.rationale ? ` <span class="hint">— ${escapeHtml(e.rationale)}</span>` : ''}</li>`,
         )
         .join('');
-      return `<div class="answer-key"><h2>정답과 해설</h2><ol>${items}</ol></div>`;
+      // Phase 0.7: combined variant 는 학생용 문제지와 정답·해설을 물리적으로 분리.
+      const cls = variant === 'combined' ? 'answer-key forced-new-page' : 'answer-key';
+      return `<div class="${cls}"><h2>정답과 해설</h2><ol>${items}</ol></div>`;
     }
     case 'rubric': {
       const rows = section.criteria

@@ -125,16 +125,13 @@ export async function renderDocx(
   return Buffer.from(buffer);
 }
 
+// Phase 0.7 재정의:
+//   - student  : answer-key 제외 (인라인 정답 X)
+//   - teacher  : 전체 유지 (인라인 정답 O, answer-key 도 유지)
+//   - combined : 전체 유지 (인라인 정답 X, 마지막 answer-key + 페이지 브레이크)
 function filterSections(sections: Section[], variant: AnswerVariant): Section[] {
-  if (variant === 'combined') return sections;
   if (variant === 'student') return sections.filter((s) => s.kind !== 'answer-key');
-  return sections.filter(
-    (s) =>
-      s.kind === 'answer-key' ||
-      s.kind === 'rubric' ||
-      (s.kind === 'heading' && s.level === 1) ||
-      s.kind === 'callout',
-  );
+  return sections;
 }
 
 type DocxChild = Paragraph | Table;
@@ -225,7 +222,22 @@ async function sectionToDocxChildren(
           }),
         );
       }
-      // Phase 0.6: 인라인 정답 제거. combined 도 마지막 answer-key 섹션만 사용.
+      // Phase 0.7: teacher variant 만 인라인 정답 표시.
+      if (variant === 'teacher' && section.answer) {
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `정답: ${section.answer}`,
+                bold: true,
+                color: '059669',
+                font: FONT_STACK,
+              }),
+            ],
+            spacing: { after: 100 },
+          }),
+        );
+      }
       return paragraphs;
     }
 
@@ -383,6 +395,7 @@ async function sectionToDocxChildren(
     }
 
     case 'answer-key': {
+      // Phase 0.7: combined 는 학생용 문제지와 정답·해설을 물리적으로 분리.
       const header = new Paragraph({
         heading: HeadingLevel.HEADING_2,
         children: [
@@ -395,6 +408,7 @@ async function sectionToDocxChildren(
         ],
         spacing: { before: 240, after: 120 },
         keepNext: true,
+        pageBreakBefore: variant === 'combined',
       });
       const items = section.entries.map(
         (e) =>
