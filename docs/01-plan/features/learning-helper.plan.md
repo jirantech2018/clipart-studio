@@ -1,6 +1,6 @@
-# Learning Helper — 초등 학습지·활동지 생성 AI (Feasibility & Plan v0.3)
+# Learning Helper — 초등 학습지·활동지 생성 AI (Feasibility & Plan v0.4)
 
-**Status**: **Phase 0 착수 승인 (2026-09-04)**
+**Status**: **Phase 1 조건부 착수 승인 (2026-09-07)** — Windows Office 폰트 검증은 배포 전 필수 게이트
 **Author date**: 2026-09-04
 **Source directive**: `docs/00-pm/learning-helper.prd.md` (원본 md: 사용자 첨부, UTF-8 저장 필요)
 **Placement target**: `clipart-studio` 프로젝트 내부, `/organization/*/generate` 옆에 신규 서브 페이지로 통합
@@ -8,7 +8,8 @@
 **Version history**
 - v0.1 — 초안. PDF만 Phase 1, Word Phase 2, PPT Phase 3(선택).
 - v0.2 — 세 포맷(PDF/Word/PPT) 모두 Phase 1에 포함. §2·§5·§8·§9 갱신.
-- **v0.3** — Phase 0 착수 승인. D-1/D-4/D-13 확정. slide-break 정책 확정. Phase 0 검증 항목 상세화.
+- v0.3 — Phase 0 착수 승인. D-1/D-4/D-13 확정. slide-break 정책 확정. Phase 0 검증 항목 상세화.
+- **v0.4** — Phase 0.7 완료 후 Phase 1 조건부 착수 승인. Phase 1 을 사용자 지시 순서에 따라 M1~M7 마일스톤으로 재구성. Windows Office 한글 호환성을 pre-deploy gate 로 §8.5 신설.
 
 ---
 
@@ -307,24 +308,119 @@ interface LearningDocument {
 
 **Gate**: 사용자 검토 후 Phase 1 착수 승인. Puppeteer 리소스 문제 확인 시 react-pdf fallback 결정.
 
-### Phase 1 — MVP (v0.3, 3~4주)
-- [ ] Migration 078~081: subjects, common_topics, material_types, learning_documents
-- [ ] Seed (**v0.3 확장**): **1~6학년 국어/수학** common_topics (약 120~140개), material_types **5종** (OX 퀴즈 / 객관식 / 개별 활동지 / 개념 정리 / 읽기 자료)
-- [ ] `/organization/[slug]/learning` 페이지 UI
-  - 학년 선택: **1학년~6학년 각각** 선택 가능 (학년군 X)
-  - 과목: 국어/수학만 (Phase 1)
-  - 자료유형: 5종
-  - 주제: AI 추천 3개 + 직접 입력
-- [ ] `POST /api/learning/recommendations` — AI 주제 3개 추천
-- [ ] `POST /api/learning/jobs` — 문서 생성 job 시작 (크레딧 예약)
-- [ ] `GET /api/learning/jobs/[id]/stream` — SSE 미리보기 (LearningDocument JSON 스트림)
-- [ ] **PDF 렌더러** (`services/learning-renderer/pdf.ts`) + `POST /api/learning/documents/[id]/render?format=pdf`
-- [ ] **Word 렌더러** (`services/learning-renderer/docx.ts`) + `?format=docx`
-- [ ] **PPT 렌더러** (`services/learning-renderer/pptx.ts`) + `?format=pptx`
-- [ ] 자료유형별 기본 포맷 지정 매트릭스 UI 반영 (§2.4)
-- [ ] 사용자 라이브러리에 "내가 만든 학습지" 탭 추가 (세 포맷 아이콘 노출)
-- [ ] 포맷별 안내 문구 UI (한글 폰트 fallback, 슬라이드 분할 제한 등)
-- **완료 조건**: 교사 1인이 1주간 실사용 후 세 포맷 모두 인쇄·편집·발표 활용 확인
+**Phase 0 실제 실행 결과 (2026-09-07 완료)**
+- Phase 0.5 → 0.6 → 0.7 3차 반복. 최종 승인 사항은 [`docs/03-analysis/learning-helper-phase-0.md`](../../03-analysis/learning-helper-phase-0.md) v4 참조
+- 세 포맷 모두 실증 완료. teacher variant = 전체+인라인 정답, combined = 학생용+뒤 페이지 정답, student = 문제만
+- lessonPlan.pdf 1페이지 압축 성공. openingSlides.pptx 5슬라이드 (과분할 해소)
+- Windows Office 한글 표시 검증은 아직 미완료 → §8.5 pre-deploy gate 참조
+
+### Phase 1 — MVP (v0.4, 사용자 지시 M1~M7 순서, 3~4주)
+
+Phase 0.7 승인 사항 (2026-09-07): 사용자 지정 진행 순서에 따라 아래 M1~M7 마일스톤 단위로 순차 착수. 각 마일스톤은 M{n} 완료 리뷰 → 다음 마일스톤 착수 순.
+
+Renderer 는 Phase 0.7 완료 (`services/learning-renderer/`). 렌더러 외 모든 것을 M1~M7 로 구축.
+
+#### M1 — 수직 슬라이스: 학생용 PDF 생성 골든 패스 (사용자 지시, 2026-09-07 확정)
+
+> **M1 의 완료 기준은 백엔드 파일 생성이 아니라, 사용자가 브라우저에서 학년·과목·자료유형·주제를 입력하고 AI 학습자료를 생성해 미리보고 한 가지 포맷으로 내려받는 전체 흐름을 경험할 수 있는 상태이다.**
+>
+> M1 은 배포된 테스트 화면에서 사용자가 직접 사용할 수 있어야 하며, 코드 목록이나 API 로그만 전달하는 것으로는 완료로 간주하지 않는다.
+
+**M1 데모 시나리오 (fixed)**
+1. `/organization/[slug]/learning` 접속
+2. 학년: **1학년** / 과목: **국어** 선택
+3. 자료유형: **객관식** 또는 **개별 활동지** 선택
+4. 단원·주제: 직접 입력 또는 AI 추천 3개 중 선택
+5. "생성" 클릭 → **학생용** 결과물 생성
+6. 브라우저에서 미리보기
+7. **PDF 다운로드**
+
+**M1 구현 항목 (수직 슬라이스 순서, 각각이 위 흐름의 한 단계를 채움)**
+
+*데이터 · 저장 (범위 축소)*
+- [ ] Migration 078: `subjects` (국어·수학 2행 seed)
+- [ ] Migration 079: `common_topics` — **1~2학년 국·수만 seed** (전체 120~140개 seed 는 M1 검증 후 M2 이후 3~6학년 확대. 확대 판단 기준은 아래 M1 관측 항목)
+- [ ] Migration 080: `material_types` (5종 seed — OX 퀴즈 / 객관식 / 개별 활동지 / 개념 정리 / 읽기 자료. M1 UI 는 이 중 객관식·개별 활동지 우선 노출)
+- [ ] Migration 081: `learning_documents` (문서 저장 + RLS)
+
+*Job 파이프라인 (기존 확장)*
+- [ ] `generation_jobs.kind` enum 에 **`'learning_doc'` 추가** (Migration 082 예상)
+- [ ] payload/result JSON schema 를 kind 별로 분리 (이미지 생성 로직과 학습자료 생성 로직이 섞이지 않도록 handler 분리)
+  - `services/jobs/handlers/image-gen.ts` (기존 이미지 생성 로직 이동)
+  - `services/jobs/handlers/learning-doc.ts` (신규)
+  - `services/jobs/dispatcher.ts` — kind 로 handler 라우팅
+- [ ] 기존 SSE·진행 상태·오류 처리 구조는 그대로 재사용
+- [ ] Phase 1 운영 중 재시도/상태 정책이 크게 달라지면 그때 `learning_jobs` 분리 재검토 (지금은 확장이 옳음)
+
+*AI 오케스트레이션*
+- [ ] `services/openai/learning-prompt.ts` — M1 은 **객관식·개별 활동지 2종** 프롬프트 템플릿만 (나머지 3종은 M2)
+- [ ] `services/learning-orchestrator/index.ts` — GPT-4o structured output → LearningDocument JSON 파싱 + zod 검증
+
+*API*
+- [ ] `POST /api/learning/documents` — 크레딧 예약 → job 생성 → 결과 반환
+- [ ] `POST /api/learning/recommendations` — 학년·과목·자료유형 기반 3개 추천
+
+*UI (수직 슬라이스의 사용자 접점)*
+- [ ] `/organization/[slug]/learning` + `/organization/my/learning` 페이지
+- [ ] `features/learning-helper/` 도메인 모듈 신설
+- [ ] `LearningInputForm` — 학년(1~2 노출) · 과목(국어·수학) · 자료유형(5종, 객관식·개별활동지 강조) · 주제(직접 입력 or AI 추천 3개) · 문항 수 · 난이도
+- [ ] `LearningPreview` — LearningDocument 를 브라우저에서 HTML 로 렌더 (PDF 렌더러의 `documentToHtml()` 재사용)
+- [ ] "PDF 다운로드" 버튼 (student variant only) — 서버 렌더 후 R2 저장 + 서명 URL 다운로드
+
+*배포*
+- [ ] Railway 배포 확인 (기존 clipartstudio.schoolp.co.kr 도메인 재사용, 신규 라우트만 추가)
+- [ ] 사용자에게 배포된 URL 전달
+
+**M1 완료 관측 항목** (완료 후 M2 착수 전 사용자와 함께 확인)
+- 주제 분류 방식이 자연스러운지
+- 학년별 수준이 적절한지
+- 단원과 주제를 별도 필드로 둘지 (지금은 하나의 필드)
+- AI 추천 3개가 실제로 유용한지
+- 직접 입력 vs 추천 선택 중 어느 사용성이 좋은지
+
+**M2~M7 은 M1 관측 결과 반영 후 확장** — 자료유형 확장 · Word/PPT · teacher/answerKey/combined variant · 클립아트 연동 · 3~6학년 seed 확장 · 라이브러리 통합.
+
+#### M2 — 자료유형·학년 seed 확장
+- [ ] common_topics 3~6학년 국·수 확장 (M1 관측 항목 반영)
+- [ ] 자료유형 5종 프롬프트 완성 (M1 은 객관식·개별 활동지 2종만)
+- [ ] 자료유형별 UI 안내 문구 (§2.4 매트릭스 반영)
+- [ ] 사이드바 nav "학습지 만들기" 항목 추가
+- **완료 조건**: 3~6학년까지 M1 데모 흐름 통과
+
+#### M3 — Word · PPT 포맷 추가
+- [ ] `POST /api/learning/documents/[id]/render?format=docx|pptx` 활성 (M1 은 pdf 만)
+- [ ] 다운로드 버튼 확장 (PDF / DOCX / PPTX)
+- [ ] Railway `@sparticuz/chromium` 실증 (콜드/웜 시간, RSS 피크) → `docs/03-analysis/learning-helper-railway.md`
+- [ ] R2 캐싱: 같은 (docId, format, variant) 재요청 시 hit
+- **완료 조건**: 3포맷 모두 R2 에 저장되고 서명 URL 로 다운로드 가능
+
+#### M4 — 학생용·교사용·정답지·통합본 variant 선택 기능
+- [ ] `answerVariant` UI (student / teacher / answerKey / combined)
+- [ ] `answerKey` variant 렌더러 신설 (현재 3렌더러는 student/teacher/combined 3개) — schema 및 렌더러 확장
+- [ ] 자료유형 × variant 부적합 안내 문구 (§2.4)
+- [ ] **Pre-deploy gate §8.5 실행**: Windows Office 뷰어 실측 스크린샷 확보 → 통과 시 배포, 실패 시 폰트 정책 재조정
+- **완료 조건**: 4 variant × 3 format = 12 조합 모두 다운로드 확인 + pre-deploy gate 통과
+
+#### M5 — R2 클립아트 검색·삽입 연결
+- [ ] `services/learning-renderer/image-loader.ts` — R2 프로토콜 (`r2://path` 또는 `clipart://imageId`) 지원 확장
+- [ ] 서버에서 `LearningDocument.sections[image]` 를 만나면 R2 signed URL 다운로드 → Buffer 로 렌더러 전달
+- [ ] `POST /api/learning/clipart-search` — 학년·과목·태그 기반 기존 images 테이블 검색 (기존 검색 API 재사용 검토)
+- [ ] AI 프롬프트에 "필요 시 clipart 검색 결과 중 이미지 assetRef 를 반환" 지시 추가 (Phase 1 은 자동 삽입은 최소, 사용자 수동 선택 UI 우선)
+- **완료 조건**: 샘플 문서에 실제 R2 클립아트가 삽입된 PDF/DOCX/PPTX 생성
+
+#### M6 — 미리보기 스트리밍 · 라이브러리 통합
+- [ ] SSE 미리보기: `GET /api/learning/documents/[id]/stream` — LearningDocument JSON 섹션 단위 스트림 (M1 은 완성 후 일괄 표시)
+- [ ] 라이브러리에 "내가 만든 학습지" 탭 (사용자 문서 목록 · 재다운로드)
+- [ ] 포맷별 안내 문구 (한글 폰트 fallback, 슬라이드 분할 제한)
+- **완료 조건**: 라이브러리에서 과거 생성 문서 재다운로드 가능
+
+#### M7 — 골든 패스 완주 + 교사 실사용 리뷰
+- [ ] 4 variant × 3 format 다운로드 → Windows Office 에서 열기까지 골든 패스 통과
+- [ ] 교사 1인 1주 실사용 (Phase 1 총 완료 조건)
+- [ ] 관측: 크레딧 정책 실사용 로그, 재생성 빈도, 다운로드 포맷 분포
+- **완료 조건**: 교사 1인이 폼 입력 → 미리보기 → 4 variant × 3 format 다운로드 → 실제 수업에 활용까지 완주
+
+**전체 완료 조건**: 교사 1인이 1주간 실사용 후 세 포맷 모두 인쇄·편집·발표 활용 확인.
 
 ### Phase 2 — 확장 (2주)
 - [ ] 나머지 학년/과목 seed (~620개 common_topics)
@@ -343,6 +439,31 @@ interface LearningDocument {
 - [ ] 다중 포맷 일괄 다운로드 (ZIP)
 
 **총 MVP 배포 목표**: **Phase 0+1 = 3~4주** (세 포맷 동시 지원 반영)
+
+### 8.5 Pre-deploy Gate — Windows Office 한글 호환성 (v0.4 신규)
+
+Phase 0.7 승인 조건: **Phase 1 진입은 허용하되, 실사용 배포 전에 아래 항목을 반드시 통과해야 한다.** 통과 후에만 실제 사용자에게 도메인·API 를 노출한다.
+
+**대상 파일** (Phase 0.7 5개 산출물 or Phase 1 M6 온디맨드 산출물):
+- workbook-student.docx / workbook-teacher.docx / lessonPlan.docx
+- workbook-student.pptx / workbook-teacher.pptx / lessonPlan.pptx / openingSlides.pptx
+
+**검증 매트릭스**:
+
+| 뷰어 | 필수/선택 | 확인 항목 |
+|---|---|---|
+| MS Word | 필수 | 한글 텍스트 정상 표시, 폰트 이름 표시가 `맑은 고딕`, 표·이미지 정상 |
+| 한컴오피스 한글 | 필수 | 한글 정상 표시, 폰트 이름이 `맑은 고딕` 또는 함초롬돋움 fallback, 문서 열림 오류 없음 |
+| MS PowerPoint | 필수 | 슬라이드 한글 정상, 폰트 `맑은 고딕`, 도형·표 손상 없음 |
+| Google Slides | 선택 | pptx import 시 한글 유지 |
+| LibreOffice Impress | 선택 | 대체 뷰어 실사용 케이스 |
+
+**실패 시 대응 (조건부 재조정)**:
+- 특정 뷰어에서 한글 깨짐 확인 → 해당 뷰어용 폰트 fallback 스택 조정 (예: DOCX 는 `맑은 고딕` + `함초롬돋움` + `Batang` 다단 지정, PPTX 는 `Malgun Gothic` 영문명 병기 등)
+- Noto Sans KR 을 DOCX/PPTX 에도 명시 (뷰어 호환성 개선 시)
+- 실패가 지속되면 폰트 embed (docx 는 `assets/fonts` embed, pptx 는 `pptxgenjs` embed 기능 검토)
+
+**결과 기록**: `docs/03-analysis/learning-helper-phase-0.md` 하단 "Windows Office Compatibility Screenshots" 섹션에 뷰어별 스크린샷 + 폰트 목록 캡처 첨부.
 
 ---
 

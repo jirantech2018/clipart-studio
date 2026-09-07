@@ -263,6 +263,27 @@ Phase 0.7 승인 기준으로 사용자가 요청한 5개만 재생성 (`pnpm ts
 
 ---
 
+## Windows Office Compatibility Screenshots (pre-deploy gate)
+
+Phase 0.7 승인 조건으로 사용자가 배포 전에 실측 캡처를 남겨야 하는 매트릭스. Phase 1 진입은 허용되지만 실제 도메인 노출 전 아래 표를 채워야 한다. 실패 시 폰트 정책 재조정.
+
+| 뷰어 | 파일 | 통과? | 폰트 이름 표시 | 스크린샷 경로 | 비고 |
+|---|---|:-:|---|---|---|
+| MS Word | workbook-teacher.docx | ⬜ | (예: 맑은 고딕) | `docs/03-analysis/office-screenshots/word-teacher.png` | |
+| MS Word | lessonPlan.docx | ⬜ | | `.../word-lesson.png` | |
+| 한컴오피스 | workbook-teacher.docx | ⬜ | | `.../hwp-teacher.png` | |
+| 한컴오피스 | lessonPlan.docx | ⬜ | | `.../hwp-lesson.png` | |
+| MS PowerPoint | workbook-teacher.pptx | ⬜ | | `.../ppt-teacher.png` | |
+| MS PowerPoint | openingSlides.pptx | ⬜ | | `.../ppt-opening.png` | |
+| Google Slides (선택) | openingSlides.pptx | ⬜ | | `.../gslides-opening.png` | |
+| LibreOffice (선택) | lessonPlan.docx | ⬜ | | `.../libre-lesson.png` | |
+
+**결과 처리**
+- 전 항목 통과 → 렌더러 폰트 정책 확정 (`맑은 고딕` + `hint: eastAsia`)
+- 실패 항목 있음 → `docs/01-plan/features/learning-helper.plan.md` §8.5 실패 시 대응 절차 적용
+
+---
+
 ## 참고 링크
 
 - 계획: [`docs/01-plan/features/learning-helper.plan.md`](../01-plan/features/learning-helper.plan.md)
