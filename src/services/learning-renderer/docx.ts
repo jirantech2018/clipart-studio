@@ -1,6 +1,11 @@
 // DOCX 렌더러 — `docx` npm.
 //
-// v2 (Phase 0.5) 개선:
+// v3 (Phase 0.6) 개선:
+//   - 폰트를 Windows 기본 한글 폰트 '맑은 고딕' 으로 지정 → MS Word / 한컴오피스
+//     100% 열림 보장. Pretendard 는 서버 렌더링 (PDF) 에서만 사용.
+//   - hint: 'eastAsia' 로 명시하여 한자·한글 영역에 확실히 매핑.
+//   - combined 인라인 정답 제거 (마지막 answer-key 섹션만).
+// v2 (Phase 0.5):
 //   - 한글 fallback: styles.default.document.run.font 에 { name, hint: 'eastAsia' }
 //     로 지정 → MS Word / 한컴오피스에서 Pretendard 없어도 시스템 한글 폰트 fallback.
 //   - 이미지 원본 비율 유지 (loadImage 가 반환하는 width/height 활용).
@@ -30,11 +35,11 @@ export interface RenderDocxOptions {
   answerVariant?: AnswerVariant;
 }
 
-// Word/한컴오피스가 열 때 폰트 우선순위:
-//   1) Pretendard (사용자 컴퓨터에 설치돼 있으면)
-//   2) 없으면 문서 내 지정한 폰트가 없다는 이유로 시스템 기본 한글 폰트 사용
-// docx 라이브러리는 fonts 필드를 { ascii, eastAsia } 로 나눠 지정할 수 있다.
-const FONT_STACK = { name: 'Pretendard' } as const;
+// Phase 0.6 폰트 정책 (DOCX 뷰어 = MS Word / 한컴오피스 / LibreOffice):
+//   - '맑은 고딕' 은 Windows 기본 한글 폰트로 사실상 모든 Word/한컴 환경에서 열림.
+//   - hint: 'eastAsia' 는 CJK 문자에 이 폰트를 명시 매핑 (docx OOXML 스펙).
+//   - Pretendard 브랜드 폰트는 PDF 서버 렌더링에서만 사용 (뷰어 미설치 위험 회피).
+const FONT_STACK = { name: '맑은 고딕', hint: 'eastAsia' } as const;
 
 export async function renderDocx(
   doc: LearningDocument,
@@ -220,21 +225,7 @@ async function sectionToDocxChildren(
           }),
         );
       }
-      if (variant === 'combined' && section.answer) {
-        paragraphs.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `정답: ${section.answer}`,
-                bold: true,
-                color: '059669',
-                font: FONT_STACK,
-              }),
-            ],
-            spacing: { after: 100 },
-          }),
-        );
-      }
+      // Phase 0.6: 인라인 정답 제거. combined 도 마지막 answer-key 섹션만 사용.
       return paragraphs;
     }
 

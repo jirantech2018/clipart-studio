@@ -1,6 +1,12 @@
 // PDF 렌더러 — Puppeteer(-core) + (선택) @sparticuz/chromium.
 //
-// v2 (Phase 0.5) 개선:
+// v3 (Phase 0.6) 개선:
+//   - section-block 그룹핑: heading + 뒤따르는 non-heading 섹션을 하나의 div 로
+//     묶어 break-inside: avoid-page 적용 → 고아 페이지 원천 차단.
+//   - combined 인라인 정답 제거: 정답은 answer-key 섹션에서만 노출.
+//   - 한글 폰트 fallback 강화: Pretendard · Noto Sans KR · 맑은 고딕 · Apple SD.
+//     서버 렌더링 시 Noto Sans KR CDN 로 한글 확실 확보.
+// v2 (Phase 0.5):
 //   - 고아 페이지 방지: heading 뒤에 최소 콘텐츠 유지, answer-key 통째로 유지,
 //     question / activity 는 절대 분할 X, orphans/widows 3 이상.
 //   - 학생용 / 교사용 / combined 세 variant 지원 (RenderOptions.answerVariant).
@@ -85,10 +91,20 @@ export async function documentToHtml(
   //  - combined : 전부
   const sections = filterSections(doc.sections, variant);
 
-  const parts = await Promise.all(
-    sections.map((s) => sectionToHtml(s, variant)),
+  // Phase 0.6: heading + 뒤따르는 non-heading 섹션을 section-block 으로 그룹핑.
+  // answer-key 는 자체적으로 break 처리하므로 그룹에서 제외.
+  const groups = groupIntoSectionBlocks(sections);
+
+  const groupHtmlList = await Promise.all(
+    groups.map(async (group) => {
+      const inner = await Promise.all(group.sections.map((s) => sectionToHtml(s, variant)));
+      if (group.standalone) {
+        return inner.join('\n');
+      }
+      return `<div class="section-block">\n${inner.join('\n')}\n</div>`;
+    }),
   );
-  const body = parts.join('\n');
+  const body = groupHtmlList.join('\n');
 
   const variantBadge =
     variant === 'student'
@@ -102,7 +118,16 @@ export async function documentToHtml(
 <head>
 <meta charset="utf-8" />
 <title>${escapeHtml(doc.meta.title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
+  /*
+   * Phase 0.6 폰트 정책 (PDF 서버 렌더링 전용):
+   *   1) Pretendard  — 브랜드 폰트 (jsDelivr CDN)
+   *   2) Noto Sans KR — Google Fonts. 서버에 한글 폰트 미설치여도 확실 fallback.
+   *   3) 로컬 시스템 한글 폰트 (Windows: Malgun Gothic / macOS: Apple SD)
+   */
   @font-face {
     font-family: 'Pretendard';
     src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Regular.woff2') format('woff2');
@@ -117,12 +142,19 @@ export async function documentToHtml(
   }
   * { box-sizing: border-box; }
   body {
-    font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', 'HCR Dotum', sans-serif;
     color: #1a1a1a;
     line-height: 1.6;
     font-size: 12pt;
     orphans: 3;
     widows: 3;
+  }
+  /* 섹션 그룹 — heading + 뒤따르는 non-heading 섹션을 한 페이지에 유지 시도.
+     그룹이 너무 커서 한 페이지에 안 들어가면 자연 분할되지만, 짧은
+     '준비물' 같은 블록이 혼자 다음 페이지로 밀리는 고아 페이지는 방지. */
+  .section-block {
+    page-break-inside: avoid;
+    break-inside: avoid-page;
   }
   /* 제목 계열은 뒤 콘텐츠와 분리되지 않도록 강제. */
   h1, h2, h3 {
@@ -235,6 +267,48 @@ ${body}
 </html>`;
 }
 
+// heading + 뒤따르는 non-heading 섹션을 하나의 section-block 으로 묶는다.
+// answer-key / image / table 처럼 자체적으로 break-inside: avoid-page 를 갖는
+// 큰 블록은 standalone: true 로 두어 이중 wrap 을 피한다.
+interface SectionGroup {
+  standalone: boolean;
+  sections: Section[];
+}
+
+function groupIntoSectionBlocks(sections: Section[]): SectionGroup[] {
+  const groups: SectionGroup[] = [];
+  let current: SectionGroup | null = null;
+
+  const flush = () => {
+    if (current && current.sections.length > 0) groups.push(current);
+    current = null;
+  };
+
+  for (const s of sections) {
+    // answer-key 는 자체 처리 (내부에 페이지 브레이크 힌트 존재).
+    if (s.kind === 'answer-key') {
+      flush();
+      groups.push({ standalone: true, sections: [s] });
+      continue;
+    }
+    if (s.kind === 'slide-break') {
+      // PDF 에서는 무시.
+      continue;
+    }
+    if (s.kind === 'heading') {
+      flush();
+      current = { standalone: false, sections: [s] };
+      continue;
+    }
+    if (!current) {
+      current = { standalone: false, sections: [] };
+    }
+    current.sections.push(s);
+  }
+  flush();
+  return groups;
+}
+
 // variant 별 sections 필터링.
 function filterSections(sections: Section[], variant: AnswerVariant): Section[] {
   if (variant === 'combined') return sections;
@@ -269,12 +343,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       const hint = section.hint
         ? `<div class="hint">💡 ${escapeHtml(section.hint)}</div>`
         : '';
-      // combined 만 인라인 답 표시 (교사가 함께 보는 인쇄용). student 는 숨김.
-      const inlineAnswer =
-        variant === 'combined' && section.answer
-          ? `<div class="inline-answer">정답: ${escapeHtml(section.answer)}</div>`
-          : '';
-      return `<div class="question">${stem}${choices}${hint}${inlineAnswer}</div>`;
+      // Phase 0.6: 인라인 정답 완전 제거. combined 는 마지막 answer-key 섹션만 사용.
+      return `<div class="question">${stem}${choices}${hint}</div>`;
     }
     case 'activity': {
       const title = section.title

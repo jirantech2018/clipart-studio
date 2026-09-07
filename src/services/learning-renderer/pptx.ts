@@ -1,20 +1,16 @@
 // PPTX 렌더러 — `pptxgenjs`.
 //
-// v2 (Phase 0.5) 대폭 재구성:
+// v3 (Phase 0.6) 개선:
+//   - 과분할 방지: section-cover 슬라이드 폐지. heading L1 을 만나면 별도 슬라이드를
+//     만들지 않고 currentSectionTitle 만 갱신 → 다음 콘텐츠 슬라이드의 상단 타이틀.
+//   - text 버퍼 크기 확대 (250 → 450자) 로 짧은 문단·콜아웃 병합.
+//   - 폰트를 Windows 기본 '맑은 고딕' 으로 지정 (PowerPoint / Keynote 100% 열림).
+//   - combined 인라인 정답 제거 (마지막 answer-key 슬라이드만).
+// v2 (Phase 0.5):
 //   - A4 문서 축소판이 아니라 발표용 슬라이드 레이아웃.
-//   - 자료유형별 레이아웃 결정:
-//       * question    → 한 슬라이드 = 큰 질문 하나 + 선택지 큰 글자
-//       * activity    → 한 슬라이드 = 활동 하나 (제목 + 단계 목록)
-//       * table       → 한 슬라이드 = 표 하나 (배경 대비 셀)
-//       * image       → 한 슬라이드 = 이미지 크게 + 캡션
-//       * paragraph/callout → heading level 1 하위로 묶여 텍스트 슬라이드
-//       * heading L1  → 새 섹션 표지 슬라이드
-//       * answer-key  → 마지막에 몰아서 별도 슬라이드
+//   - 자료유형별 레이아웃 결정 (question / activity / table / image / text / answer-key).
 //   - 최소 폰트: 본문 20pt, 제목 32pt, 문항 24pt (선택지 22pt).
-//   - 슬라이드당 최대 정보량: 문항 1개, 표 1개, 이미지 1개, 텍스트 250자.
-//   - 한글 fallback: fontFace 만 지정. Pretendard 없으면 열람 환경 폰트 사용.
 //   - 이미지 원본 비율 유지.
-//   - splitIntoSlides: AI slide-break 는 힌트로만, 최종 분할은 렌더러가 결정.
 
 import PptxGenJS from 'pptxgenjs';
 
@@ -34,10 +30,11 @@ const FONT_BODY = 20;
 const FONT_CAPTION = 14;
 const FONT_FOOTER = 11;
 const COLOR_PRIMARY = '2D2F77';
-const COLOR_ACCENT = '059669';
 const COLOR_MUTED = '64748B';
 const COLOR_BG_SOFT = 'F5F7FF';
-const FONT_STACK = 'Pretendard';
+// Phase 0.6 폰트 정책: Windows 기본 한글 폰트 '맑은 고딕' → PowerPoint / Keynote /
+// LibreOffice Impress 어디서든 열림. Pretendard 브랜드 폰트는 PDF 서버에서만.
+const FONT_STACK = '맑은 고딕';
 
 export type AnswerVariant = 'student' | 'teacher' | 'combined';
 
@@ -46,25 +43,29 @@ export interface RenderPptxOptions {
 }
 
 // ============================================================
-// 슬라이드 그룹핑 — 발표용 규칙.
-// heading level 1 은 표지 슬라이드로 분리, 각 question / activity /
-// image / table 은 자신만의 슬라이드. paragraph/callout 은 앞의 heading 과
-// 함께 텍스트 슬라이드로 묶이되 250자 초과 시 분할.
-// AI 힌트 slide-break 는 힌트만 (강제 분할 X, 이미 대체로 자연스러움).
+// 슬라이드 그룹핑 — Phase 0.6 발표용 규칙.
+// - heading L1: 별도 슬라이드 X. currentSectionTitle 만 갱신 → 다음 콘텐츠
+//   슬라이드의 상단 타이틀로 사용됨.
+// - question / activity / image / table / rubric: 각자 슬라이드 1개.
+// - paragraph / callout / heading L2/3: 텍스트 버퍼에 누적 → 450자 초과 또는
+//   heading L1 신호 시 flush.
+// - slide-break 힌트: 힌트만. flushText 트리거.
+// - answer-key: 마지막에 몰아서.
 // ============================================================
 export interface SlideChunk {
   kind:
     | 'cover'          // 문서 표지
-    | 'section-cover'  // 섹션 표지 (heading L1)
     | 'question'
     | 'activity'
     | 'table'
     | 'image'
-    | 'text'           // heading L2/3 + paragraph 묶음
+    | 'text'           // heading L2/3 + paragraph + callout 묶음
     | 'answer-key';
   title: string;
   sections: Section[];
 }
+
+const TEXT_BUFFER_LIMIT = 450;
 
 export function splitIntoSlides(doc: LearningDocument): SlideChunk[] {
   const chunks: SlideChunk[] = [
@@ -97,10 +98,10 @@ export function splitIntoSlides(doc: LearningDocument): SlideChunk[] {
       continue;
     }
 
+    // heading L1 은 별도 슬라이드를 만들지 않고 다음 콘텐츠 타이틀만 갱신.
     if (s.kind === 'heading' && s.level === 1) {
       flushText();
       currentSectionTitle = s.text;
-      chunks.push({ kind: 'section-cover', title: s.text, sections: [] });
       continue;
     }
 
@@ -118,7 +119,7 @@ export function splitIntoSlides(doc: LearningDocument): SlideChunk[] {
       flushText();
       chunks.push({
         kind: 'activity',
-        title: s.title ? `활동 · ${s.title}` : currentSectionTitle,
+        title: s.title ? `${currentSectionTitle} · ${s.title}` : currentSectionTitle,
         sections: [s],
       });
       continue;
@@ -146,7 +147,7 @@ export function splitIntoSlides(doc: LearningDocument): SlideChunk[] {
 
     if (s.kind === 'rubric') {
       flushText();
-      chunks.push({ kind: 'table', title: '평가 기준', sections: [s] });
+      chunks.push({ kind: 'table', title: `${currentSectionTitle} · 평가 기준`, sections: [s] });
       continue;
     }
 
@@ -157,7 +158,7 @@ export function splitIntoSlides(doc: LearningDocument): SlideChunk[] {
         : s.kind === 'heading'
           ? s.text.length
           : 0;
-    if (textBuffer && textBuffer.chars + chars > 250) {
+    if (textBuffer && textBuffer.chars + chars > TEXT_BUFFER_LIMIT) {
       flushText();
     }
     if (!textBuffer) {
@@ -315,21 +316,6 @@ async function drawBody(
       return;
     }
 
-    case 'section-cover': {
-      // 섹션 구분 표지 — 상단 헤더 이미 그렸으므로 본문에 부제만.
-      anySlide.addText('학습 목표에 맞춰 아래 내용을 함께 살펴봐요.', {
-        x: S.x,
-        y: 3.5,
-        w: S.w,
-        h: 0.8,
-        fontSize: FONT_BODY,
-        color: COLOR_MUTED,
-        align: 'center',
-        fontFace: FONT_STACK,
-      });
-      return;
-    }
-
     case 'question': {
       const q = chunk.sections[0];
       if (!q || q.kind !== 'question') return;
@@ -360,19 +346,7 @@ async function drawBody(
           valign: 'top',
         });
       }
-      // 인라인 정답 (combined only)
-      if (variant === 'combined' && q.answer) {
-        anySlide.addText(`정답: ${q.answer}`, {
-          x: S.x,
-          y: 6.4,
-          w: S.w,
-          h: 0.4,
-          fontSize: FONT_BODY,
-          bold: true,
-          color: COLOR_ACCENT,
-          fontFace: FONT_STACK,
-        });
-      }
+      // Phase 0.6: 인라인 정답 제거. 마지막 answer-key 슬라이드만 표시.
       if (q.hint) {
         anySlide.addText(`💡 ${q.hint}`, {
           x: S.x,
