@@ -1,6 +1,4 @@
-// @ts-nocheck — Phase 0 skeleton. 라이브러리 설치 후 제거: pnpm add pptxgenjs
-//
-// PPTX 렌더러 (Phase 0 skeleton) — pptxgenjs.
+// PPTX 렌더러 — `pptxgenjs`.
 //
 // D-12 확정: AI 응답의 slide-break 는 보조 힌트로만 사용. 최종 슬라이드 분할은
 // 이 렌더러가 다음 기준으로 결정한다.
@@ -13,12 +11,10 @@
 //   - 표 8행 초과 → 표만 별도 슬라이드
 //   - 이미지 2개 초과 → 새 슬라이드
 
-import type { LearningDocument, Section } from './schema';
+import PptxGenJS from 'pptxgenjs';
 
-async function loadPptx() {
-  const mod = await import('pptxgenjs');
-  return mod.default;
-}
+import { loadImage } from './image-loader';
+import type { LearningDocument, Section } from './schema';
 
 // 슬라이드 분할 기준값 (Phase 0 튜닝 대상).
 const SPLIT = {
@@ -110,7 +106,6 @@ export function splitIntoSlides(doc: LearningDocument): SlideChunk[] {
 // pptx 파일 생성.
 // ============================================================
 export async function renderPptx(doc: LearningDocument): Promise<Buffer> {
-  const PptxGenJS = await loadPptx();
   const pres = new PptxGenJS();
   pres.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 inch
   pres.author = '우리학교 클립아트스튜디오';
@@ -133,7 +128,7 @@ export async function renderPptx(doc: LearningDocument): Promise<Buffer> {
       color: '2D2F77',
       fontFace: 'Pretendard',
     });
-    slide.addShape('line', {
+    slide.addShape('line' as never, {
       x: 0.5,
       y: 1.3,
       w: 12.3,
@@ -143,7 +138,7 @@ export async function renderPptx(doc: LearningDocument): Promise<Buffer> {
 
     let cursorY = 1.6;
     for (const s of chunk.sections) {
-      const rendered = renderSection(slide, s, cursorY);
+      const rendered = await renderSection(slide, s, cursorY);
       cursorY += rendered.consumedHeight + 0.2;
     }
 
@@ -167,18 +162,21 @@ export async function renderPptx(doc: LearningDocument): Promise<Buffer> {
   return buf;
 }
 
+type PptxSlide = ReturnType<PptxGenJS['addSlide']>;
+
 // ============================================================
 // 단일 sections 렌더 (매우 단순 배치 — Phase 0 검증용).
 // Phase 1 에서는 자동 레이아웃 개선 필요.
 // ============================================================
-function renderSection(
-  slide: unknown,
+async function renderSection(
+  slide: PptxSlide,
   s: Section,
   y: number,
-): { consumedHeight: number } {
-  const anySlide = slide as {
+): Promise<{ consumedHeight: number }> {
+  const anySlide = slide as unknown as {
     addText: (t: string, o: Record<string, unknown>) => void;
     addTable: (rows: unknown[][], o: Record<string, unknown>) => void;
+    addImage: (o: Record<string, unknown>) => void;
   };
 
   const commonText = (fontSize: number, extra: Record<string, unknown> = {}) => ({
@@ -249,12 +247,37 @@ function renderSection(
       return { consumedHeight: rows.length * rowH + 0.2 };
     }
     case 'image':
-      anySlide.addText(`[이미지: ${s.assetRef}] (Phase 1 R2 매핑)`, {
-        ...commonText(11, { italic: true, color: '64748B' }),
-        y,
-        h: 0.4,
-      });
-      return { consumedHeight: 0.4 };
+      try {
+        const img = await loadImage(s.assetRef);
+        // 폭 pct 를 슬라이드 사용 폭 (11.9 in) 기준으로 환산.
+        const widthIn = 11.9 * ((s.widthPct ?? 60) / 100);
+        // 원본 비율 4:3 가정 (Phase 0 sample).
+        const heightIn = (widthIn * 3) / 4;
+        anySlide.addImage({
+          data: img.dataUrl,
+          x: (13.333 - widthIn) / 2,
+          y,
+          w: widthIn,
+          h: heightIn,
+        });
+        let consumed = heightIn;
+        if (s.caption) {
+          anySlide.addText(s.caption, {
+            ...commonText(11, { italic: true, color: '64748B', align: 'center' }),
+            y: y + heightIn + 0.05,
+            h: 0.3,
+          });
+          consumed += 0.35;
+        }
+        return { consumedHeight: consumed };
+      } catch {
+        anySlide.addText(`[이미지 로드 실패: ${s.assetRef}]`, {
+          ...commonText(11, { italic: true, color: '9CA3AF' }),
+          y,
+          h: 0.4,
+        });
+        return { consumedHeight: 0.4 };
+      }
     case 'answer-key':
       // 답안은 별도 슬라이드 만들거나 마지막에 몰기 — Phase 0 은 skip.
       return { consumedHeight: 0 };

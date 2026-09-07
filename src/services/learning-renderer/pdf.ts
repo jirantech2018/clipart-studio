@@ -1,48 +1,63 @@
-// @ts-nocheck — Phase 0 skeleton. 라이브러리 설치 후 제거:
-//   pnpm add puppeteer-core @sparticuz/chromium
-//   (Windows 로컬은 시스템 크롬 사용 → @sparticuz/chromium 불필요, useLocalChrome=true)
-//
-// PDF 렌더러 (Phase 0 skeleton) — Puppeteer + @sparticuz/chromium.
+// PDF 렌더러 — Puppeteer(-core) + (선택) @sparticuz/chromium.
 //
 // LearningDocument → HTML → Chromium 페이지 렌더 → PDF Buffer.
 // Phase 0 검증 목표: 한글 폰트(Pretendard), 표·이미지 배치, 페이지 자동 분할,
 // A4 인쇄 규격, Railway 콜드 스타트/메모리 실측.
+//
+// 로컬(Windows/Mac): useLocalChrome=true + localChromePath 로 시스템 크롬 사용.
+// Railway(Node): useLocalChrome=false → @sparticuz/chromium 자동 사용.
 
+import puppeteer, { type Browser } from 'puppeteer-core';
+
+import { loadImage } from './image-loader';
 import type { LearningDocument, Section } from './schema';
 
-// dynamic import — 라이브러리 미설치 상태에서 tsc 가 통과되도록.
-// 실제 실행 시 pnpm add puppeteer-core @sparticuz/chromium 필요.
-async function loadPuppeteer() {
-  const [{ default: chromium }, puppeteer] = await Promise.all([
-    import('@sparticuz/chromium'),
-    import('puppeteer-core'),
-  ]);
-  return { chromium, puppeteer: puppeteer.default };
-}
-
 export interface RenderPdfOptions {
-  /** 로컬 개발 시 시스템 크롬 사용. Railway 배포는 자동으로 @sparticuz/chromium. */
+  /** 로컬 개발 시 시스템 크롬 사용. Railway 배포는 false 로 두어 @sparticuz/chromium 로드. */
   useLocalChrome?: boolean;
   localChromePath?: string;
+}
+
+async function launchBrowser(options: RenderPdfOptions): Promise<Browser> {
+  if (options.useLocalChrome) {
+    if (!options.localChromePath) {
+      throw new Error(
+        'useLocalChrome=true 인데 localChromePath 가 지정되지 않았어요',
+      );
+    }
+    return puppeteer.launch({
+      executablePath: options.localChromePath,
+      headless: true,
+    });
+  }
+  // Railway / Linux serverless — @sparticuz/chromium 로드 (dynamic import 로
+  // 로컬 개발 환경에서 미설치 상태여도 로드 시점에만 요구되도록).
+  const { default: chromium } = await import('@sparticuz/chromium');
+  return puppeteer.launch({
+    args: chromium.args,
+    executablePath: await chromium.executablePath(),
+    headless: true,
+  });
 }
 
 export async function renderPdf(
   doc: LearningDocument,
   options: RenderPdfOptions = {},
 ): Promise<Buffer> {
-  const { chromium, puppeteer } = await loadPuppeteer();
-  const html = documentToHtml(doc);
-
-  const browser = await puppeteer.launch({
-    args: options.useLocalChrome ? [] : chromium.args,
-    executablePath: options.useLocalChrome
-      ? options.localChromePath
-      : await chromium.executablePath(),
-    headless: true,
-  });
+  const html = await documentToHtml(doc);
+  const browser = await launchBrowser(options);
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    // localhost 자원이 아니라 CDN 폰트 + 인라인 base64 이미지만 사용하므로
+    // networkidle0 대신 domcontentloaded 로 충분. 페이지 로드 대기 늘리려면
+    // 폰트 로드 확인 로직을 추가.
+    await page.setContent(html, { waitUntil: 'load' });
+    // 폰트가 로드될 때까지 잠깐 대기 (Pretendard woff2 fetch).
+    await page.evaluate(async () => {
+      if ('fonts' in document) {
+        await (document as unknown as { fonts: { ready: Promise<void> } }).fonts.ready;
+      }
+    });
     const buffer = await page.pdf({
       format: 'A4',
       margin: { top: '20mm', right: '18mm', bottom: '20mm', left: '18mm' },
@@ -57,10 +72,12 @@ export async function renderPdf(
 // ============================================================
 // LearningDocument → HTML 문자열 변환.
 // Phase 0 은 시각 검증 목적이므로 CSS 는 인라인 style 로만 유지 (외부 CSS 파일 X).
-// Pretendard woff2 는 CDN 링크로 삽입.
+// Pretendard woff2 는 CDN 링크로 삽입. 이미지 section 은 base64 data URL 로
+// 인라인 (외부 네트워크 의존 최소화).
 // ============================================================
-export function documentToHtml(doc: LearningDocument): string {
-  const body = doc.sections.map(sectionToHtml).join('\n');
+export async function documentToHtml(doc: LearningDocument): Promise<string> {
+  const parts = await Promise.all(doc.sections.map(sectionToHtml));
+  const body = parts.join('\n');
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -124,7 +141,7 @@ ${body}
 </html>`;
 }
 
-function sectionToHtml(section: Section): string {
+async function sectionToHtml(section: Section): Promise<string> {
   switch (section.kind) {
     case 'heading':
       return `<h${section.level}>${escapeHtml(section.text)}</h${section.level}>`;
@@ -178,14 +195,17 @@ function sectionToHtml(section: Section): string {
       return `<table>${caption}${head}<tbody>${body}</tbody></table>`;
     }
     case 'image': {
-      const src =
-        section.source === 'external'
-          ? section.assetRef
-          : `/* TODO Phase 1: resolve ${section.source}:${section.assetRef} to R2 URL */`;
-      const caption = section.caption
-        ? `<figcaption>${escapeHtml(section.caption)}</figcaption>`
-        : '';
-      return `<figure><img src="${escapeHtml(src)}" style="width:${section.widthPct ?? 60}%" alt="" />${caption}</figure>`;
+      // Phase 0: image-loader 가 로컬 파일 또는 http URL 을 base64 data URL 로 변환.
+      // Phase 1: source==='clipart' 인 경우 R2 URL 조회 후 로드.
+      try {
+        const img = await loadImage(section.assetRef);
+        const caption = section.caption
+          ? `<figcaption>${escapeHtml(section.caption)}</figcaption>`
+          : '';
+        return `<figure><img src="${img.dataUrl}" style="width:${section.widthPct ?? 60}%" alt="" />${caption}</figure>`;
+      } catch (err) {
+        return `<figure><em>[이미지 로드 실패: ${escapeHtml(section.assetRef)}]</em></figure>`;
+      }
     }
     case 'answer-key': {
       const items = section.entries

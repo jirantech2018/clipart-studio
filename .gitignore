@@ -27,3 +27,6 @@ next-env.d.ts
 
 supabase/.branches/
 supabase/.temp/
+
+# Phase 0 실증 산출물 — 실서비스에서는 R2 에 저장, tmp/ 는 로컬 검수용만.
+tmp/

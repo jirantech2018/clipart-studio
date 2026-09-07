@@ -85,6 +85,15 @@ export const sampleLessonPlan: LearningDocument = {
   sections: [
     { kind: 'heading', level: 1, text: '분수의 덧셈 수업안' },
     { kind: 'paragraph', text: '학년: 5학년 · 과목: 수학 · 소요 시간: 40분' },
+    // Phase 0 이미지 배치 검증 — 프로젝트 public/ 의 로컬 클립아트 sample.
+    // Phase 1 에서는 source: 'clipart' + R2 URL 로 대체.
+    {
+      kind: 'image',
+      source: 'external',
+      assetRef: 'public/generate-v2_intro_01.png',
+      caption: '수업 도입에 사용할 예시 클립아트 (Phase 0 sample)',
+      widthPct: 50,
+    },
     {
       kind: 'callout',
       tone: 'tip',

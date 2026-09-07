@@ -1,24 +1,32 @@
-// @ts-nocheck — Phase 0 skeleton. 라이브러리 설치 후 제거: pnpm add docx
-//
-// DOCX 렌더러 (Phase 0 skeleton) — docx npm.
+// DOCX 렌더러 — `docx` npm.
 //
 // LearningDocument → Word 문서 Buffer.
 // Phase 0 검증: 한글 폰트(문서 내 지정만, embed 없음 → 열람 환경 폰트 사용),
 // 표·이미지, 실제 Word/한컴오피스 편집 가능 여부.
 
+import {
+  AlignmentType,
+  Document,
+  HeadingLevel,
+  ImageRun,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+  WidthType,
+  convertMillimetersToTwip,
+} from 'docx';
+
+import { loadImage } from './image-loader';
 import type { LearningDocument, Section } from './schema';
 
-async function loadDocx() {
-  const mod = await import('docx');
-  return mod;
-}
-
 export async function renderDocx(doc: LearningDocument): Promise<Buffer> {
-  const D = await loadDocx();
+  const nested = await Promise.all(doc.sections.map(sectionToDocxChildren));
+  const children = nested.flat();
 
-  const children = doc.sections.flatMap((s) => sectionToDocxChildren(s, D));
-
-  const document = new D.Document({
+  const document = new Document({
     creator: '우리학교 클립아트스튜디오',
     title: doc.meta.title,
     styles: {
@@ -33,26 +41,26 @@ export async function renderDocx(doc: LearningDocument): Promise<Buffer> {
         properties: {
           page: {
             margin: {
-              top: D.convertMillimetersToTwip(20),
-              right: D.convertMillimetersToTwip(18),
-              bottom: D.convertMillimetersToTwip(20),
-              left: D.convertMillimetersToTwip(18),
+              top: convertMillimetersToTwip(20),
+              right: convertMillimetersToTwip(18),
+              bottom: convertMillimetersToTwip(20),
+              left: convertMillimetersToTwip(18),
             },
           },
         },
         children: [
-          new D.Paragraph({
+          new Paragraph({
             children: [
-              new D.TextRun({
+              new TextRun({
                 text: `${doc.meta.title} · ${doc.meta.grade}학년 · ${SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject}`,
                 bold: true,
                 color: '2D2F77',
               }),
             ],
           }),
-          new D.Paragraph({
+          new Paragraph({
             children: [
-              new D.TextRun({
+              new TextRun({
                 text: 'AI 초안이며 교사 검토가 필요합니다.',
                 italics: true,
                 color: '64748B',
@@ -61,21 +69,19 @@ export async function renderDocx(doc: LearningDocument): Promise<Buffer> {
             ],
             spacing: { after: 200 },
           }),
-          ...children,
+          ...(children as (Paragraph | Table)[]),
         ],
       },
     ],
   });
 
-  const buffer = await D.Packer.toBuffer(document);
-  return buffer;
+  const buffer = await Packer.toBuffer(document);
+  return Buffer.from(buffer);
 }
 
-type DocxModule = Awaited<ReturnType<typeof loadDocx>>;
+type DocxChild = Paragraph | Table;
 
-function sectionToDocxChildren(section: Section, D: DocxModule): unknown[] {
-  const { Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType } = D;
-
+async function sectionToDocxChildren(section: Section): Promise<DocxChild[]> {
   switch (section.kind) {
     case 'heading': {
       const level =
@@ -158,7 +164,7 @@ function sectionToDocxChildren(section: Section, D: DocxModule): unknown[] {
     }
 
     case 'table': {
-      const rows: unknown[] = [];
+      const rows: TableRow[] = [];
       if (section.headers?.length) {
         rows.push(
           new TableRow({
@@ -190,20 +196,68 @@ function sectionToDocxChildren(section: Section, D: DocxModule): unknown[] {
       }
       const table = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
-        rows: rows as never[],
+        rows,
       });
       return [table, new Paragraph({ text: '', spacing: { after: 120 } })];
     }
 
-    case 'image':
-      // Phase 0 skeleton: 실제 이미지 fetch 는 Phase 1 에서 R2 매핑 후 구현.
-      return [
-        new Paragraph({
-          children: [new TextRun({ text: `[이미지: ${section.assetRef}]`, italics: true, color: '64748B' })],
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 120, after: 120 },
-        }),
-      ];
+    case 'image': {
+      // Phase 0: image-loader 로 로컬 파일 buffer 로드. Phase 1 에서는
+      // source==='clipart' 인 경우 R2 URL fetch 로 확장.
+      try {
+        const img = await loadImage(section.assetRef);
+        // docx ImageRun 은 픽셀 크기 지정. widthPct 를 A4 본문 폭 기준으로 환산.
+        // A4 - margin 좌우 18mm = 174mm ≈ 493 EMU. 여기선 화면 픽셀 620px 기준.
+        const targetWidthPx = Math.round(620 * ((section.widthPct ?? 60) / 100));
+        // 원본 비율 유지를 위한 근사값 — 4:3 가정 (샘플 클립아트).
+        const targetHeightPx = Math.round((targetWidthPx * 3) / 4);
+        const imageType = img.mime === 'image/jpeg' ? 'jpg' : img.mime === 'image/webp' ? 'png' : 'png';
+        const paragraphs: DocxChild[] = [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 120, after: 60 },
+            children: [
+              new ImageRun({
+                data: img.buffer,
+                transformation: { width: targetWidthPx, height: targetHeightPx },
+                type: imageType as 'png' | 'jpg',
+              }),
+            ],
+          }),
+        ];
+        if (section.caption) {
+          paragraphs.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({
+                  text: section.caption,
+                  italics: true,
+                  color: '64748B',
+                  size: 18,
+                }),
+              ],
+              spacing: { after: 120 },
+            }),
+          );
+        }
+        return paragraphs;
+      } catch {
+        return [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `[이미지 로드 실패: ${section.assetRef}]`,
+                italics: true,
+                color: '9CA3AF',
+              }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 120, after: 120 },
+          }),
+        ];
+      }
+    }
 
     case 'answer-key': {
       const header = new Paragraph({
@@ -228,7 +282,7 @@ function sectionToDocxChildren(section: Section, D: DocxModule): unknown[] {
     }
 
     case 'rubric': {
-      const rows: unknown[] = [
+      const rows: TableRow[] = [
         new TableRow({
           children: [
             new TableCell({
@@ -263,7 +317,7 @@ function sectionToDocxChildren(section: Section, D: DocxModule): unknown[] {
         ),
       ];
       return [
-        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: rows as never[] }),
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }),
         new Paragraph({ text: '', spacing: { after: 120 } }),
       ];
     }

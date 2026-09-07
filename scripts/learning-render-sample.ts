@@ -1,29 +1,34 @@
-// @ts-nocheck — Phase 0 실행 스크립트. 라이브러리 설치 후 제거.
-//
 // Phase 0 sample 실행 스크립트.
 //
-// 사용법:
-//   1) 라이브러리 설치
-//      pnpm add -D puppeteer-core @sparticuz/chromium docx pptxgenjs
-//   2) 실행 (Windows PowerShell 예시)
-//      pnpm tsx scripts/learning-render-sample.ts
-//   3) 산출물 확인
-//      ./tmp/phase-0/*.pdf, *.docx, *.pptx
+// 실행 (Windows PowerShell 또는 Git Bash):
+//   pnpm tsx scripts/learning-render-sample.ts
 //
-// 로컬 개발 시 puppeteer 는 시스템 크롬 경로가 필요 — 환경변수로 전달:
+// 산출물:
+//   ./tmp/phase-0/{workbook,lessonPlan,openingSlides}.{pdf,docx,pptx}
+//
+// 로컬 크롬 경로가 필요합니다. Windows 기본 위치를 자동 감지하며 없으면 환경변수:
 //   PPTR_LOCAL_CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"
 
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 
-import { renderDocx } from '@/services/learning-renderer/docx';
-import { renderPdf } from '@/services/learning-renderer/pdf';
-import { renderPptx, splitIntoSlides } from '@/services/learning-renderer/pptx';
-import { PHASE_0_SAMPLES } from '@/services/learning-renderer/sample';
+import { renderDocx } from '../src/services/learning-renderer/docx';
+import { renderPdf } from '../src/services/learning-renderer/pdf';
+import { renderPptx, splitIntoSlides } from '../src/services/learning-renderer/pptx';
+import { PHASE_0_SAMPLES } from '../src/services/learning-renderer/sample';
 
 const OUT_DIR = path.resolve(process.cwd(), 'tmp', 'phase-0');
-const LOCAL_CHROME = process.env.PPTR_LOCAL_CHROME_PATH;
+
+// Windows 기본 Chrome 위치 자동 감지 (필요 시 env 로 override).
+const DEFAULT_WINDOWS_CHROME_PATHS = [
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+];
+const LOCAL_CHROME =
+  process.env.PPTR_LOCAL_CHROME_PATH ??
+  DEFAULT_WINDOWS_CHROME_PATHS.find((p) => existsSync(p));
 
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
