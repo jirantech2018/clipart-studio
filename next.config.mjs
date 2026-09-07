@@ -19,7 +19,10 @@ const nextConfig = {
     },
     // sharp가 서버리스 번들에 포함되지 않고 native runtime 모듈로 남게 해서
     // Vercel의 Linux native 바이너리 프리셋이 정상 로드되도록 한다.
-    serverComponentsExternalPackages: ['sharp'],
+    // @sparticuz/chromium 과 puppeteer-core 도 external 로 두어 번들러가
+    // native binary · shared lib 참조를 깨뜨리지 않도록 한다 (learning-helper
+    // PDF 렌더러가 Railway 에서 정상 실행되기 위한 필수 설정).
+    serverComponentsExternalPackages: ['sharp', '@sparticuz/chromium', 'puppeteer-core'],
   },
   // Organization-centric 재구성 (Plan v0.2.2 §M2):
   //   기존 개인 최상위 페이지 (/library, /generate, /generate-v2) 는 삭제되고

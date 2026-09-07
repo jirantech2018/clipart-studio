@@ -44,6 +44,9 @@ async function launchBrowser(options: RenderPdfOptions): Promise<Browser> {
       headless: true,
     });
   }
+  // Railway / 서버리스 환경: @sparticuz/chromium 이 제공하는 args + binary.
+  // next.config.mjs 의 serverComponentsExternalPackages 에 이 패키지가
+  // 포함돼 있어야 번들러가 native binary 참조를 유지한다.
   const { default: chromium } = await import('@sparticuz/chromium');
   return puppeteer.launch({
     args: chromium.args,

@@ -63,7 +63,11 @@ export async function GET(
     });
   } catch (err) {
     console.error('[learning/documents/render] pdf render failed', err);
-    return apiError('INTERNAL_ERROR', 'PDF 생성 중 오류가 발생했어요');
+    // Phase 1 M1 진단 임시: 원인 파악을 위해 err.message 를 응답에 포함.
+    // 서비스 안정화 후 이 상세는 제거하고 일반 메시지만 유지 (M2 이후).
+    const detail =
+      err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300);
+    return apiError('INTERNAL_ERROR', `PDF 생성 중 오류: ${detail}`);
   }
 
   const safeTitle = sanitizeFilename(title);
