@@ -23,6 +23,7 @@ import {
   extractTargetJamoFromStem,
   findChoicesContainingJamo,
 } from '@/features/learning-helper/lib/hangul';
+import { isJamoRelatedTopic } from '@/services/learning-orchestrator/prompts';
 
 export interface LearningDocJobInput extends OrchestratorInput {
   jobId: string;
@@ -270,6 +271,56 @@ function validateQuestionSet(
   return { ok: true };
 }
 
+// ============================================================
+// subject/topic 일치 검증 (M2-1.5, 사용자 지시 2026-09-08)
+//   - 수학 자료에 stem 이 자모(ㅏ/ㅓ/… or "모음","자음","초성","받침") 를
+//     다루면 실패 (과목 불일치).
+//   - 국어인데 자모 관련 topic 이 아닌데 자모 stem 이 절반 초과면 실패
+//     (예: "단어의 뜻", "사물 이름 읽기" 인데 자모 문항만).
+// ============================================================
+const JAMO_WORD_TOKENS = ['모음', '자음', '초성', '중성', '종성', '받침'];
+
+function stemLooksJamo(stem: string): boolean {
+  if (extractTargetJamoFromStem(stem)) return true; // ㅏ/ㅓ/ㄱ/… 등 홑자모
+  return JAMO_WORD_TOKENS.some((t) => stem.includes(t));
+}
+
+function validateSubjectTopicAlignment(
+  input: OrchestratorInput,
+  doc: LearningDocument,
+): { ok: true } | { ok: false; reason: string } {
+  const questions = doc.sections.filter(
+    (s): s is QuestionSection => s.kind === 'question',
+  );
+  if (questions.length === 0) return { ok: true };
+
+  // 수학 자료에 자모 문항이 하나라도 있으면 실패
+  if (input.subject === 'MATH') {
+    for (let i = 0; i < questions.length; i += 1) {
+      const q = questions[i]!;
+      if (stemLooksJamo(q.stem)) {
+        return {
+          ok: false,
+          reason: `수학 자료의 ${i + 1}번 문항이 한글 자모/모음/자음 관련 (stem: "${q.stem.slice(0, 30)}") — 과목 불일치`,
+        };
+      }
+    }
+  }
+
+  // 국어 + 자모 topic 아닌데 자모 stem 이 절반 초과면 실패
+  if (input.subject === 'KOR' && !isJamoRelatedTopic(input.unit, input.topic)) {
+    const jamoCount = questions.filter((q) => stemLooksJamo(q.stem)).length;
+    if (jamoCount > questions.length / 2) {
+      return {
+        ok: false,
+        reason: `주제 "${input.topic}" 은 자모 학습이 아닌데 ${jamoCount}/${questions.length} 문항이 자모 문제 — 주제와 문항 내용 불일치`,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
 function validateSemantic(
   input: OrchestratorInput,
   doc: LearningDocument,
@@ -313,6 +364,10 @@ function validateSemantic(
     const setCheck = validateQuestionSet(questions);
     if (!setCheck.ok) return setCheck;
   }
+
+  // 2c) subject / topic 일치 검증 (M2-1.5)
+  const alignCheck = validateSubjectTopicAlignment(input, doc);
+  if (!alignCheck.ok) return alignCheck;
 
   // 3) 단원·주제가 title 또는 첫 heading 에 반영됐는지 (부분 문자열 포함 기준, 관대)
   const firstHeadingText =
