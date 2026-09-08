@@ -72,12 +72,16 @@ export async function GET(
 
   const safeTitle = sanitizeFilename(title);
   const filename = `${safeTitle}-${variant}.pdf`;
+  // HTTP 헤더 값은 ByteString (US-ASCII) 이어야 하므로 filename= 파라미터에는
+  // 한글이 그대로 들어갈 수 없다. RFC 5987 에 따라 raw filename 은 ASCII
+  // fallback 을 넣고, 실제 UTF-8 문자열은 filename* 로 percent-encoded 전달.
+  const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_');
 
   return new Response(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       'Content-Length': String(buffer.length),
       // 다운로드 캐싱 방지 (같은 문서라도 매번 fresh)
       'Cache-Control': 'no-store',
