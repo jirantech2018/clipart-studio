@@ -226,21 +226,18 @@ export function LearningPageClient({ orgSlug, orgName, initialCredits }: Props) 
         <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight">
           <Sparkles className="h-6 w-6 text-primary" aria-hidden="true" />
           학습지 만들기
-          <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-            Phase 1 M2-1
-          </span>
         </h1>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <p className="text-xs text-muted-foreground">
-            {orgName} · 1~2학년 국어·수학 학습지 초안을 AI 로 만들고 학생용 PDF 로 내려받으세요.
+            {orgName} · AI 로 학습지 초안을 만들고 학생용 PDF 로 내려받으세요.
             <br className="sm:hidden" />
             <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground/80">
               <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
-              M2-1 은 UI 재설계 검증 단계입니다. AI 초안이며 반드시 교사 검토가 필요합니다.
+              AI 초안이며 반드시 교사 검토가 필요합니다.
             </span>
           </p>
           <div className="shrink-0 rounded-lg border border-border bg-card px-4 py-2 text-right">
-            <div className="text-xs text-muted-foreground">워크스페이스 크레딧</div>
+            <div className="text-xs text-muted-foreground">이용 가능 크레딧</div>
             <div className="text-lg font-bold text-foreground">{credits}</div>
           </div>
         </div>
@@ -313,10 +310,6 @@ export function LearningPageClient({ orgSlug, orgName, initialCredits }: Props) 
               </Button>
             </div>
             <LearningPreview document={result.document} variant="student" />
-            <p className="mt-3 text-xs text-muted-foreground">
-              문서 ID: {result.documentId} · Job ID: {result.jobId} · 소진 크레딧:{' '}
-              {result.creditsUsed}
-            </p>
           </section>
         )}
       </div>

@@ -14,7 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
-import { LEARNING_MATERIAL_TYPES } from '@/features/learning-helper/domain/material-types';
+import { amountSpecFor } from '@/features/learning-helper/domain/amount';
+import {
+  LEARNING_MATERIAL_TYPES,
+  type MaterialTypeCode,
+} from '@/features/learning-helper/domain/material-types';
 import { LEARNING_SUBJECTS } from '@/features/learning-helper/domain/subjects';
 
 export interface LearningInputValue {
@@ -74,7 +78,7 @@ export function LearningInputForm({
   return (
     <div className="space-y-5 rounded-lg border border-border bg-card p-5 shadow-sm">
       {/* 학년 */}
-      <FieldRow label="학년" hint="M1 은 1~2학년만 지원해요">
+      <FieldRow label="학년" hint="현재 1~2학년 국어·수학을 지원해요">
         <div className="flex flex-wrap gap-2">
           {M1_GRADES.map((g) => (
             <ChipButton
@@ -87,7 +91,7 @@ export function LearningInputForm({
             </ChipButton>
           ))}
           {FUTURE_GRADES.map((g) => (
-            <ChipButton key={g} active={false} disabled title="M2 이후 지원 예정">
+            <ChipButton key={g} active={false} disabled title="곧 지원 예정">
               {g}학년 (준비중)
             </ChipButton>
           ))}
@@ -111,13 +115,19 @@ export function LearningInputForm({
       </FieldRow>
 
       {/* 자료 유형 */}
-      <FieldRow label="자료 유형" hint="객관식·개별 활동지 우선 검증 (M1)">
+      <FieldRow label="자료 유형">
         <div className="grid gap-2 sm:grid-cols-2">
           {LEARNING_MATERIAL_TYPES.map((m) => (
             <button
               key={m.code}
               type="button"
-              onClick={() => onChange({ materialType: m.code })}
+              onClick={() =>
+                onChange({
+                  materialType: m.code,
+                  // 자료유형 바뀌면 기본 amount 로 재설정 (선택 옵션이 달라짐)
+                  questionCount: amountSpecFor(m.code).defaultValue,
+                })
+              }
               disabled={disabled}
               className={`rounded-lg border-2 p-3 text-left transition ${
                 value.materialType === m.code
@@ -125,14 +135,7 @@ export function LearningInputForm({
                   : 'border-border bg-card hover:border-border/60'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-foreground">{m.nameKo}</span>
-                {m.m1Featured && (
-                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                    M1 우선
-                  </span>
-                )}
-              </div>
+              <div className="text-sm font-semibold text-foreground">{m.nameKo}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">{m.description}</div>
             </button>
           ))}
@@ -205,33 +208,42 @@ export function LearningInputForm({
         </div>
       </FieldRow>
 
-      {/* 문항 수 · 난이도 */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FieldRow label="문항 수" hint="객관식 3~10문항 권장">
-          <Input
-            type="number"
-            min={1}
-            max={20}
-            value={value.questionCount}
-            onChange={(e) => onChange({ questionCount: Number(e.target.value) || 5 })}
-            disabled={disabled}
-          />
-        </FieldRow>
-        <FieldRow label="난이도">
-          <div className="flex gap-2">
-            {(['easy', 'normal', 'hard'] as const).map((d) => (
-              <ChipButton
-                key={d}
-                active={value.difficulty === d}
-                onClick={() => onChange({ difficulty: d })}
-                disabled={disabled}
-              >
-                {d === 'easy' ? '쉬움' : d === 'normal' ? '보통' : '어려움'}
-              </ChipButton>
-            ))}
+      {/* 자료유형별 수량 (문항 수 / 활동 수 / 구성 분량 / 읽기 분량) · 난이도 */}
+      {(() => {
+        const spec = amountSpecFor(value.materialType as MaterialTypeCode);
+        return (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldRow label={spec.fieldLabel} hint={spec.helperText}>
+              <div className="flex flex-wrap gap-2">
+                {spec.options.map((opt) => (
+                  <ChipButton
+                    key={opt.value}
+                    active={value.questionCount === opt.value}
+                    onClick={() => onChange({ questionCount: opt.value })}
+                    disabled={disabled}
+                  >
+                    {opt.label}
+                  </ChipButton>
+                ))}
+              </div>
+            </FieldRow>
+            <FieldRow label="난이도">
+              <div className="flex gap-2">
+                {(['easy', 'normal', 'hard'] as const).map((d) => (
+                  <ChipButton
+                    key={d}
+                    active={value.difficulty === d}
+                    onClick={() => onChange({ difficulty: d })}
+                    disabled={disabled}
+                  >
+                    {d === 'easy' ? '쉬움' : d === 'normal' ? '보통' : '어려움'}
+                  </ChipButton>
+                ))}
+              </div>
+            </FieldRow>
           </div>
-        </FieldRow>
-      </div>
+        );
+      })()}
 
       {/* 추가 요청 */}
       <FieldRow label="추가 요청 (선택)">
@@ -248,7 +260,7 @@ export function LearningInputForm({
       {/* Submit */}
       <div className="flex justify-end">
         <Button type="button" onClick={onSubmit} disabled={!canSubmit} size="lg">
-          {submitting ? 'AI 생성 중…' : '학습자료 생성 (3 크레딧)'}
+          {submitting ? 'AI 생성 중…' : '학습자료 생성 · 3크레딧'}
         </Button>
       </div>
     </div>

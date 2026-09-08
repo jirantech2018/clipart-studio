@@ -3,6 +3,7 @@
 
 import type { Difficulty, Grade } from '@/services/learning-renderer/schema';
 
+import { amountLabelForPrompt } from '@/features/learning-helper/domain/amount';
 import { SUBJECT_LABEL, type SubjectCode } from '@/features/learning-helper/domain/subjects';
 import type { MaterialTypeCode } from '@/features/learning-helper/domain/material-types';
 
@@ -103,6 +104,17 @@ function schemaSpec(): string {
     `    {`,
     `      "kind": "answer-key",`,
     `      "entries": [{ "ref": "1", "answer": "...", "rationale": "..." }]`,
+    `    },`,
+    `    {`,
+    `      "kind": "worksheet-table",  // 학생이 채워넣는 빈 표 — 개별 활동지 필수`,
+    `      "headers": ["열 제목1", "열 제목2", "..."],`,
+    `      "rowCount": 3,              // 빈 행 개수 (1~12)`,
+    `      "caption": "선택 안내"`,
+    `    },`,
+    `    {`,
+    `      "kind": "blank-space",      // 학생이 그리거나 꾸미는 사각형 — 개별 활동지 필수`,
+    `      "prompt": "여기에 크게 그려 보세요",`,
+    `      "heightRatio": 0.3          // 0.1~0.6 페이지 세로 비율`,
     `    }`,
     `  ]`,
     `}`,
@@ -114,13 +126,15 @@ function schemaSpec(): string {
 // ============================================================
 export function userPrompt(input: OrchestratorInput): string {
   const subjectKo = SUBJECT_LABEL[input.subject];
+  // 자료유형별 amount 의미가 다르므로 사용자 노출용 라벨을 프롬프트에 그대로 반영.
+  const amountLine = `요청 ${amountLabelForPrompt(input.materialType, input.questionCount)}`;
   const common = [
     `학년: ${input.grade}학년`,
     `과목: ${subjectKo}`,
     `단원: ${input.unit}`,
     `주제: ${input.topic}`,
     `난이도: ${input.difficulty}`,
-    `요청 문항 수: ${input.questionCount}`,
+    amountLine,
     input.additionalRequest ? `추가 요청: ${input.additionalRequest}` : null,
   ]
     .filter(Boolean)
@@ -138,7 +152,6 @@ export function userPrompt(input: OrchestratorInput): string {
     case 'reading_material':
       return readingMaterialPrompt(input, common);
     default:
-      // 방어적 fallback
       return `${common}\n\n객관식 문항 ${input.questionCount}개로 학습지를 만드세요.`;
   }
 }
@@ -150,13 +163,15 @@ function multipleChoicePrompt(input: OrchestratorInput, common: string): string 
     `자료 유형: 객관식 학습지`,
     ``,
     `필수 규칙:`,
-    `- sections 배열의 첫 항목은 heading level 1 (자료 제목)`,
+    `- sections 배열의 첫 항목은 heading level 1 (자료 제목). 제목에 단원명과 주제를 자연스럽게 포함.`,
     `- 다음은 학습 안내 callout (tone: info) 로 학생에게 어떻게 풀지 안내`,
-    `- 이어서 question kind 를 정확히 ${input.questionCount}개 (qtype: mc)`,
+    `- 이어서 question kind 를 반드시 정확히 ${input.questionCount}개 (qtype: mc). 더도 덜도 안 됨.`,
     `- 각 문항은 stem + choices 4개 + answer + rationale 필수`,
+    `- 각 문항의 number 필드는 1부터 ${input.questionCount}까지 순서대로 지정`,
     `- choices 는 오답도 그럴듯하게 (무성의한 오답 금지)`,
+    `- 문항끼리 stem 이 서로 달라야 함 (중복 문항 금지)`,
     `- meta.materialType = "multiple_choice"`,
-    `- 마지막 section 은 answer-key kind 하나로 모든 문항 정답·해설 집약`,
+    `- 마지막 section 은 answer-key kind 하나로 모든 문항 정답·해설 집약 (entries 개수 = 문항 수)`,
     ``,
     input.grade <= 2
       ? `1~2학년이므로 각 stem 은 15자 이내, choices 는 6자 이내로 짧게.`
@@ -165,23 +180,31 @@ function multipleChoicePrompt(input: OrchestratorInput, common: string): string 
 }
 
 function individualActivityPrompt(input: OrchestratorInput, common: string): string {
+  const activityCount = input.questionCount; // 개별 활동지에서는 활동 수 의미
   return [
     common,
     ``,
-    `자료 유형: 개별 활동지 (학생 개별 워크시트)`,
+    `자료 유형: 개별 활동지 (학생이 종이에 직접 작성하는 워크시트)`,
+    ``,
+    `핵심 원칙:`,
+    `- 이 자료는 활동 설명만 있는 게 아니라 학생이 직접 채우고 그리는 실제 워크시트.`,
+    `- 각 활동은 아래 구성을 반드시 포함:`,
+    `  1) heading level 2 (활동 이름)`,
+    `  2) paragraph 1개로 짧은 활동 안내 (30자 이내)`,
+    `  3) activity kind (steps 2~4단계) 로 진행 방법 안내`,
+    `  4) worksheet-table kind — 학생이 채워넣는 빈 표. headers 는 활동에 맞게 (예: "찾은 장소" / "찾은 글자" / "글자를 써 보세요"), rowCount 3~5`,
+    `  5) blank-space kind — 학생이 크게 그리거나 꾸미는 사각형 (prompt 에 안내 문구). 그리기·꾸미기 활동일 때 필수, 아닐 땐 생략 가능`,
     ``,
     `필수 규칙:`,
     `- sections 배열의 첫 항목은 heading level 1 (자료 제목)`,
-    `- 활동 소개 paragraph 1~2개`,
-    `- callout (tone: tip) 로 학생 스스로 할 수 있도록 격려 메시지`,
-    `- activity kind 를 1~2개 (steps 3~6단계, 학년 수준에 맞는 짧은 문장)`,
-    `- 필요 시 question kind 1~2개 (qtype: short 또는 blank) 로 확인 문항`,
-    `- meta.materialType = "individual_worksheet" (스키마 매핑)`,
-    `- answer-key kind 를 마지막에 배치 (question 이 있을 때만)`,
+    `- callout (tone: tip) 로 학생 격려 메시지 1개`,
+    `- 위 구성을 정확히 ${activityCount}개의 활동으로 반복`,
+    `- meta.materialType = "individual_worksheet"`,
+    `- answer-key kind 는 사용하지 않음 (개별 활동지는 정답이 없음)`,
     ``,
     input.grade <= 2
-      ? `1~2학년이므로 각 step 은 12자 이내, 준비물은 학교에 흔한 것만 (색연필/가위/풀 등).`
-      : `학년 수준에 맞춰 절차를 상세화.`,
+      ? `1~2학년이므로 각 step / 표 헤더 / blank-space prompt 는 12자 이내. 준비물은 학교에 흔한 것만 (색연필·가위·풀 등).`
+      : `학년 수준에 맞춰 절차·헤더 문구를 상세화.`,
   ].join('\n');
 }
 
@@ -192,7 +215,9 @@ function oxQuizPrompt(input: OrchestratorInput, common: string): string {
     `자료 유형: OX 퀴즈`,
     ``,
     `필수 규칙:`,
-    `- heading level 1 + info callout + question(qtype: ox) ${input.questionCount}개 + answer-key`,
+    `- heading level 1 + info callout + question(qtype: ox) 반드시 정확히 ${input.questionCount}개 + answer-key`,
+    `- 각 문항의 number 는 1부터 ${input.questionCount}까지 순서대로`,
+    `- 문항끼리 stem 이 서로 다름 (중복 금지)`,
     `- 각 answer 는 "O" 또는 "X"`,
     `- meta.materialType = "ox_quiz"`,
   ].join('\n');

@@ -243,6 +243,27 @@ export async function documentToHtml(
     break-before: page;
   }
   .rubric-cell { font-size: 10pt; }
+  /* 학생 작성용 표 (worksheet-table): 넉넉한 행 높이 */
+  .worksheet-table { break-inside: avoid-page; }
+  .worksheet-table th { background: #f5f5f5; }
+  .worksheet-table td.ws-cell { height: 32pt; }
+  .ws-caption { font-size: 10pt; color: #64748b; margin: 4pt 0 2pt; }
+  /* 학생 그리기·꾸미기용 빈 공간 (blank-space) */
+  .blank-space {
+    border: 1.5px dashed #94a3b8;
+    border-radius: 4pt;
+    margin: 8pt 0;
+    padding: 6pt 8pt;
+    break-inside: avoid-page;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 8pt,
+      rgba(148,163,184,0.05) 8pt,
+      rgba(148,163,184,0.05) 16pt
+    );
+  }
+  .blank-space-prompt { font-size: 10pt; color: #64748b; font-style: italic; }
   figure {
     margin: 8pt auto;
     text-align: center;
@@ -421,6 +442,35 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
     }
     case 'slide-break':
       return '<!-- slide-break -->';
+    case 'worksheet-table': {
+      // 학생 작성용 빈 표: headers + rowCount 개의 빈 행.
+      const rowCount = Math.max(1, Math.min(12, Math.round(section.rowCount)));
+      const head = section.headers?.length
+        ? `<thead><tr>${section.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>`
+        : '';
+      const colCount = section.headers?.length || 1;
+      const rows = Array.from({ length: rowCount })
+        .map(
+          () =>
+            `<tr>${Array.from({ length: colCount })
+              .map(() => `<td class="ws-cell">&nbsp;</td>`)
+              .join('')}</tr>`,
+        )
+        .join('');
+      const caption = section.caption
+        ? `<div class="ws-caption">${escapeHtml(section.caption)}</div>`
+        : '';
+      return `${caption}<table class="worksheet-table">${head}<tbody>${rows}</tbody></table>`;
+    }
+    case 'blank-space': {
+      const ratio = Math.max(0.1, Math.min(0.6, section.heightRatio ?? 0.3));
+      // A4 세로 297mm - 40mm margin = 257mm 사용 가능. 그중 ratio 비율.
+      const heightMm = Math.round(257 * ratio);
+      const prompt = section.prompt
+        ? `<div class="blank-space-prompt">${escapeHtml(section.prompt)}</div>`
+        : '';
+      return `<div class="blank-space" style="height:${heightMm}mm;">${prompt}</div>`;
+    }
     default:
       return '';
   }

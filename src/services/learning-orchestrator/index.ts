@@ -285,6 +285,26 @@ function normalizeSection(raw: unknown): Section | null {
       if (entries.length === 0) return null;
       return { kind: 'answer-key', entries };
     }
+    case 'worksheet-table': {
+      const headers = Array.isArray(s.headers)
+        ? (s.headers.filter((x) => typeof x === 'string') as string[])
+        : [];
+      if (headers.length === 0) return null;
+      const rowCount =
+        typeof s.rowCount === 'number' && s.rowCount > 0
+          ? Math.min(12, Math.round(s.rowCount))
+          : 3;
+      const caption = typeof s.caption === 'string' ? s.caption : undefined;
+      return { kind: 'worksheet-table', headers, rowCount, caption };
+    }
+    case 'blank-space': {
+      const heightRatio =
+        typeof s.heightRatio === 'number'
+          ? Math.max(0.1, Math.min(0.6, s.heightRatio))
+          : 0.3;
+      const prompt = typeof s.prompt === 'string' ? s.prompt : undefined;
+      return { kind: 'blank-space', heightRatio, prompt };
+    }
     default:
       // image / rubric / slide-break 는 M1 에서 사용 안 함, 나머지는 무시
       return null;

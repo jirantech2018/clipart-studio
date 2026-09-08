@@ -106,6 +106,23 @@ export type Section =
        *  최종 슬라이드 분할은 pptx 렌더러가 글자 수·문항 수·레이아웃 기준으로 결정하며
        *  이 마커는 힌트로만 사용한다 (D-12 확정). */
       reason?: string;
+    }
+  // M2-1.1: 개별 활동지용 학생 작성 요소.
+  | {
+      /** 학생이 채워넣을 표. headers + rowCount 만큼의 빈 행이 렌더된다. */
+      kind: 'worksheet-table';
+      headers: string[];
+      /** 빈 행의 개수 (기본 3, 최대 12). */
+      rowCount: number;
+      caption?: string;
+    }
+  | {
+      /** 학생이 그리거나 크게 쓸 수 있는 사각형 빈 공간. */
+      kind: 'blank-space';
+      /** 안내 문구 (예: "여기에 크게 그려 보세요"). */
+      prompt?: string;
+      /** 페이지 폭 기준 세로 높이 비율 (0.1~0.6, 기본 0.3). PDF 렌더러가 실제 mm 로 변환. */
+      heightRatio?: number;
     };
 
 export interface LearningDocumentMeta {
