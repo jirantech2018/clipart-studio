@@ -272,13 +272,44 @@ function validateQuestionSet(
 }
 
 // ============================================================
-// subject/topic 일치 검증 (M2-1.5, 사용자 지시 2026-09-08)
-//   - 수학 자료에 stem 이 자모(ㅏ/ㅓ/… or "모음","자음","초성","받침") 를
-//     다루면 실패 (과목 불일치).
-//   - 국어인데 자모 관련 topic 이 아닌데 자모 stem 이 절반 초과면 실패
-//     (예: "단어의 뜻", "사물 이름 읽기" 인데 자모 문항만).
+// M2-1.6 사용자 지시 (2026-09-08): 세 가지 검증 추가
+//   (a) self-contained: 이미지 없는 문서에 "이 사물/이 그림/다음 사진" 등
+//       외부 자료 지시 표현 금지.
+//   (b) hint reveal: 힌트에 정답 텍스트 노출 금지 (정답이 3자 이상일 때만).
+//   (c) 수학 활동지: 각 활동의 문제 서술이 topic 의 operation 과 일치
+//       (받아올림 덧셈 활동에 곱셈/뺄셈 상황 금지).
 // ============================================================
 const JAMO_WORD_TOKENS = ['모음', '자음', '초성', '중성', '종성', '받침'];
+
+const DEICTIC_PATTERNS = [
+  '이 사물', '위 사물', '아래 사물', '다음 사물',
+  '이 그림', '위 그림', '아래 그림', '다음 그림',
+  '이 사진', '위 사진', '아래 사진', '다음 사진',
+  '이 물건', '위 물건', '아래 물건', '다음 물건',
+  '화면에 있는', '그림을 보고', '그림에서', '그림 속',
+  '사진을 보고', '사진에서',
+];
+
+/** 문서에 image 섹션이 없을 때만 검사 — 이미지 있으면 deictic 허용. */
+function hasImageSection(sections: Section[]): boolean {
+  return sections.some((s) => s.kind === 'image');
+}
+
+function findDeicticReference(text: string): string | null {
+  for (const pat of DEICTIC_PATTERNS) {
+    if (text.includes(pat)) return pat;
+  }
+  return null;
+}
+
+/** 힌트가 정답을 그대로 노출하는지. 정답이 3자 이상일 때만 검사. */
+function hintRevealsAnswer(hint: string, correctChoice: string): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, '').replace(/[.,·!?]/g, '');
+  const answer = norm(correctChoice);
+  if (answer.length < 3) return false; // 자모 같은 짧은 정답은 오탐 방지
+  const h = norm(hint);
+  return h.includes(answer);
+}
 
 function stemLooksJamo(stem: string): boolean {
   if (extractTargetJamoFromStem(stem)) return true; // ㅏ/ㅓ/ㄱ/… 등 홑자모
@@ -292,10 +323,9 @@ function validateSubjectTopicAlignment(
   const questions = doc.sections.filter(
     (s): s is QuestionSection => s.kind === 'question',
   );
-  if (questions.length === 0) return { ok: true };
 
   // 수학 자료에 자모 문항이 하나라도 있으면 실패
-  if (input.subject === 'MATH') {
+  if (input.subject === 'MATH' && questions.length > 0) {
     for (let i = 0; i < questions.length; i += 1) {
       const q = questions[i]!;
       if (stemLooksJamo(q.stem)) {
@@ -308,7 +338,7 @@ function validateSubjectTopicAlignment(
   }
 
   // 국어 + 자모 topic 아닌데 자모 stem 이 절반 초과면 실패
-  if (input.subject === 'KOR' && !isJamoRelatedTopic(input.unit, input.topic)) {
+  if (input.subject === 'KOR' && !isJamoRelatedTopic(input.unit, input.topic) && questions.length > 0) {
     const jamoCount = questions.filter((q) => stemLooksJamo(q.stem)).length;
     if (jamoCount > questions.length / 2) {
       return {
@@ -318,6 +348,157 @@ function validateSubjectTopicAlignment(
     }
   }
 
+  return { ok: true };
+}
+
+// ============================================================
+// M2-1.6 (a) self-contained 검증
+// ============================================================
+function validateSelfContained(
+  doc: LearningDocument,
+): { ok: true } | { ok: false; reason: string } {
+  if (hasImageSection(doc.sections)) return { ok: true }; // 이미지 있으면 허용
+
+  const questions = doc.sections.filter(
+    (s): s is QuestionSection => s.kind === 'question',
+  );
+  for (let i = 0; i < questions.length; i += 1) {
+    const q = questions[i]!;
+    const hit = findDeicticReference(q.stem);
+    if (hit) {
+      return {
+        ok: false,
+        reason: `${i + 1}번 문항이 이미지 없는데 "${hit}" 같은 외부 자료 지시 표현 사용 — stem 만으로 정답 결정 불가`,
+      };
+    }
+  }
+
+  // 활동지의 activity steps / paragraph 도 검사
+  for (const s of doc.sections) {
+    if (s.kind === 'paragraph' && findDeicticReference(s.text)) {
+      const hit = findDeicticReference(s.text)!;
+      return {
+        ok: false,
+        reason: `문서에 이미지가 없는데 문단이 "${hit}" 표현 사용 — 학생이 참조할 수 없음`,
+      };
+    }
+    if (s.kind === 'activity') {
+      for (const step of s.steps) {
+        const hit = findDeicticReference(step);
+        if (hit) {
+          return {
+            ok: false,
+            reason: `활동 "${s.title ?? ''}" 의 단계가 "${hit}" 표현 사용 — 이미지 없이 참조 불가`,
+          };
+        }
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
+// ============================================================
+// M2-1.6 (b) 힌트 답 노출 검증
+// ============================================================
+function validateHintDoesNotRevealAnswer(
+  questions: QuestionSection[],
+): { ok: true } | { ok: false; reason: string } {
+  for (let i = 0; i < questions.length; i += 1) {
+    const q = questions[i]!;
+    if (q.qtype !== 'mc' || !q.hint || !q.answer || !q.choices) continue;
+    const idx = parseAnswerIndex(q.answer, q.choices.length);
+    if (idx === null) continue;
+    const correct = q.choices[idx];
+    if (!correct) continue;
+    if (hintRevealsAnswer(q.hint, correct)) {
+      return {
+        ok: false,
+        reason: `${i + 1}번 힌트가 정답 "${correct}" 을 그대로 노출: "${q.hint}"`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+// ============================================================
+// M2-1.6 (c) 수학 활동지: 각 활동의 문제가 topic operation 과 일치
+// ============================================================
+const OP_KEYWORDS: Record<string, RegExp[]> = {
+  addition: [/\+/, /더하기/, /덧셈/],
+  subtraction: [/-\s*\d/, /빼기/, /뺄셈/],
+  multiplication: [/×/, /곱하기/, /곱셈/, /씩\s*\d+개(?:면|이면|일 때)/],
+  division: [/÷/, /나누기/, /나눗셈/],
+};
+
+function detectOpsInText(text: string): Set<string> {
+  const found = new Set<string>();
+  for (const [op, patterns] of Object.entries(OP_KEYWORDS)) {
+    if (patterns.some((p) => p.test(text))) found.add(op);
+  }
+  return found;
+}
+
+function expectedOpFromTopic(unit: string, topic: string): string | null {
+  const t = `${unit} ${topic}`;
+  if (/(받아올림|덧셈|더하기)/.test(t)) return 'addition';
+  if (/(받아내림|뺄셈|빼기)/.test(t)) return 'subtraction';
+  if (/(곱셈|곱하기|구구)/.test(t)) return 'multiplication';
+  if (/(나눗셈|나누기)/.test(t)) return 'division';
+  return null;
+}
+
+function validateMathActivityOperationAlignment(
+  input: OrchestratorInput,
+  doc: LearningDocument,
+): { ok: true } | { ok: false; reason: string } {
+  if (input.subject !== 'MATH' || input.materialType !== 'individual_activity') {
+    return { ok: true };
+  }
+  const expectedOp = expectedOpFromTopic(input.unit, input.topic);
+  if (!expectedOp) return { ok: true }; // topic 에서 operation 감지 안 되면 skip
+
+  // 각 activity 블록에 인접한 콘텐츠 (activity + 그 다음 paragraph/table/worksheet-table) 를 검사.
+  // 간단한 근사: 문서 전체 텍스트에서 등장한 operation 이 expectedOp 외 다른 게 있는지.
+  // 더 정밀: activity index 별로 순회하며 각 활동 뒤의 콘텐츠까지 묶어 검사.
+  const activityIndices: number[] = [];
+  doc.sections.forEach((s, i) => {
+    if (s.kind === 'activity') activityIndices.push(i);
+  });
+
+  for (let a = 0; a < activityIndices.length; a += 1) {
+    const start = activityIndices[a]!;
+    const end = a + 1 < activityIndices.length ? activityIndices[a + 1]! : doc.sections.length;
+    const blockTexts: string[] = [];
+    for (let j = start; j < end; j += 1) {
+      const sec = doc.sections[j]!;
+      if (sec.kind === 'paragraph') blockTexts.push(sec.text);
+      else if (sec.kind === 'activity') {
+        if (sec.title) blockTexts.push(sec.title);
+        blockTexts.push(...sec.steps);
+      } else if (sec.kind === 'table') {
+        for (const row of sec.rows) blockTexts.push(...row);
+        if (sec.headers) blockTexts.push(...sec.headers);
+      } else if (sec.kind === 'worksheet-table') {
+        blockTexts.push(...sec.headers);
+        if (sec.caption) blockTexts.push(sec.caption);
+      } else if (sec.kind === 'heading') {
+        blockTexts.push(sec.text);
+      }
+    }
+    const combined = blockTexts.join(' \n ');
+    const opsFound = detectOpsInText(combined);
+    // expected 는 있어야 함
+    if (opsFound.size === 0) continue; // 지금은 통과 (콘텐츠 부재 검증은 별도)
+    for (const op of opsFound) {
+      if (op !== expectedOp) {
+        return {
+          ok: false,
+          reason: `활동 ${a + 1}이(가) 주제 "${input.topic}" 과 다른 연산 (${op}) 사용 — 활동별 topic 불일치`,
+        };
+      }
+    }
+  }
   return { ok: true };
 }
 
@@ -368,6 +549,23 @@ function validateSemantic(
   // 2c) subject / topic 일치 검증 (M2-1.5)
   const alignCheck = validateSubjectTopicAlignment(input, doc);
   if (!alignCheck.ok) return alignCheck;
+
+  // 2d) self-contained 검증 (M2-1.6a) — 이미지 없는 문서에 외부 지시 표현 금지
+  const selfContainedCheck = validateSelfContained(doc);
+  if (!selfContainedCheck.ok) return selfContainedCheck;
+
+  // 2e) 힌트가 답을 직접 노출하지 않음 (M2-1.6b) — 객관식만
+  if (input.materialType === 'multiple_choice') {
+    const questions = doc.sections.filter(
+      (s): s is QuestionSection => s.kind === 'question',
+    );
+    const hintCheck = validateHintDoesNotRevealAnswer(questions);
+    if (!hintCheck.ok) return hintCheck;
+  }
+
+  // 2f) 수학 활동지: 각 활동이 topic operation 과 일치 (M2-1.6c)
+  const opCheck = validateMathActivityOperationAlignment(input, doc);
+  if (!opCheck.ok) return opCheck;
 
   // 3) 단원·주제가 title 또는 첫 heading 에 반영됐는지 (부분 문자열 포함 기준, 관대)
   const firstHeadingText =
