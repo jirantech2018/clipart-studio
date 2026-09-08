@@ -208,15 +208,21 @@ export async function POST(request: Request) {
     }
 
     if (err instanceof LearningOrchestratorError) {
-      const message =
+      // Phase 1 M2-2 진단 임시: 세트 검증 실패 원인을 응답 message 에 상세 노출.
+      // 이 상세는 프롬프트/검증 튜닝이 안정되면 다시 축약된 문구로 되돌린다.
+      const baseMessage =
         err.code === 'AI_TIMEOUT'
           ? 'AI 응답이 너무 오래 걸렸어요. 잠시 후 다시 시도해주세요.'
           : err.code === 'AI_UPSTREAM'
             ? 'AI 서비스에 일시적 문제가 있어요. 잠시 후 다시 시도해주세요.'
             : err.code === 'PARSE_ERROR' || err.code === 'SCHEMA_ERROR'
-              ? 'AI 응답 형식이 올바르지 않아 다시 만들어야 해요. 다시 시도해주세요.'
+              ? 'AI 응답 형식이 올바르지 않아 다시 만들어야 해요.'
               : 'AI 생성 중 오류가 발생했어요.';
-      return apiError('UPSTREAM_UNAVAILABLE', message);
+      const detail =
+        err.code === 'SCHEMA_ERROR' && err.message
+          ? ` (원인: ${err.message.slice(0, 300)})`
+          : '';
+      return apiError('UPSTREAM_UNAVAILABLE', baseMessage + detail);
     }
     console.error('[learning/documents POST] dispatch failed', err);
     return apiError('INTERNAL_ERROR', '학습자료 생성 중 오류가 발생했어요. 다시 시도해주세요.');
