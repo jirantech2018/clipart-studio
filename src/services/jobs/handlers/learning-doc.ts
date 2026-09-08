@@ -41,6 +41,40 @@ export interface LearningDocJobResult {
 // ============================================================
 type QuestionSection = Extract<Section, { kind: 'question' }>;
 
+// ============================================================
+// 정답 위치 셔플 (M2-1.4):
+//   GPT-4o 는 프롬프트 지시와 무관하게 정답을 1번 위치에 두는 강한 습관이
+//   있어 프롬프트만으로는 다양성 검증을 통과하지 못한다. 서버가 각 문항의
+//   choices 배열을 Fisher-Yates 로 셔플하고 answer 인덱스를 재계산해서
+//   위치 편중을 원천 차단한다.
+//
+//   자모 유형 검증(findChoicesContainingJamo)은 셔플 후에도 여전히 정확
+//   (셔플로 정답의 "위치"만 바뀌고 "내용"은 그대로).
+// ============================================================
+function shuffleMcSections(sections: Section[]): Section[] {
+  return sections.map((s) => {
+    if (s.kind !== 'question' || s.qtype !== 'mc') return s;
+    const choices = s.choices;
+    if (!choices || choices.length < 2 || !s.answer) return s;
+    const answerIdx = parseAnswerIndex(s.answer, choices.length);
+    if (answerIdx === null) return s;
+    const correctContent = choices[answerIdx]!;
+
+    // Fisher-Yates shuffle
+    const shuffled = [...choices];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = shuffled[i]!;
+      shuffled[i] = shuffled[j]!;
+      shuffled[j] = tmp;
+    }
+    const newAnswerIdx = shuffled.indexOf(correctContent);
+    if (newAnswerIdx < 0) return s; // safety: 셔플 후 정답 못 찾으면 원본 유지
+
+    return { ...s, choices: shuffled, answer: String(newAnswerIdx + 1) };
+  });
+}
+
 /** answer 문자열에서 정답 번호 파싱 ("2", "2번", "2)", "2. …" 등). */
 function parseAnswerIndex(answer: string, totalChoices: number): number | null {
   const m = answer.trim().match(/^(\d+)/);
@@ -331,15 +365,21 @@ export async function runLearningDocJob(
     .update({ status: 'running' })
     .eq('id', input.jobId);
 
-  // 2) AI 호출 + semantic 검증. 불일치 시 1회 자동 재생성.
+  // 2) AI 호출 + 정답 위치 셔플 + semantic 검증. 불일치 시 1회 자동 재생성.
   let attempt = 0;
   let result: GenerateResult;
   let lastReason = '';
+  let doc: LearningDocument;
   while (true) {
     attempt += 1;
     result = await generateLearningDocument(input);
-    const check = validateSemantic(input, result.document);
-    if (check.ok) break;
+    // 셔플로 정답 위치 편중을 원천 차단 (GPT 습관 회피).
+    const shuffled = { ...result.document, sections: shuffleMcSections(result.document.sections) };
+    const check = validateSemantic(input, shuffled);
+    if (check.ok) {
+      doc = shuffled;
+      break;
+    }
     lastReason = check.reason;
     if (attempt >= 2) {
       throw new LearningOrchestratorError(
@@ -350,7 +390,6 @@ export async function runLearningDocJob(
     // 재시도 전 잠깐 대기 (rate limit / transient issue 대응)
     await new Promise((r) => setTimeout(r, 500));
   }
-  const doc = result.document;
 
   // 3) learning_documents INSERT (service role 로 RLS 우회, user_id/organization_id
   //    는 이미 API route 에서 인증됨).
