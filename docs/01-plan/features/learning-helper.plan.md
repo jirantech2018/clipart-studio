@@ -10,7 +10,8 @@
 - v0.2 — 세 포맷(PDF/Word/PPT) 모두 Phase 1에 포함. §2·§5·§8·§9 갱신.
 - v0.3 — Phase 0 착수 승인. D-1/D-4/D-13 확정. slide-break 정책 확정. Phase 0 검증 항목 상세화.
 - v0.4 — Phase 0.7 완료 후 Phase 1 조건부 착수 승인. Phase 1 을 사용자 지시 순서에 따라 M1~M7 마일스톤으로 재구성. Windows Office 한글 호환성을 pre-deploy gate 로 §8.5 신설.
-- **v0.5** — **M1 골든패스 완주 (2026-09-08)**. M2 를 사용성·품질 검증 우선으로 M2-1 (경험 보정) / M2-2 (교육 품질 표본 11개) / M2-3 (검증 후 확장) 로 재분할. 사이드바 nav 노출은 M2 종료 조건으로 이동. `RAILPACK_DEPLOY_APT_PACKAGES` env 도입 + RFC 5987 filename 정책 채택.
+- v0.5 — M1 골든패스 완주 (2026-09-08). M2 를 사용성·품질 검증 우선으로 M2-1 / M2-2 / M2-3 로 재분할.
+- **v0.6** — **M2-1.8 학습자료 생성·검증 구조 범용화 (사용자 지시 2026-09-09)**. M2-1.2~1.7 fixes 는 case 별 조건문·금지어 방식이라 3~6학년 확장이 지수적. 3계층 (구조/결정적/교육적 AI 검수) + LearningProfile 데이터 분리 + EvaluationResult 구조화 + 실패 문항 부분 재생성 + legacy guards 격리로 재설계. M2-2 전체 표본 생성은 이 구조 승인 · 회귀 테스트 통과 후 재개.
 
 ---
 
@@ -403,7 +404,241 @@ Renderer 는 Phase 0.7 완료 (`services/learning-renderer/`). 렌더러 외 모
   - `/generate` 레이아웃을 복제하지 말고 공통 디자인 시스템 (`components/ui`) 재사용
 - **완료 조건**: 사용자가 배포된 화면 캡처·URL 을 확인하고 승인
 
-**M2-2: 교육 품질 표본 검증 (11개)**
+**M2-1.8: 학습자료 생성·검증 구조 범용화 (사용자 지시 2026-09-09, M2-2 선행 필수)**
+
+**동기 · Non-goal**
+- M2-1.2~1.7 fixes 는 특정 case (자모, "책상 위", 곱셈 상황 등) 에 대응하는 조건문·금지어 방식. 1~6학년 전교과로 확장 시 지수적 규모 폭발.
+- 사용자 지시: 확장 가능한 3계층 구조로 재설계. 특정 단원명 · 금지어 의존 X.
+- Non-goal (이번 단계): 1~6학년 프로필 대량 입력. 스키마·인터페이스·1~2학년 국·수 대표 프로필까지.
+
+**① 3계층 책임 · 실행 순서**
+
+```
+학습자료 생성 요청
+  │
+  ├─ 오케스트레이터 (기존 GPT-4o) → LearningDocument 초안
+  │
+  ├─ Layer 1: 구조 검증 (structural, 코드)
+  │    · amount 일치, 필수 필드 존재, index 유효성
+  │    · 학생용 정답 미노출
+  │    · 빈 choices / steps / rows 등 불완전 구조
+  │    · self-contained (이미지 없는데 deictic 표현)
+  │    실패 → 전체 재생성 1회 → 실패 시 종료(환불)
+  │
+  ├─ Layer 2: 결정적 검증 (deterministic, 코드)
+  │    · 선택지 중복
+  │    · 정답 유일성 (index 매칭)
+  │    · 수식·정답 코드 검산 (예: 27+15=42 확인, "42" 가 정답일 때만 통과)
+  │    · 받아올림 발생 여부 (덧셈 결과 자릿수 증가)
+  │    · 사칙연산 종류가 LearningProfile.deterministicRules.operationSet 과 일치
+  │    · 수 범위 / 단위 일치
+  │    실패 → 실패 문항 index 목록 수집 (Layer 3 로 전달)
+  │
+  ├─ Layer 3: 교육적 AI 검수 (semantic, gpt-4o-mini 별도 호출)
+  │    · topicAlignment: 각 문항이 단원·주제 반영
+  │    · gradeSuitability: 학년 어휘·문장 적합
+  │    · hintLeakage: 힌트가 정답/동의어/활용형 노출
+  │    · selfContained: 외부 참조 없이 풀 수 있음
+  │    · naturalness: 문항·선택지 자연스러움
+  │    반환: EvaluationResult { pass, criteria, failedItemIndexes }
+  │    실패 문항만 최대 1회 부분 재생성 → 재검수
+  │    재검수도 실패 → SCHEMA_ERROR + 크레딧 환불
+  │
+  └─ 저장 (learning_documents INSERT) + 응답
+```
+
+**② LearningProfile 최소 스키마**
+
+`src/features/learning-helper/domain/learning-profile.ts` (신규)
+
+```ts
+export interface LearningProfile {
+  grade: 1 | 2 | 3 | 4 | 5 | 6;
+  subject: SubjectCode;               // 'KOR' | 'MATH' (M2-1.8은 이 2개만)
+  domain: string;                     // 예: "자모 학습", "수 감각", "연산"
+  unit: string;                       // seed common_topics.unit
+
+  learningGoals: string[];            // 예: ["받아올림이 있는 두 자리 덧셈의 원리를 이해한다"]
+  prerequisites: string[];            // 예: ["10 이하의 덧셈"]
+
+  allowedScope: string[];             // 예: ["두 자리+두 자리", "10 자리 올림 발생"]
+  excludedScope: string[];            // 예: ["세 자리 수", "곱셈", "뺄셈"]
+
+  vocabularyGuidance: {
+    level: 'grade1_early' | 'grade1_late' | 'grade2' | 'grade3' | 'grade4' | 'grade5' | 'grade6';
+    maxSentenceLength?: number;       // 예: 15자
+    notes?: string[];                 // 예: ["한자어 지양"]
+  };
+
+  recommendedQuestionTypes: string[]; // 예: ["계산", "이야기 문제"]
+  unsuitableQuestionTypes: string[];  // 예: ["자모 식별"]
+
+  deterministicRules: {
+    // Layer 2 검산 대상 · 자유 형식 (프로필 별 상이)
+    // 예: operationSet: 'addition' | 'subtraction' | 'multiplication' | 'division' | 'count' | 'compare'
+    //     requireCarry: boolean
+    //     digitRange: { min: number; max: number }
+    //     answerRange: { min: number; max: number }
+    [key: string]: unknown;
+  };
+  semanticEvaluationCriteria: string[]; // Layer 3 프롬프트에 반드시 넣을 항목
+}
+```
+
+M2-1.8 완료 시점에 준비되는 프로필: 1~2학년 국·수 대표 6~8개 (자모, 낱말·뜻, 사물 이름, 수 세기, 수 비교, 받아올림 덧셈, 곱셈구구 등).
+
+**③ EvaluationResult 스키마**
+
+`src/services/learning-validators/types.ts` (신규)
+
+```ts
+export type EvaluationCriterionKey =
+  | 'topicAlignment'
+  | 'gradeSuitability'
+  | 'hintLeakage'
+  | 'selfContained'
+  | 'naturalness';
+
+export interface EvaluationResult {
+  pass: boolean;
+  criteria: Array<{
+    key: EvaluationCriterionKey;
+    pass: boolean;
+    reason: string;              // 왜 실패했는지 확인 가능한 구체적 설명
+    failedItemIndexes: number[]; // 문항/활동 0-based index
+  }>;
+  failedItemIndexes: number[];   // union of all criteria failedItemIndexes
+}
+```
+
+Layer 3 는 이 스키마로 gpt-4o-mini 에게 응답 요청 (structured JSON output).
+
+**④ 실패 문항 부분 재생성 흐름**
+
+```
+Layer 3 → EvaluationResult { pass: false, failedItemIndexes: [1, 3] }
+  ↓
+partial regeneration (오케스트레이터 별도 프롬프트):
+  - 원본 LearningProfile
+  - 유지할 정상 문항 (index 0, 2, 4) — context 로 전달
+  - 실패 문항 (index 1, 3) 의 실패 사유 (criteria.reason)
+  - 조건: 기존 문항과 중복 X, 기존 정답 위치·유형 편중 회피
+  ↓
+새 index 1, 3 문항 삽입 → 새 문서 조립
+  ↓
+Layer 1 + 2 + 3 재검증
+  ↓
+재검증 실패 → SCHEMA_ERROR + 크레딧 환불 종료
+```
+
+부분 재생성은 최대 1회만. 전체 재생성 대비 지연 절감 + 유지 문항 손실 회피.
+
+**⑤ Legacy guards 격리 · 제거 기준**
+
+**격리**:
+- 현재 `learning-doc.ts` 의 case 별 validate 함수들 (validateMultipleChoice / validateQuestionSet / validateSubjectTopicAlignment / validateSelfContained / validateHintDoesNotRevealAnswer / validateMathActivityOperationAlignment) 을 별도 모듈로 이동: `src/services/learning-validators/legacy-guards.ts`
+- 현재 프롬프트의 자모 특화 / "책상 위" 금지어 / 곱셈 상황 금지 등 fragment 도 legacy 로 표시
+
+**병행 실행**:
+- 신규 3계층 + legacy guards 동시 실행
+- 둘 다 pass 여야 최종 통과
+- Legacy 는 회귀 방지 안전망 (신규 구조가 놓치는 케이스를 잡음)
+
+**회귀 fixture**:
+- `src/services/learning-validators/__fixtures__/regression/*.json`
+- 각 fixture: `{ input, aiMockResponse, expectedFailKey, expectedFailIndexes, historicalRef }`
+- vitest 로 신규 3계층이 동일 오류를 탐지하는지 자동 확인
+
+**제거 조건**:
+- 신규 Layer 1/2/3 가 해당 케이스를 확실히 탐지
+- fixture 테스트 통과
+- Legacy guard 를 disable 하고 재테스트 통과
+- 그 후 개별 legacy 규칙 단계적 제거
+
+**⑥ AI 호출 · 크레딧 정책**
+
+| 단계 | 호출 | 모델 | 사용자 크레딧 |
+|---|---|---|---|
+| 초안 생성 | 1회 | gpt-4o | 3 (소진) |
+| Layer 3 검수 | 1회 | gpt-4o-mini | 0 (오케스트레이터 부담) |
+| 부분 재생성 (실패 시) | 최대 1회 | gpt-4o | 0 (동일 요청 안에서) |
+| 재검수 (실패 시) | 최대 1회 | gpt-4o-mini | 0 |
+| **총** | **최대 4회** | | **3 크레딧** |
+
+크레딧 정책은 사용자에게 노출된 값 (3) 유지. 실패 시 자동 환불.
+
+**⑦ 파일 변경 / 신규 목록**
+
+*신규*
+- `src/features/learning-helper/domain/learning-profile.ts` — 스키마 + 1~2학년 국·수 대표 프로필
+- `src/services/learning-validators/types.ts` — EvaluationResult / 공통 타입
+- `src/services/learning-validators/layer-1-structural.ts`
+- `src/services/learning-validators/layer-2-deterministic.ts` (수학 검산 유틸 포함)
+- `src/services/learning-validators/layer-3-semantic.ts` — gpt-4o-mini 검수 호출
+- `src/services/learning-validators/legacy-guards.ts` — 기존 case 별 로직 이동
+- `src/services/learning-validators/orchestrator.ts` — 3계층 조합 + 부분 재생성
+- `src/services/learning-validators/__fixtures__/regression/*.json`
+- `src/services/learning-validators/__tests__/regression.spec.ts` (vitest)
+
+*변경*
+- `src/services/jobs/handlers/learning-doc.ts` — 3계층 orchestrator 호출로 교체 (기존 case 별 코드는 legacy 로 이동)
+- `src/services/learning-orchestrator/prompts.ts` — LearningProfile 정보를 프롬프트 컨텍스트로 주입, case 별 조건문 감소
+- `docs/01-plan/features/learning-helper.plan.md` — 이 계획 반영 (v0.6, 이 커밋)
+
+*미변경*
+- Migration (078~083)
+- Chromium libs, RFC 5987
+- Sidebar nav (M2 종료 게이트 유지)
+
+**⑧ 최소 회귀 테스트 사례** (vitest fixtures)
+
+M2-1.2~1.7 과정에서 등장한 실패를 자동화. 하나라도 놓치면 build fail.
+
+| # | 사례 | 신규 검증 계층 |
+|---|---|---|
+| R1 | 정답이 모든 5문항에서 1번 위치 몰림 | Layer 2 (정답 위치 분포) |
+| R2 | 자모 5문항 모두 ㅏ (동일 target 자모) | Layer 3 topicAlignment |
+| R3 | 인접 문항 선택지 배열 완전 동일 | Layer 2 |
+| R4 | 자모 유형에서 정답 후보 여러 개 (ㅏ가 4개 다) | Layer 2 (자모 코드 검증) |
+| R5 | 수학 자료에 자모 문항 | Layer 3 topicAlignment |
+| R6 | 이미지 없는데 "이 사물 …" | Layer 1 self-contained |
+| R7 | 힌트가 정답 문자열 그대로 포함 | Layer 3 hintLeakage |
+| R8 | 수학 활동지 활동 2에 곱셈 상황 (덧셈 주제) | Layer 2 (LearningProfile.operationSet) |
+| R9 | 사물 주제인데 동물 소리 문항 섞임 | Layer 3 topicAlignment |
+| R10 | 힌트 동의어·활용형 노출 | Layer 3 hintLeakage |
+| R11 | 정답 검산 실패 ("5 + 3 = 9" 같은 오답) | Layer 2 (신규 수학 검산) |
+| R12 | 받아올림 주제인데 받아올림 없는 문제 | Layer 2 (LearningProfile.requireCarry) |
+
+**⑨ 완료 기준 (사용자 명시 그대로)**
+
+- [ ] 특정 단원명·금지어에 의존하지 않고 과거 오류 탐지
+- [ ] Layer 1 / Layer 2 / Layer 3 코드상 분리
+- [ ] 국어·수학 규칙이 동일한 LearningProfile 형식으로 표현 가능
+- [ ] 수학 계산을 코드로 검산
+- [ ] 의미 검토 실패 시 실패한 문항만 재생성
+- [ ] 실패 사유·문항 번호 저장·확인 가능
+- [ ] 기존 정상 이미지 생성·학습자료 PDF 생성 회귀 없음
+- [ ] 기존 실패 사례 (R1~R12) 자동 테스트 통과
+
+**⑩ 진행 순서 (승인 후)**
+
+1. `LearningProfile` 스키마 + 1~2학년 국·수 프로필 최소 6~8개
+2. `EvaluationResult` 타입 + Layer 3 프롬프트
+3. Layer 1 (structural) — 기존 legacy 에서 구조 검증 부분 이관
+4. Layer 2 (deterministic + 수학 검산 신규)
+5. Layer 3 (LLM 검수)
+6. Orchestrator — 3계층 조합 + 부분 재생성
+7. Legacy guards 격리 (기존 코드 이동)
+8. Regression fixtures (R1~R12) + vitest 회귀 통과
+9. `learning-doc.ts` handler 를 새 orchestrator 로 교체 (legacy 병행)
+10. 사용자에게 회귀 통과 결과 + 통합 완료 보고
+11. 사용자 승인 후 M2-2 재개
+
+각 단계는 개별 커밋으로 분리, 회귀 fixture 는 각 layer 커밋 시 함께 추가.
+
+---
+
+**M2-2: 교육 품질 표본 검증 (11개, M2-1.8 완료·승인 후 재개)**
 - [ ] 아래 고정 조건으로 표본 생성:
   - 1학년 국어 객관식 3
   - 1학년 국어 개별활동지 2
