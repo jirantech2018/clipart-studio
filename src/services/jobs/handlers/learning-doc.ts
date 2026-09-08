@@ -128,6 +128,114 @@ function validateMultipleChoice(
   return { ok: true };
 }
 
+// ============================================================
+// 세트 단위 검증 (M2-1.3 사용자 지시 2026-09-08):
+//   - 같은 정답 내용 (choices[answerIdx]) 이 문항의 50% 초과 X
+//   - 정답 번호 (1~4) 가 한 위치에 몰리지 X (50% 초과 X)
+//   - 자모 유형에서 목표 자모가 3문항 이상 모두 동일이면 실패
+//   - 인접 두 문항의 선택지 배열이 완전 동일이면 실패
+//   - 힌트가 이전 문항 답을 알려주는 패턴 (앞의 문제와 같아요 등) 사용 금지
+//   - 최소 2가지 이상 문제 표현 (stem 앞머리) 사용
+// ============================================================
+const BAD_HINT_PATTERNS: RegExp[] = [
+  /앞의?\s*문제와?\s*같/,
+  /앞에서\s*나온\s*답과?\s*같/,
+  /['‘’][가-힣]+['‘’]와?\s*비슷/,
+  /['‘’][가-힣]+['‘’]\s*,?\s*['‘’][가-힣]+['‘’]와?\s*같/,
+];
+
+function validateQuestionSet(
+  questions: QuestionSection[],
+): { ok: true } | { ok: false; reason: string } {
+  const mcQs = questions.filter((q) => q.qtype === 'mc');
+  const n = mcQs.length;
+  if (n < 3) return { ok: true }; // 문항 수 적으면 다양성 검사 skip
+
+  // 정답 내용 · 위치 집계
+  const answerContent = new Map<string, number>();
+  const answerPos = new Map<number, number>();
+  for (const q of mcQs) {
+    const choices = q.choices ?? [];
+    if (!q.answer || choices.length === 0) continue;
+    const idx = parseAnswerIndex(q.answer, choices.length);
+    if (idx === null) continue;
+    const content = (choices[idx] ?? '').replace(/\s+/g, '').trim();
+    if (content) answerContent.set(content, (answerContent.get(content) ?? 0) + 1);
+    answerPos.set(idx, (answerPos.get(idx) ?? 0) + 1);
+  }
+
+  // 1) 정답 내용 다양성
+  for (const [content, count] of answerContent) {
+    if (count / n > 0.5) {
+      const pct = Math.round((count / n) * 100);
+      return {
+        ok: false,
+        reason: `정답 "${content}" 이 전체 문항의 ${pct}% (${count}/${n}) 을 차지 — 정답 내용이 너무 편중됨`,
+      };
+    }
+  }
+
+  // 2) 정답 번호 다양성
+  for (const [pos, count] of answerPos) {
+    if (count / n > 0.5) {
+      const pct = Math.round((count / n) * 100);
+      return {
+        ok: false,
+        reason: `정답이 ${pos + 1}번 위치에 ${pct}% (${count}/${n}) 몰림`,
+      };
+    }
+  }
+
+  // 3) 자모 유형 목표 자모 다양성
+  const targetJamos = mcQs
+    .map((q) => extractTargetJamoFromStem(q.stem))
+    .filter((j): j is string => j !== null);
+  if (targetJamos.length >= 3 && new Set(targetJamos).size === 1) {
+    return {
+      ok: false,
+      reason: `자모 유형 ${targetJamos.length}문항 모두 동일한 자모 "${targetJamos[0]}" 를 다룸 — 서로 다른 자모로 문항을 구성해야 함`,
+    };
+  }
+
+  // 4) 인접 두 문항의 선택지 배열 동일 금지
+  for (let i = 1; i < mcQs.length; i += 1) {
+    const prev = (mcQs[i - 1]!.choices ?? []).map((c) => c.replace(/\s+/g, '').trim()).join('|');
+    const curr = (mcQs[i]!.choices ?? []).map((c) => c.replace(/\s+/g, '').trim()).join('|');
+    if (prev && prev === curr) {
+      return {
+        ok: false,
+        reason: `${i}번과 ${i + 1}번 문항의 선택지 배열이 완전히 동일 — 선택지 순서·구성을 다르게 해야 함`,
+      };
+    }
+  }
+
+  // 5) 이전 문항 답을 알려주는 힌트 패턴 금지
+  for (let i = 0; i < mcQs.length; i += 1) {
+    const hint = mcQs[i]!.hint;
+    if (!hint) continue;
+    for (const pat of BAD_HINT_PATTERNS) {
+      if (pat.test(hint)) {
+        return {
+          ok: false,
+          reason: `${i + 1}번 힌트가 이전 문항을 참조: "${hint}"`,
+        };
+      }
+    }
+  }
+
+  // 6) 문항 표현 다양성 — stem 앞머리 5글자 종류가 최소 2가지 이상 (전체 문항 수의 절반 이상 다양)
+  const stemHeads = mcQs.map((q) => q.stem.replace(/\s+/g, '').slice(0, 5));
+  const uniqueHeads = new Set(stemHeads);
+  if (uniqueHeads.size < 2) {
+    return {
+      ok: false,
+      reason: `모든 문항 stem 이 같은 표현으로 시작 — 최소 2가지 이상의 문제 표현 사용 필요`,
+    };
+  }
+
+  return { ok: true };
+}
+
 function validateSemantic(
   input: OrchestratorInput,
   doc: LearningDocument,
@@ -167,6 +275,9 @@ function validateSemantic(
       const check = validateMultipleChoice(questions[i]!, i);
       if (!check.ok) return check;
     }
+    // 2b) 세트 단위 다양성 검증 (M2-1.3)
+    const setCheck = validateQuestionSet(questions);
+    if (!setCheck.ok) return setCheck;
   }
 
   // 3) 단원·주제가 title 또는 첫 heading 에 반영됐는지 (부분 문자열 포함 기준, 관대)
