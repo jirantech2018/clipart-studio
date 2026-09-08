@@ -100,7 +100,7 @@ export async function POST(request: Request) {
   }
 
   // Job insert — placeholder prompt / batch_size=1 로 기존 CHECK 만족.
-  const promptSummary = `${body.grade}학년 ${SUBJECT_LABEL[body.subject as 'KOR' | 'MATH']} · ${materialTypeLabel(body.materialType as 'multiple_choice' | 'individual_activity' | 'ox_quiz' | 'concept_summary' | 'reading_material')} · ${body.topic}`;
+  const promptSummary = `${body.grade}학년 ${SUBJECT_LABEL[body.subject as 'KOR' | 'MATH']} · ${materialTypeLabel(body.materialType as 'multiple_choice' | 'individual_activity' | 'ox_quiz' | 'concept_summary' | 'reading_material')} · ${body.unit} · ${body.topic}`;
   const service = createSupabaseServiceClient();
   const { data: job, error: jobError } = await service
     .from('generation_jobs')
@@ -170,6 +170,7 @@ export async function POST(request: Request) {
         | 'ox_quiz'
         | 'concept_summary'
         | 'reading_material',
+      unit: body.unit,
       topic: body.topic,
       questionCount: body.questionCount,
       difficulty: body.difficulty,

@@ -16,6 +16,8 @@ export const createLearningDocumentSchema = z.object({
   grade: gradeSchema,
   subject: subjectSchema,
   materialType: materialTypeSchema,
+  // M2-1 (v0.5): 단원과 주제 필드 분리. AI 프롬프트에는 둘 다 전달.
+  unit: z.string().min(1).max(80),
   topic: z.string().min(2).max(80),
   questionCount: z.number().int().min(1).max(20).default(5),
   difficulty: z.enum(['easy', 'normal', 'hard']).default('normal'),

@@ -45,6 +45,10 @@ export async function runLearningDocJob(
 
   // 3) learning_documents INSERT (service role 로 RLS 우회, user_id/organization_id
   //    는 이미 API route 에서 인증됨).
+  // M2-1 (v0.5): unit + topic 두 필드를 하나의 topic 컬럼에 concat 저장.
+  // 별도 unit 컬럼은 M2-3 이후 검토 (지금은 스키마 마이그레이션 미필요).
+  const topicForStorage = `${input.unit} · ${input.topic}`;
+
   const { data: docRow, error: docErr } = await service
     .from('learning_documents')
     .insert({
@@ -54,7 +58,7 @@ export async function runLearningDocJob(
       grade: input.grade,
       subject_code: input.subject,
       material_type_code: input.materialType,
-      topic: input.topic,
+      topic: topicForStorage,
       difficulty: input.difficulty,
       question_count: input.questionCount,
       document_json: doc,

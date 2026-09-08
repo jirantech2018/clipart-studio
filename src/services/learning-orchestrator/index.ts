@@ -158,7 +158,7 @@ function validateAndNormalize(
     difficulty: (input.difficulty ?? 'normal') as Difficulty,
     estimatedMinutes:
       typeof metaRaw?.estimatedMinutes === 'number' ? metaRaw.estimatedMinutes : 20,
-    topic: input.topic,
+    topic: `${input.unit} · ${input.topic}`,
     teacherReviewRequired: true,
     generatedAt: new Date().toISOString(),
   };

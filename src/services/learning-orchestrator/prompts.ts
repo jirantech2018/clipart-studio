@@ -10,6 +10,8 @@ export interface OrchestratorInput {
   grade: Grade;
   subject: SubjectCode;
   materialType: MaterialTypeCode;
+  /** M2-1 (v0.5): 단원 (seed 기반 선택). AI 컨텍스트에 명시적으로 전달. */
+  unit: string;
   topic: string;
   questionCount: number;
   difficulty: Difficulty;
@@ -115,7 +117,8 @@ export function userPrompt(input: OrchestratorInput): string {
   const common = [
     `학년: ${input.grade}학년`,
     `과목: ${subjectKo}`,
-    `단원·주제: ${input.topic}`,
+    `단원: ${input.unit}`,
+    `주제: ${input.topic}`,
     `난이도: ${input.difficulty}`,
     `요청 문항 수: ${input.questionCount}`,
     input.additionalRequest ? `추가 요청: ${input.additionalRequest}` : null,

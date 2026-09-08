@@ -18,10 +18,11 @@ interface Props {
   onSelect: (rec: Recommendation) => void;
 }
 
+// M2-1 (v0.5) 명칭 조정 — 내부 값은 유지, 사용자 노출 문구만 변경.
 const TYPE_LABEL: Record<Recommendation['type'], string> = {
-  basic: '교육과정 기본형',
-  realworld: '실생활 연결형',
-  inquiry: '탐구·확장형',
+  basic: '기본 개념 익히기',
+  realworld: '생활 속에서 적용하기',
+  inquiry: '생각을 넓혀 탐구하기',
 };
 
 const TYPE_COLOR: Record<Recommendation['type'], string> = {
