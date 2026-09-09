@@ -407,31 +407,22 @@ export function LearningPageClientV2({
   return (
     <div className="mx-auto flex max-w-7xl gap-6">
       {/* ============ MAIN ============ */}
-      <main className="min-w-0 flex-1 space-y-6">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
+      <main className="min-w-0 flex-1 space-y-8">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight">
             학습 자료 만들기
           </h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             학년·과목·단원을 고르고 세부 주제까지 정하면 학생용 학습지가 자동으로 만들어집니다.
             현재 워크스페이스: <span className="font-medium text-foreground">{orgName}</span>
           </p>
         </header>
 
-        {/* 최근 자료 (재다운로드) */}
-        <RecentDocumentsCard
-          documents={recent}
-          loading={recentLoading}
-          orgSlug={orgSlug}
-          downloading={downloading}
-          onDownload={(id, title) => doDownload(id, 'pdf', 'student', title)}
-        />
-
-        {/* 입력 카드 */}
-        <section className="space-y-5 rounded-lg border border-border bg-card p-5 shadow-sm">
+        {/* 입력 카드 (페이지 진입 즉시 노출) */}
+        <section className="space-y-7 rounded-xl border border-border bg-card p-7 shadow-sm">
           {/* 학년 */}
           <div>
-            <Label className="mb-2 block text-sm font-medium">학년</Label>
+            <Label className="mb-3 block text-[15px] font-semibold text-foreground">학년</Label>
             <div className="flex flex-wrap gap-2">
               {ALL_GRADES.map((g) => {
                 const hasProfile = supportedSubjectsForGrade(supportMatrix, g).size > 0;
@@ -443,13 +434,13 @@ export function LearningPageClientV2({
                     onClick={() => patch({ grade: g })}
                     className={
                       selected
-                        ? 'rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground'
-                        : 'rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted'
+                        ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
+                        : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
                     }
                   >
                     {g}학년
                     {!hasProfile && (
-                      <span className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-semibold text-slate-500">
+                      <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
                         준비 중
                       </span>
                     )}
@@ -461,7 +452,7 @@ export function LearningPageClientV2({
 
           {/* 과목 */}
           <div>
-            <Label className="mb-2 block text-sm font-medium">과목</Label>
+            <Label className="mb-3 block text-[15px] font-semibold text-foreground">과목</Label>
             <div className="flex flex-wrap gap-2">
               {LEARNING_SUBJECTS.map((s) => {
                 const hasProfile = supportedSubjects.has(s.code);
@@ -473,13 +464,13 @@ export function LearningPageClientV2({
                     onClick={() => patch({ subject: s.code })}
                     className={
                       selected
-                        ? 'rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground'
-                        : 'rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted'
+                        ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
+                        : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
                     }
                   >
                     {s.nameKo}
                     {gradeSupported && !hasProfile && (
-                      <span className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-semibold text-slate-500">
+                      <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
                         준비 중
                       </span>
                     )}
@@ -491,7 +482,7 @@ export function LearningPageClientV2({
 
           {/* 자료유형 */}
           <div>
-            <Label className="mb-2 block text-sm font-medium">자료유형</Label>
+            <Label className="mb-3 block text-[15px] font-semibold text-foreground">자료유형</Label>
             <div className="flex flex-wrap gap-2">
               {LEARNING_MATERIAL_TYPES.map((m) => {
                 const selected = form.materialType === m.code;
@@ -502,8 +493,8 @@ export function LearningPageClientV2({
                     onClick={() => patch({ materialType: m.code })}
                     className={
                       selected
-                        ? 'rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground'
-                        : 'rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted'
+                        ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
+                        : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
                     }
                     title={m.description}
                   >
@@ -516,8 +507,8 @@ export function LearningPageClientV2({
 
           {/* 수량 */}
           <div>
-            <Label className="mb-1 block text-sm font-medium">{amountSpec.fieldLabel}</Label>
-            <p className="mb-2 text-xs text-muted-foreground">{amountSpec.helperText}</p>
+            <Label className="mb-1 block text-[15px] font-semibold text-foreground">{amountSpec.fieldLabel}</Label>
+            <p className="mb-3 text-sm text-muted-foreground">{amountSpec.helperText}</p>
             <div className="flex flex-wrap gap-2">
               {amountSpec.options.map((opt) => {
                 const selected = form.questionCount === opt.value;
@@ -528,8 +519,8 @@ export function LearningPageClientV2({
                     onClick={() => patch({ questionCount: opt.value })}
                     className={
                       selected
-                        ? 'rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground'
-                        : 'rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted'
+                        ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
+                        : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
                     }
                   >
                     {opt.label}
@@ -541,7 +532,7 @@ export function LearningPageClientV2({
 
           {/* 단원 */}
           <div>
-            <Label className="mb-2 block text-sm font-medium">단원</Label>
+            <Label className="mb-3 block text-[15px] font-semibold text-foreground">단원</Label>
             {!combinationSupported ? (
               <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                 {form.grade}학년 {SUBJECT_LABEL[form.subject as 'KOR' | 'MATH'] ?? form.subject}은
@@ -569,7 +560,7 @@ export function LearningPageClientV2({
                     >
                       {u}
                       {hasProfile && (
-                        <span className="ml-1.5 rounded bg-emerald-50 px-1 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        <span className="ml-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800">
                           맞춤 프로필
                         </span>
                       )}
@@ -631,7 +622,7 @@ export function LearningPageClientV2({
 
           {/* 추가 요청 */}
           <div>
-            <Label className="mb-2 block text-sm font-medium">
+            <Label className="mb-3 block text-[15px] font-semibold text-foreground">
               추가 요청 <span className="text-xs text-muted-foreground">(선택)</span>
             </Label>
             <Textarea
@@ -646,7 +637,7 @@ export function LearningPageClientV2({
           {/* 출력 옵션 */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label className="mb-2 block text-sm font-medium">배포 대상</Label>
+              <Label className="mb-3 block text-[15px] font-semibold text-foreground">배포 대상</Label>
               <div className="flex flex-wrap gap-2">
                 {VARIANT_OPTIONS.map((opt) => {
                   const selected = form.variant === opt.value;
@@ -669,7 +660,7 @@ export function LearningPageClientV2({
               </div>
             </div>
             <div>
-              <Label className="mb-2 block text-sm font-medium">출력 형식</Label>
+              <Label className="mb-3 block text-[15px] font-semibold text-foreground">출력 형식</Label>
               <div className="flex flex-wrap gap-2">
                 {FORMAT_OPTIONS.map((opt) => {
                   const selected = form.format === opt.value;
@@ -706,7 +697,7 @@ export function LearningPageClientV2({
 
           {/* 액션 */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               {combinationSupported
                 ? `이 자료 생성에 크레딧 ${LEARNING_DOC_CREDITS}이(가) 사용돼요. 잔액: ${credits}`
                 : '지원 학년·과목을 선택하면 생성할 수 있어요.'}
@@ -715,15 +706,16 @@ export function LearningPageClientV2({
               type="button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="min-w-[10rem]"
+              size="lg"
+              className="min-w-[12rem] text-base font-semibold"
             >
               {submitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 생성 중…
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 생성 중…
                 </>
               ) : (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4" /> 학습지 만들기
+                  <Sparkles className="mr-2 h-5 w-5" /> 학습지 만들기
                 </>
               )}
             </Button>
@@ -770,17 +762,28 @@ export function LearningPageClientV2({
             />
           </section>
         )}
+
+        {/* 최근 자료 (재다운로드) — 생성 폼 아래로 이동 · 상단은 접힘 3개만 */}
+        <RecentDocumentsCard
+          documents={recent}
+          loading={recentLoading}
+          orgSlug={orgSlug}
+          downloading={downloading}
+          onDownload={(id, title) => doDownload(id, 'pdf', 'student', title)}
+        />
       </main>
 
       {/* ============ SIDEBAR ============ */}
-      <aside className="hidden w-72 shrink-0 space-y-4 lg:block">
-        <SummarySidebar
-          credits={credits}
-          form={form}
-          combinationSupported={combinationSupported}
-          appliedProfile={result?.appliedProfile}
-          matrix={supportMatrix}
-        />
+      <aside className="hidden w-72 shrink-0 lg:block">
+        <div className="sticky top-4 space-y-4">
+          <SummarySidebar
+            credits={credits}
+            form={form}
+            combinationSupported={combinationSupported}
+            appliedProfile={result?.appliedProfile}
+            matrix={supportMatrix}
+          />
+        </div>
       </aside>
     </div>
   );
@@ -921,9 +924,11 @@ function RecentDocumentsCard({
   downloading: boolean;
   onDownload: (id: string, title: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (loading) {
     return (
-      <section className="rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground shadow-sm">
+      <section className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground shadow-sm">
         최근 학습자료 불러오는 중…
       </section>
     );
@@ -931,18 +936,24 @@ function RecentDocumentsCard({
   if (documents.length === 0) {
     return null;
   }
+
+  const visible = expanded ? documents : documents.slice(0, 3);
+  const hasMore = documents.length > 3;
+
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-sm font-semibold">최근 학습자료</div>
-        <div className="text-xs text-muted-foreground">최근 20건 · 학생용 PDF 재다운로드</div>
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-base font-semibold">최근 학습자료</div>
+        <div className="text-xs text-muted-foreground">
+          최근 {documents.length}건 · 학생용 PDF 재다운로드
+        </div>
       </div>
       <ul className="divide-y divide-border">
-        {documents.slice(0, 8).map((d) => (
-          <li key={d.id} className="flex items-center justify-between gap-3 py-2">
+        {visible.map((d) => (
+          <li key={d.id} className="flex items-center justify-between gap-3 py-3">
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">{d.title}</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="mt-0.5 text-xs text-muted-foreground">
                 {d.grade}학년 · {SUBJECT_LABEL[d.subjectCode as 'KOR' | 'MATH'] ?? d.subjectCode} ·{' '}
                 {d.topic}
               </div>
@@ -960,6 +971,17 @@ function RecentDocumentsCard({
           </li>
         ))}
       </ul>
+      {hasMore && (
+        <div className="mt-2 border-t border-border pt-2 text-center">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs font-medium text-primary hover:opacity-80"
+          >
+            {expanded ? '접기' : `전체 보기 (${documents.length}건)`}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
