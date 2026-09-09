@@ -1,12 +1,10 @@
-// MY organization 컨텍스트 학습지 만들기 페이지 (Phase 1 M1).
+// MY organization 컨텍스트 학습지 만들기 페이지 (Phase 2 UI).
 // /organization/my/learning
-//
-// Personal workspace 를 자동 해석해 /organization/[slug]/learning 과 동일 클라이언트
-// 컴포넌트로 렌더한다.
 
 import { redirect } from 'next/navigation';
 
-import { LearningPageClient } from '@/features/learning-helper/components/LearningPageClient';
+import { LearningPageClientV2 } from '@/features/learning-helper/components/LearningPageClientV2';
+import { loadSupportMatrix } from '@/features/learning-helper/lib/support-matrix';
 import { resolveMyOrganization } from '@/lib/organization/resolve-personal';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
@@ -29,11 +27,15 @@ export default async function MyLearningPage() {
     .maybeSingle();
   const initialCredits = (poolRow as { balance: number } | null)?.balance ?? 0;
 
+  const supportMatrix = await loadSupportMatrix();
+
   return (
-    <LearningPageClient
+    <LearningPageClientV2
       orgSlug={myOrg.slug}
       orgName="내 워크스페이스"
       initialCredits={initialCredits}
+      supportMatrix={supportMatrix}
+      userEmail={user.email ?? null}
     />
   );
 }

@@ -5,7 +5,8 @@
 
 import { redirect } from 'next/navigation';
 
-import { LearningPageClient } from '@/features/learning-helper/components/LearningPageClient';
+import { LearningPageClientV2 } from '@/features/learning-helper/components/LearningPageClientV2';
+import { loadSupportMatrix } from '@/features/learning-helper/lib/support-matrix';
 import { createSupabaseServerClient } from '@/services/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -48,11 +49,15 @@ export default async function OrganizationLearningPage({ params }: Props) {
     .maybeSingle();
   const initialCredits = (poolRow as { balance: number } | null)?.balance ?? 0;
 
+  const supportMatrix = await loadSupportMatrix();
+
   return (
-    <LearningPageClient
+    <LearningPageClientV2
       orgSlug={org.slug}
       orgName={org.name}
       initialCredits={initialCredits}
+      supportMatrix={supportMatrix}
+      userEmail={user.email ?? null}
     />
   );
 }
