@@ -48,12 +48,17 @@ export type MaterialType =
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
 // 산출물의 논리적 블록. 세 렌더러가 각자 이 배열을 순회한다.
+//
+// itemId (M2-1.8): 부분 재생성 대상 지정용 안정 식별자. question / activity /
+//   worksheet-table / blank-space / table 등 재생성 가능 블록에 orchestrator 가
+//   자동 부여 ("q_01", "act_02" 등). 렌더러는 이 필드를 사용하지 않음.
 export type Section =
   | { kind: 'heading'; level: 1 | 2 | 3; text: string }
   | { kind: 'paragraph'; text: string }
   | { kind: 'callout'; tone: 'info' | 'warn' | 'tip'; text: string }
   | {
       kind: 'question';
+      itemId?: string;
       qtype: 'ox' | 'mc' | 'short' | 'blank' | 'essay';
       /** 문항 번호 표시용 (렌더러가 자동 번호매김도 가능하지만 SoT 우선). */
       number?: number;
@@ -65,6 +70,7 @@ export type Section =
     }
   | {
       kind: 'activity';
+      itemId?: string;
       /** 활동 이름 (예: "모둠 관찰 활동"). */
       title?: string;
       steps: string[];
@@ -75,6 +81,7 @@ export type Section =
     }
   | {
       kind: 'table';
+      itemId?: string;
       headers?: string[];
       rows: string[][];
       caption?: string;
@@ -111,6 +118,7 @@ export type Section =
   | {
       /** 학생이 채워넣을 표. headers + rowCount 만큼의 빈 행이 렌더된다. */
       kind: 'worksheet-table';
+      itemId?: string;
       headers: string[];
       /** 빈 행의 개수 (기본 3, 최대 12). */
       rowCount: number;
@@ -119,6 +127,7 @@ export type Section =
   | {
       /** 학생이 그리거나 크게 쓸 수 있는 사각형 빈 공간. */
       kind: 'blank-space';
+      itemId?: string;
       /** 안내 문구 (예: "여기에 크게 그려 보세요"). */
       prompt?: string;
       /** 페이지 폭 기준 세로 높이 비율 (0.1~0.6, 기본 0.3). PDF 렌더러가 실제 mm 로 변환. */

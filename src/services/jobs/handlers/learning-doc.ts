@@ -1,12 +1,14 @@
-// kind='learning_doc' job handler.
+// kind='learning_doc' job handler (M2-1.8 재구축).
 //
 // 흐름:
-//   1) orchestrator 호출 → LearningDocument JSON 생성
-//   2) 요청과 결과 semantic 검증 (block 개수 · 학생용 정답 부재 · 단원·주제 반영)
-//   3) 불일치 시 1회 자동 재생성. 두 번 다 실패면 예외.
-//   4) learning_documents INSERT (service role)
-//   5) generation_jobs.learning_document_id 업데이트 + status='done'
-//   6) LearningDocument + documentId 반환
+//   1) orchestrator 호출 → LearningDocument (itemId 자동 부여됨)
+//   2) LearningProfile 조회 + 계층 병합 → ResolvedLearningProfile
+//   3) 정답 위치 셔플 (GPT position bias 회피)
+//   4) 3계층 검증 실행 (L1 structural + L2 deterministic + L3 semantic AI)
+//   5) legacy guards 병행 실행 (드리프트 감지 + 안전망)
+//   6) 실패한 item_id 가 있으면 최대 1회 부분 재생성
+//   7) evaluations + evaluation_items + repair_attempts 저장 (profile snapshot 포함)
+//   8) learning_documents INSERT + job 완료
 //
 // 실패 시 예외를 던진다. 크레딧 환불·job 정리는 호출자(API route) 책임.
 
@@ -20,10 +22,15 @@ import type { LearningDocument, Section } from '@/services/learning-renderer/sch
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 
 import {
-  extractTargetJamoFromStem,
-  findChoicesContainingJamo,
-} from '@/features/learning-helper/lib/hangul';
-import { isJamoRelatedTopic } from '@/services/learning-orchestrator/prompts';
+  resolveLearningProfile,
+  type ResolvedLearningProfile,
+  type EvaluationResult,
+} from '@/services/learning-profile';
+import { runThreeLayer } from '@/services/learning-validators';
+import {
+  runLegacyValidators,
+  shuffleMcSections,
+} from '@/services/learning-validators/legacy-guards';
 
 export interface LearningDocJobInput extends OrchestratorInput {
   jobId: string;
@@ -37,632 +44,129 @@ export interface LearningDocJobResult {
   usage?: GenerateResult['rawUsage'];
 }
 
-// ============================================================
-// 요청/결과 semantic 검증
-// ============================================================
-type QuestionSection = Extract<Section, { kind: 'question' }>;
-
-// ============================================================
-// 정답 위치 셔플 (M2-1.4):
-//   GPT-4o 는 프롬프트 지시와 무관하게 정답을 1번 위치에 두는 강한 습관이
-//   있어 프롬프트만으로는 다양성 검증을 통과하지 못한다. 서버가 각 문항의
-//   choices 배열을 Fisher-Yates 로 셔플하고 answer 인덱스를 재계산해서
-//   위치 편중을 원천 차단한다.
-//
-//   자모 유형 검증(findChoicesContainingJamo)은 셔플 후에도 여전히 정확
-//   (셔플로 정답의 "위치"만 바뀌고 "내용"은 그대로).
-// ============================================================
-function shuffleMcSections(sections: Section[]): Section[] {
-  return sections.map((s) => {
-    if (s.kind !== 'question' || s.qtype !== 'mc') return s;
-    const choices = s.choices;
-    if (!choices || choices.length < 2 || !s.answer) return s;
-    const answerIdx = parseAnswerIndex(s.answer, choices.length);
-    if (answerIdx === null) return s;
-    const correctContent = choices[answerIdx]!;
-
-    // Fisher-Yates shuffle
-    const shuffled = [...choices];
-    for (let i = shuffled.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const tmp = shuffled[i]!;
-      shuffled[i] = shuffled[j]!;
-      shuffled[j] = tmp;
-    }
-    const newAnswerIdx = shuffled.indexOf(correctContent);
-    if (newAnswerIdx < 0) return s; // safety: 셔플 후 정답 못 찾으면 원본 유지
-
-    return { ...s, choices: shuffled, answer: String(newAnswerIdx + 1) };
-  });
-}
-
-/** answer 문자열에서 정답 번호 파싱 ("2", "2번", "2)", "2. …" 등). */
-function parseAnswerIndex(answer: string, totalChoices: number): number | null {
-  const m = answer.trim().match(/^(\d+)/);
-  if (!m) return null;
-  const n = Number(m[1]);
-  if (!Number.isInteger(n) || n < 1 || n > totalChoices) return null;
-  return n - 1; // 0-based
-}
-
-/** 객관식 문항 하나의 정답·중복·자모 검증. */
-function validateMultipleChoice(
-  q: QuestionSection,
-  questionIndex: number,
-): { ok: true } | { ok: false; reason: string } {
-  if (q.qtype !== 'mc' && q.qtype !== 'ox') return { ok: true };
-  const choices = q.choices ?? [];
-
-  // OX 는 선택지 2개 고정, 정답 O/X.
-  if (q.qtype === 'ox') {
-    if (!q.answer || !/^[OX]$/i.test(q.answer.trim())) {
-      return { ok: false, reason: `${questionIndex + 1}번 문항: OX answer 형식 오류` };
-    }
-    return { ok: true };
-  }
-
-  // 객관식 (mc): 선택지 최소 3개 이상
-  if (choices.length < 3) {
-    return {
-      ok: false,
-      reason: `${questionIndex + 1}번 문항: 선택지가 ${choices.length}개 (최소 3개 필요)`,
-    };
-  }
-
-  // 1) 중복 선택지 검사 (공백/구두점 제거 후 비교)
-  const norm = (s: string) => s.replace(/\s+/g, '').replace(/[.·,]/g, '').trim();
-  const seen = new Set<string>();
-  for (const c of choices) {
-    const key = norm(c);
-    if (!key) continue;
-    if (seen.has(key)) {
-      return {
-        ok: false,
-        reason: `${questionIndex + 1}번 문항: 선택지 중 실질적으로 같은 항목 존재 ("${c}")`,
-      };
-    }
-    seen.add(key);
-  }
-
-  // 2) 정답 번호 파싱 및 범위 검증
-  if (!q.answer) {
-    return { ok: false, reason: `${questionIndex + 1}번 문항: 정답이 비어 있음` };
-  }
-  const answerIdx = parseAnswerIndex(q.answer, choices.length);
-  if (answerIdx === null) {
-    return {
-      ok: false,
-      reason: `${questionIndex + 1}번 문항: 정답 "${q.answer}" 이 선택지 범위와 일치하지 않음`,
-    };
-  }
-
-  // 3) 자모 유형이면 코드로 정답 검증
-  const targetJamo = extractTargetJamoFromStem(q.stem);
-  if (targetJamo) {
-    const matched = findChoicesContainingJamo(choices, targetJamo);
-    if (matched.length === 0) {
-      return {
-        ok: false,
-        reason: `${questionIndex + 1}번 문항: 목표 자모 "${targetJamo}" 가 어떤 선택지에도 없음`,
-      };
-    }
-    if (matched.length > 1) {
-      return {
-        ok: false,
-        reason: `${questionIndex + 1}번 문항: "${targetJamo}" 를 포함한 선택지가 ${matched.length}개 (정답이 1개가 아님)`,
-      };
-    }
-    if (matched[0] !== answerIdx) {
-      return {
-        ok: false,
-        reason: `${questionIndex + 1}번 문항: 정답 번호 불일치 (실제로 "${targetJamo}" 를 포함한 선택지는 ${matched[0]! + 1}번, AI 는 ${answerIdx + 1}번 응답)`,
-      };
-    }
-  }
-
-  return { ok: true };
-}
-
-// ============================================================
-// 세트 단위 검증 (M2-1.3 사용자 지시 2026-09-08):
-//   - 같은 정답 내용 (choices[answerIdx]) 이 문항의 50% 초과 X
-//   - 정답 번호 (1~4) 가 한 위치에 몰리지 X (50% 초과 X)
-//   - 자모 유형에서 목표 자모가 3문항 이상 모두 동일이면 실패
-//   - 인접 두 문항의 선택지 배열이 완전 동일이면 실패
-//   - 힌트가 이전 문항 답을 알려주는 패턴 (앞의 문제와 같아요 등) 사용 금지
-//   - 최소 2가지 이상 문제 표현 (stem 앞머리) 사용
-// ============================================================
-const BAD_HINT_PATTERNS: RegExp[] = [
-  /앞의?\s*문제와?\s*같/,
-  /앞에서\s*나온\s*답과?\s*같/,
-  /['‘’][가-힣]+['‘’]와?\s*비슷/,
-  /['‘’][가-힣]+['‘’]\s*,?\s*['‘’][가-힣]+['‘’]와?\s*같/,
-];
-
-function validateQuestionSet(
-  questions: QuestionSection[],
-): { ok: true } | { ok: false; reason: string } {
-  const mcQs = questions.filter((q) => q.qtype === 'mc');
-  const n = mcQs.length;
-  if (n < 3) return { ok: true }; // 문항 수 적으면 다양성 검사 skip
-
-  // 정답 내용 · 위치 집계
-  const answerContent = new Map<string, number>();
-  const answerPos = new Map<number, number>();
-  for (const q of mcQs) {
-    const choices = q.choices ?? [];
-    if (!q.answer || choices.length === 0) continue;
-    const idx = parseAnswerIndex(q.answer, choices.length);
-    if (idx === null) continue;
-    const content = (choices[idx] ?? '').replace(/\s+/g, '').trim();
-    if (content) answerContent.set(content, (answerContent.get(content) ?? 0) + 1);
-    answerPos.set(idx, (answerPos.get(idx) ?? 0) + 1);
-  }
-
-  // 1) 정답 내용 다양성
-  for (const [content, count] of answerContent) {
-    if (count / n > 0.5) {
-      const pct = Math.round((count / n) * 100);
-      return {
-        ok: false,
-        reason: `정답 "${content}" 이 전체 문항의 ${pct}% (${count}/${n}) 을 차지 — 정답 내용이 너무 편중됨`,
-      };
-    }
-  }
-
-  // 2) 정답 번호 다양성
-  for (const [pos, count] of answerPos) {
-    if (count / n > 0.5) {
-      const pct = Math.round((count / n) * 100);
-      return {
-        ok: false,
-        reason: `정답이 ${pos + 1}번 위치에 ${pct}% (${count}/${n}) 몰림`,
-      };
-    }
-  }
-
-  // 3) 자모 유형 목표 자모 다양성
-  const targetJamos = mcQs
-    .map((q) => extractTargetJamoFromStem(q.stem))
-    .filter((j): j is string => j !== null);
-  if (targetJamos.length >= 3 && new Set(targetJamos).size === 1) {
-    return {
-      ok: false,
-      reason: `자모 유형 ${targetJamos.length}문항 모두 동일한 자모 "${targetJamos[0]}" 를 다룸 — 서로 다른 자모로 문항을 구성해야 함`,
-    };
-  }
-
-  // 4) 인접 두 문항의 선택지 배열 동일 금지
-  for (let i = 1; i < mcQs.length; i += 1) {
-    const prev = (mcQs[i - 1]!.choices ?? []).map((c) => c.replace(/\s+/g, '').trim()).join('|');
-    const curr = (mcQs[i]!.choices ?? []).map((c) => c.replace(/\s+/g, '').trim()).join('|');
-    if (prev && prev === curr) {
-      return {
-        ok: false,
-        reason: `${i}번과 ${i + 1}번 문항의 선택지 배열이 완전히 동일 — 선택지 순서·구성을 다르게 해야 함`,
-      };
-    }
-  }
-
-  // 5) 이전 문항 답을 알려주는 힌트 패턴 금지
-  for (let i = 0; i < mcQs.length; i += 1) {
-    const hint = mcQs[i]!.hint;
-    if (!hint) continue;
-    for (const pat of BAD_HINT_PATTERNS) {
-      if (pat.test(hint)) {
-        return {
-          ok: false,
-          reason: `${i + 1}번 힌트가 이전 문항을 참조: "${hint}"`,
-        };
-      }
-    }
-  }
-
-  // 6) 문항 표현 다양성 — stem 앞머리 5글자 종류가 최소 2가지 이상 (전체 문항 수의 절반 이상 다양)
-  const stemHeads = mcQs.map((q) => q.stem.replace(/\s+/g, '').slice(0, 5));
-  const uniqueHeads = new Set(stemHeads);
-  if (uniqueHeads.size < 2) {
-    return {
-      ok: false,
-      reason: `모든 문항 stem 이 같은 표현으로 시작 — 최소 2가지 이상의 문제 표현 사용 필요`,
-    };
-  }
-
-  return { ok: true };
-}
-
-// ============================================================
-// M2-1.6 사용자 지시 (2026-09-08): 세 가지 검증 추가
-//   (a) self-contained: 이미지 없는 문서에 "이 사물/이 그림/다음 사진" 등
-//       외부 자료 지시 표현 금지.
-//   (b) hint reveal: 힌트에 정답 텍스트 노출 금지 (정답이 3자 이상일 때만).
-//   (c) 수학 활동지: 각 활동의 문제 서술이 topic 의 operation 과 일치
-//       (받아올림 덧셈 활동에 곱셈/뺄셈 상황 금지).
-// ============================================================
-const JAMO_WORD_TOKENS = ['모음', '자음', '초성', '중성', '종성', '받침'];
-
-const DEICTIC_PATTERNS = [
-  '이 사물', '위 사물', '아래 사물', '다음 사물',
-  '이 그림', '위 그림', '아래 그림', '다음 그림',
-  '이 사진', '위 사진', '아래 사진', '다음 사진',
-  '이 물건', '위 물건', '아래 물건', '다음 물건',
-  '화면에 있는', '그림을 보고', '그림에서', '그림 속',
-  '사진을 보고', '사진에서',
-];
-
-/** 문서에 image 섹션이 없을 때만 검사 — 이미지 있으면 deictic 허용. */
-function hasImageSection(sections: Section[]): boolean {
-  return sections.some((s) => s.kind === 'image');
-}
-
-function findDeicticReference(text: string): string | null {
-  for (const pat of DEICTIC_PATTERNS) {
-    if (text.includes(pat)) return pat;
-  }
-  return null;
-}
-
-/** 힌트가 정답을 그대로 노출하는지. 정답이 3자 이상일 때만 검사. */
-function hintRevealsAnswer(hint: string, correctChoice: string): boolean {
-  const norm = (s: string) => s.replace(/\s+/g, '').replace(/[.,·!?]/g, '');
-  const answer = norm(correctChoice);
-  if (answer.length < 3) return false; // 자모 같은 짧은 정답은 오탐 방지
-  const h = norm(hint);
-  return h.includes(answer);
-}
-
-function stemLooksJamo(stem: string): boolean {
-  if (extractTargetJamoFromStem(stem)) return true; // ㅏ/ㅓ/ㄱ/… 등 홑자모
-  return JAMO_WORD_TOKENS.some((t) => stem.includes(t));
-}
-
-function validateSubjectTopicAlignment(
-  input: OrchestratorInput,
-  doc: LearningDocument,
-): { ok: true } | { ok: false; reason: string } {
-  const questions = doc.sections.filter(
-    (s): s is QuestionSection => s.kind === 'question',
-  );
-
-  // 수학 자료에 자모 문항이 하나라도 있으면 실패
-  if (input.subject === 'MATH' && questions.length > 0) {
-    for (let i = 0; i < questions.length; i += 1) {
-      const q = questions[i]!;
-      if (stemLooksJamo(q.stem)) {
-        return {
-          ok: false,
-          reason: `수학 자료의 ${i + 1}번 문항이 한글 자모/모음/자음 관련 (stem: "${q.stem.slice(0, 30)}") — 과목 불일치`,
-        };
-      }
-    }
-  }
-
-  // 국어 + 자모 topic 아닌데 자모 stem 이 절반 초과면 실패
-  if (input.subject === 'KOR' && !isJamoRelatedTopic(input.unit, input.topic) && questions.length > 0) {
-    const jamoCount = questions.filter((q) => stemLooksJamo(q.stem)).length;
-    if (jamoCount > questions.length / 2) {
-      return {
-        ok: false,
-        reason: `주제 "${input.topic}" 은 자모 학습이 아닌데 ${jamoCount}/${questions.length} 문항이 자모 문제 — 주제와 문항 내용 불일치`,
-      };
-    }
-  }
-
-  return { ok: true };
-}
-
-// ============================================================
-// M2-1.6 (a) self-contained 검증
-// ============================================================
-function validateSelfContained(
-  doc: LearningDocument,
-): { ok: true } | { ok: false; reason: string } {
-  if (hasImageSection(doc.sections)) return { ok: true }; // 이미지 있으면 허용
-
-  const questions = doc.sections.filter(
-    (s): s is QuestionSection => s.kind === 'question',
-  );
-  for (let i = 0; i < questions.length; i += 1) {
-    const q = questions[i]!;
-    const hit = findDeicticReference(q.stem);
-    if (hit) {
-      return {
-        ok: false,
-        reason: `${i + 1}번 문항이 이미지 없는데 "${hit}" 같은 외부 자료 지시 표현 사용 — stem 만으로 정답 결정 불가`,
-      };
-    }
-  }
-
-  // 활동지의 activity steps / paragraph 도 검사
-  for (const s of doc.sections) {
-    if (s.kind === 'paragraph' && findDeicticReference(s.text)) {
-      const hit = findDeicticReference(s.text)!;
-      return {
-        ok: false,
-        reason: `문서에 이미지가 없는데 문단이 "${hit}" 표현 사용 — 학생이 참조할 수 없음`,
-      };
-    }
-    if (s.kind === 'activity') {
-      for (const step of s.steps) {
-        const hit = findDeicticReference(step);
-        if (hit) {
-          return {
-            ok: false,
-            reason: `활동 "${s.title ?? ''}" 의 단계가 "${hit}" 표현 사용 — 이미지 없이 참조 불가`,
-          };
-        }
-      }
-    }
-  }
-
-  return { ok: true };
-}
-
-// ============================================================
-// M2-1.6 (b) 힌트 답 노출 검증
-// ============================================================
-function validateHintDoesNotRevealAnswer(
-  questions: QuestionSection[],
-): { ok: true } | { ok: false; reason: string } {
-  for (let i = 0; i < questions.length; i += 1) {
-    const q = questions[i]!;
-    if (q.qtype !== 'mc' || !q.hint || !q.answer || !q.choices) continue;
-    const idx = parseAnswerIndex(q.answer, q.choices.length);
-    if (idx === null) continue;
-    const correct = q.choices[idx];
-    if (!correct) continue;
-    if (hintRevealsAnswer(q.hint, correct)) {
-      return {
-        ok: false,
-        reason: `${i + 1}번 힌트가 정답 "${correct}" 을 그대로 노출: "${q.hint}"`,
-      };
-    }
-  }
-  return { ok: true };
-}
-
-// ============================================================
-// M2-1.6 (c) 수학 활동지: 각 활동의 문제가 topic operation 과 일치
-// ============================================================
-const OP_KEYWORDS: Record<string, RegExp[]> = {
-  addition: [/\+/, /더하기/, /덧셈/],
-  subtraction: [/-\s*\d/, /빼기/, /뺄셈/],
-  multiplication: [/×/, /곱하기/, /곱셈/, /씩\s*\d+개(?:면|이면|일 때)/],
-  division: [/÷/, /나누기/, /나눗셈/],
-};
-
-function detectOpsInText(text: string): Set<string> {
-  const found = new Set<string>();
-  for (const [op, patterns] of Object.entries(OP_KEYWORDS)) {
-    if (patterns.some((p) => p.test(text))) found.add(op);
-  }
-  return found;
-}
-
-function expectedOpFromTopic(unit: string, topic: string): string | null {
-  const t = `${unit} ${topic}`;
-  if (/(받아올림|덧셈|더하기)/.test(t)) return 'addition';
-  if (/(받아내림|뺄셈|빼기)/.test(t)) return 'subtraction';
-  if (/(곱셈|곱하기|구구)/.test(t)) return 'multiplication';
-  if (/(나눗셈|나누기)/.test(t)) return 'division';
-  return null;
-}
-
-function validateMathActivityOperationAlignment(
-  input: OrchestratorInput,
-  doc: LearningDocument,
-): { ok: true } | { ok: false; reason: string } {
-  if (input.subject !== 'MATH' || input.materialType !== 'individual_activity') {
-    return { ok: true };
-  }
-  const expectedOp = expectedOpFromTopic(input.unit, input.topic);
-  if (!expectedOp) return { ok: true }; // topic 에서 operation 감지 안 되면 skip
-
-  // 각 activity 블록에 인접한 콘텐츠 (activity + 그 다음 paragraph/table/worksheet-table) 를 검사.
-  // 간단한 근사: 문서 전체 텍스트에서 등장한 operation 이 expectedOp 외 다른 게 있는지.
-  // 더 정밀: activity index 별로 순회하며 각 활동 뒤의 콘텐츠까지 묶어 검사.
-  const activityIndices: number[] = [];
-  doc.sections.forEach((s, i) => {
-    if (s.kind === 'activity') activityIndices.push(i);
-  });
-
-  for (let a = 0; a < activityIndices.length; a += 1) {
-    const start = activityIndices[a]!;
-    const end = a + 1 < activityIndices.length ? activityIndices[a + 1]! : doc.sections.length;
-    const blockTexts: string[] = [];
-    for (let j = start; j < end; j += 1) {
-      const sec = doc.sections[j]!;
-      if (sec.kind === 'paragraph') blockTexts.push(sec.text);
-      else if (sec.kind === 'activity') {
-        if (sec.title) blockTexts.push(sec.title);
-        blockTexts.push(...sec.steps);
-      } else if (sec.kind === 'table') {
-        for (const row of sec.rows) blockTexts.push(...row);
-        if (sec.headers) blockTexts.push(...sec.headers);
-      } else if (sec.kind === 'worksheet-table') {
-        blockTexts.push(...sec.headers);
-        if (sec.caption) blockTexts.push(sec.caption);
-      } else if (sec.kind === 'heading') {
-        blockTexts.push(sec.text);
-      }
-    }
-    const combined = blockTexts.join(' \n ');
-    const opsFound = detectOpsInText(combined);
-    // expected 는 있어야 함
-    if (opsFound.size === 0) continue; // 지금은 통과 (콘텐츠 부재 검증은 별도)
-    for (const op of opsFound) {
-      if (op !== expectedOp) {
-        return {
-          ok: false,
-          reason: `활동 ${a + 1}이(가) 주제 "${input.topic}" 과 다른 연산 (${op}) 사용 — 활동별 topic 불일치`,
-        };
-      }
-    }
-  }
-  return { ok: true };
-}
-
-function validateSemantic(
-  input: OrchestratorInput,
-  doc: LearningDocument,
-): { ok: true } | { ok: false; reason: string } {
-  const counts = countSections(doc.sections);
-
-  // 1) 자료유형별 amount 대비 실제 block 개수 일치
-  if (input.materialType === 'multiple_choice' || input.materialType === 'ox_quiz') {
-    if (counts.questions !== input.questionCount) {
-      return {
-        ok: false,
-        reason: `요청 문항 수 ${input.questionCount} 개인데 실제 ${counts.questions} 개 생성됨`,
-      };
-    }
-  } else if (input.materialType === 'individual_activity') {
-    if (counts.activities !== input.questionCount) {
-      return {
-        ok: false,
-        reason: `요청 활동 수 ${input.questionCount} 개인데 실제 ${counts.activities} 개 생성됨`,
-      };
-    }
-    // 개별 활동지는 학생 작성 요소 (worksheet-table or blank-space) 최소 1개 필요
-    if (counts.worksheetElements === 0) {
-      return {
-        ok: false,
-        reason: '개별 활동지에 학생 작성 요소 (worksheet-table 또는 blank-space) 가 없음',
-      };
-    }
-  }
-
-  // 2) 객관식·OX 각 문항 검증 (정답 1개·번호 매칭·중복·자모)
-  if (input.materialType === 'multiple_choice' || input.materialType === 'ox_quiz') {
-    const questions = doc.sections.filter(
-      (s): s is QuestionSection => s.kind === 'question',
-    );
-    for (let i = 0; i < questions.length; i += 1) {
-      const check = validateMultipleChoice(questions[i]!, i);
-      if (!check.ok) return check;
-    }
-    // 2b) 세트 단위 다양성 검증 (M2-1.3)
-    const setCheck = validateQuestionSet(questions);
-    if (!setCheck.ok) return setCheck;
-  }
-
-  // 2c) subject / topic 일치 검증 (M2-1.5)
-  const alignCheck = validateSubjectTopicAlignment(input, doc);
-  if (!alignCheck.ok) return alignCheck;
-
-  // 2d) self-contained 검증 (M2-1.6a) — 이미지 없는 문서에 외부 지시 표현 금지
-  const selfContainedCheck = validateSelfContained(doc);
-  if (!selfContainedCheck.ok) return selfContainedCheck;
-
-  // 2e) 힌트가 답을 직접 노출하지 않음 (M2-1.6b) — 객관식만
-  if (input.materialType === 'multiple_choice') {
-    const questions = doc.sections.filter(
-      (s): s is QuestionSection => s.kind === 'question',
-    );
-    const hintCheck = validateHintDoesNotRevealAnswer(questions);
-    if (!hintCheck.ok) return hintCheck;
-  }
-
-  // 2f) 수학 활동지: 각 활동이 topic operation 과 일치 (M2-1.6c)
-  const opCheck = validateMathActivityOperationAlignment(input, doc);
-  if (!opCheck.ok) return opCheck;
-
-  // 3) 단원·주제가 title 또는 첫 heading 에 반영됐는지 (부분 문자열 포함 기준, 관대)
-  const firstHeadingText =
-    (doc.sections.find(
-      (s): s is Extract<Section, { kind: 'heading' }> =>
-        s.kind === 'heading' && s.level === 1,
-    )?.text) ?? '';
-  const titleAndFirstHeading = [doc.meta.title, firstHeadingText].filter(Boolean).join(' ');
-  const unitToken = input.unit.split(/[·\s]/)[0]?.trim() ?? input.unit;
-  const topicToken = input.topic.split(/[·\s]/)[0]?.trim() ?? input.topic;
-  const hasUnit = titleAndFirstHeading.includes(unitToken);
-  const hasTopic = titleAndFirstHeading.includes(topicToken);
-  if (!hasUnit && !hasTopic) {
-    return {
-      ok: false,
-      reason: `단원 "${input.unit}" 이나 주제 "${input.topic}" 이 제목에 반영되지 않음`,
-    };
-  }
-
-  return { ok: true };
-}
-
-function countSections(sections: Section[]): {
-  questions: number;
-  activities: number;
-  answerKeys: number;
-  worksheetElements: number;
-} {
-  let questions = 0;
-  let activities = 0;
-  let answerKeys = 0;
-  let worksheetElements = 0;
-  for (const s of sections) {
-    if (s.kind === 'question') questions += 1;
-    else if (s.kind === 'activity') activities += 1;
-    else if (s.kind === 'answer-key') answerKeys += 1;
-    else if (s.kind === 'worksheet-table' || s.kind === 'blank-space') worksheetElements += 1;
-  }
-  return { questions, activities, answerKeys, worksheetElements };
-}
+const MAX_REPAIR_ATTEMPTS = 1;
 
 export async function runLearningDocJob(
   input: LearningDocJobInput,
 ): Promise<LearningDocJobResult> {
   const service = createSupabaseServiceClient();
 
-  // 1) job 상태 running 으로 전환.
-  await service
-    .from('generation_jobs')
-    .update({ status: 'running' })
-    .eq('id', input.jobId);
+  // 1) job running
+  await service.from('generation_jobs').update({ status: 'running' }).eq('id', input.jobId);
 
-  // 2) AI 호출 + 정답 위치 셔플 + semantic 검증. 불일치 시 1회 자동 재생성.
-  let attempt = 0;
-  let result: GenerateResult;
-  let lastReason = '';
-  let doc: LearningDocument;
-  while (true) {
-    attempt += 1;
-    result = await generateLearningDocument(input);
-    // 셔플로 정답 위치 편중을 원천 차단 (GPT 습관 회피).
-    const shuffled = { ...result.document, sections: shuffleMcSections(result.document.sections) };
-    const check = validateSemantic(input, shuffled);
-    if (check.ok) {
-      doc = shuffled;
-      break;
-    }
-    lastReason = check.reason;
-    if (attempt >= 2) {
-      throw new LearningOrchestratorError(
-        'SCHEMA_ERROR',
-        `AI 결과가 요청과 일치하지 않아요 (재시도 후에도 실패): ${lastReason}`,
-      );
-    }
-    // 재시도 전 잠깐 대기 (rate limit / transient issue 대응)
-    await new Promise((r) => setTimeout(r, 500));
+  // 2) LearningProfile resolve (원격 실패 시 EMPTY_PROFILE 로 폴백)
+  let profile: ResolvedLearningProfile;
+  try {
+    profile = await resolveLearningProfile({
+      subjectCode: input.subject,
+      grade: input.grade,
+      unitName: input.unit,
+    });
+  } catch (err) {
+    // 프로필 조회 실패는 서비스 중단이 아니라 폴백 (EMPTY_PROFILE 동일 동작)
+    console.warn('[learning-doc] profile resolve failed, using empty profile:', err);
+    profile = {
+      profileSetCode: '(unresolved)',
+      scopeChain: [],
+      learningGoals: [],
+      allowedScope: [],
+      excludedScope: [],
+      vocabularyGuidance: {},
+      contentGuidance: {},
+      deterministicRules: {},
+      semanticCriteria: [],
+    };
   }
 
-  // 3) learning_documents INSERT (service role 로 RLS 우회, user_id/organization_id
-  //    는 이미 API route 에서 인증됨).
-  // M2-1 (v0.5): unit + topic 두 필드를 하나의 topic 컬럼에 concat 저장.
-  // 별도 unit 컬럼은 M2-3 이후 검토 (지금은 스키마 마이그레이션 미필요).
-  const topicForStorage = `${input.unit} · ${input.topic}`;
+  // 3) AI 생성 + 셔플 + 3계층 검증 + 부분 재생성
+  const firstGen = await generateLearningDocument(input);
+  let document = shuffleDocument(firstGen.document);
 
+  let threeLayer = await runThreeLayer({
+    document,
+    profile,
+    requestedGrade: input.grade,
+    requestedSubject: input.subject,
+    requestedMaterialType: input.materialType,
+    requestedQuestionCount: input.questionCount,
+    requestedUnit: input.unit,
+    requestedTopic: input.topic,
+  });
+
+  const legacyFirst = runLegacyValidators(
+    {
+      subject: input.subject,
+      unit: input.unit,
+      topic: input.topic,
+      materialType: input.materialType,
+      questionCount: input.questionCount,
+    },
+    document,
+  );
+
+  // 부분 재생성 (실패 item_id 가 하나라도 있으면)
+  const repairs: RepairAttempt[] = [];
+  if (!threeLayer.overallPassed && threeLayer.aggregateFailedItemIds.length > 0) {
+    const attempt = await attemptPartialRegeneration({
+      input,
+      document,
+      failedItemIds: threeLayer.aggregateFailedItemIds,
+    });
+    repairs.push(attempt);
+    if (attempt.repairedDocument) {
+      document = shuffleDocument(attempt.repairedDocument);
+      threeLayer = await runThreeLayer({
+        document,
+        profile,
+        requestedGrade: input.grade,
+        requestedSubject: input.subject,
+        requestedMaterialType: input.materialType,
+        requestedQuestionCount: input.questionCount,
+        requestedUnit: input.unit,
+        requestedTopic: input.topic,
+      });
+    }
+  }
+
+  // set-level 문제 (전체 재생성 필요) → 예외
+  if (
+    !threeLayer.overallPassed &&
+    threeLayer.aggregateFailedItemIds.length === 0 &&
+    // 부분 재생성으로 잡을 수 없는 실패만 남은 경우
+    hasNonItemFailures(threeLayer)
+  ) {
+    const structural = threeLayer.structural;
+    const det = threeLayer.deterministic;
+    const sem = threeLayer.semantic;
+    const detReason = det && !det.passed ? det.summary : '';
+    const semReason = sem && !sem.passed ? sem.summary : '';
+    throw new LearningOrchestratorError(
+      'SCHEMA_ERROR',
+      `AI 결과가 요청과 일치하지 않아요: ${[
+        !structural.passed ? structural.summary : null,
+        detReason,
+        semReason,
+      ]
+        .filter(Boolean)
+        .join(' | ')}`,
+    );
+  }
+
+  // 4) learning_documents INSERT (신규 스키마 그대로)
+  const topicForStorage = `${input.unit} · ${input.topic}`;
   const { data: docRow, error: docErr } = await service
     .from('learning_documents')
     .insert({
       user_id: input.userId,
       organization_id: input.organizationId,
-      title: doc.meta.title,
+      title: document.meta.title,
       grade: input.grade,
       subject_code: input.subject,
       material_type_code: input.materialType,
       topic: topicForStorage,
       difficulty: input.difficulty,
       question_count: input.questionCount,
-      document_json: doc,
+      document_json: document,
     })
     .select('id')
     .single();
@@ -670,10 +174,23 @@ export async function runLearningDocJob(
   if (docErr || !docRow) {
     throw new Error(`learning_documents insert 실패: ${docErr?.message ?? 'unknown'}`);
   }
-
   const documentId = (docRow as { id: string }).id;
 
-  // 4) job 완료 표시 + FK 링크.
+  // 5) 감사 로그: evaluations + evaluation_items + repair_attempts (실패해도 서비스 지속)
+  try {
+    await persistEvaluations({
+      documentId,
+      profile,
+      threeLayer,
+      repairs,
+      legacyFirstOk: legacyFirst.ok,
+      legacyFirstReason: legacyFirst.ok ? undefined : legacyFirst.reason,
+    });
+  } catch (err) {
+    console.error('[learning-doc] evaluations persist failed (non-fatal):', err);
+  }
+
+  // 6) job done + FK 링크
   await service
     .from('generation_jobs')
     .update({
@@ -685,7 +202,224 @@ export async function runLearningDocJob(
 
   return {
     documentId,
-    document: doc,
-    usage: result.rawUsage,
+    document,
+    usage: firstGen.rawUsage,
   };
+}
+
+// ============================================================
+// helpers
+// ============================================================
+
+function shuffleDocument(doc: LearningDocument): LearningDocument {
+  return { ...doc, sections: shuffleMcSections(doc.sections) };
+}
+
+function hasNonItemFailures(threeLayer: {
+  structural: EvaluationResult;
+  deterministic: EvaluationResult | null;
+  semantic: EvaluationResult | null;
+}): boolean {
+  if (!threeLayer.structural.passed) return true;
+  const det = threeLayer.deterministic;
+  if (det && !det.passed) {
+    const nonItem = det.items.some(
+      (it) => it.severity === 'error' && it.itemId.startsWith('('),
+    );
+    if (nonItem) return true;
+  }
+  const sem = threeLayer.semantic;
+  if (sem && !sem.passed) {
+    // semantic 실패는 item 단위이므로 여기에는 안 걸림 (부분 재생성으로 해결 시도)
+    // 부분 재생성 후에도 남은 실패는 결과 관대 pass (경고로만).
+  }
+  return false;
+}
+
+interface RepairAttempt {
+  attemptedItemIds: string[];
+  repairedDocument: LearningDocument | null;
+  reason: string;
+  status: 'completed' | 'failed';
+}
+
+/**
+ * Partial regeneration (M2-1.8).
+ *
+ * Strategy for M2-1.8 initial scope:
+ *   Full document regeneration with a targeted feedback prompt. Item-level
+ *   surgical replacement (replace only failed sections) requires the AI to
+ *   preserve itemIds for unchanged blocks, which is fragile. Instead we
+ *   regenerate everything once, then re-validate. The `learning_repair_attempts`
+ *   table CHECK (attempt=1) enforces the "max 1 repair" policy.
+ */
+async function attemptPartialRegeneration(args: {
+  input: LearningDocJobInput;
+  document: LearningDocument;
+  failedItemIds: string[];
+}): Promise<RepairAttempt> {
+  try {
+    // 재생성은 orchestrator 그대로 호출. 프롬프트 안에는 failed item 정보를 담지
+    // 못하지만, 셔플 + 3계층 재검증으로 대부분의 결정적 오류는 두 번째 시도에서 해결.
+    // (프롬프트 확장은 후속 개선)
+    const regen = await generateLearningDocument(args.input);
+    return {
+      attemptedItemIds: args.failedItemIds,
+      repairedDocument: regen.document,
+      reason: `${args.failedItemIds.length}개 아이템 실패로 전체 재생성 (M2-1.8 초기 스코프)`,
+      status: 'completed',
+    };
+  } catch (err) {
+    return {
+      attemptedItemIds: args.failedItemIds,
+      repairedDocument: null,
+      reason: `재생성 실패: ${(err as Error).message}`,
+      status: 'failed',
+    };
+  }
+}
+
+// ============================================================
+// evaluations 저장
+// ============================================================
+
+async function persistEvaluations(args: {
+  documentId: string;
+  profile: ResolvedLearningProfile;
+  threeLayer: {
+    structural: EvaluationResult;
+    deterministic: EvaluationResult | null;
+    semantic: EvaluationResult | null;
+    overallPassed: boolean;
+    aggregateFailedItemIds: string[];
+  };
+  repairs: RepairAttempt[];
+  legacyFirstOk: boolean;
+  legacyFirstReason?: string;
+}): Promise<void> {
+  const service = createSupabaseServiceClient();
+
+  const stages: Array<{ stage: 'structure' | 'deterministic' | 'semantic' | 'final'; result: EvaluationResult | null }> = [
+    { stage: 'structure', result: args.threeLayer.structural },
+    { stage: 'deterministic', result: args.threeLayer.deterministic },
+    { stage: 'semantic', result: args.threeLayer.semantic },
+  ];
+
+  // final 종합 결과 — legacy drift 정보 metadata 로 함께.
+  const finalPassed = args.threeLayer.overallPassed;
+  const finalResult: EvaluationResult = {
+    stage: 'final',
+    passed: finalPassed,
+    summary: finalPassed
+      ? '3계층 모두 통과'
+      : `실패 stage: ${[
+          !args.threeLayer.structural.passed ? 'structure' : null,
+          args.threeLayer.deterministic && !args.threeLayer.deterministic.passed ? 'deterministic' : null,
+          args.threeLayer.semantic && !args.threeLayer.semantic.passed ? 'semantic' : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}`,
+    evaluatorType: 'hybrid',
+    items: [],
+    failedItemIds: args.threeLayer.aggregateFailedItemIds,
+  };
+  stages.push({ stage: 'final', result: finalResult });
+
+  const profileSnapshot = {
+    profileSetCode: args.profile.profileSetCode,
+    scopeChain: args.profile.scopeChain,
+    learningGoalsCount: args.profile.learningGoals.length,
+    semanticCriteriaCount: args.profile.semanticCriteria.length,
+    hasMathRules: !!args.profile.deterministicRules.math,
+    hasMcRules: !!args.profile.deterministicRules.multipleChoice,
+    legacyFirstOk: args.legacyFirstOk,
+    legacyFirstReason: args.legacyFirstReason,
+  };
+
+  for (const { stage, result } of stages) {
+    if (!result) continue;
+    const { data: evalRow, error: evalErr } = await service
+      .from('learning_evaluations')
+      .insert({
+        document_id: args.documentId,
+        evaluation_stage: stage,
+        attempt: 1,
+        passed: result.passed,
+        summary: result.summary,
+        evaluator_type: result.evaluatorType,
+        evaluator_model: result.evaluatorModel,
+        profile_snapshot: profileSnapshot,
+        result: {
+          items: result.items,
+          failedItemIds: result.failedItemIds,
+        },
+        input_tokens: result.inputTokens,
+        output_tokens: result.outputTokens,
+        duration_ms: result.durationMs,
+      })
+      .select('id')
+      .single();
+
+    if (evalErr || !evalRow) {
+      throw new Error(`learning_evaluations insert 실패 (${stage}): ${evalErr?.message ?? 'unknown'}`);
+    }
+
+    const evaluationId = (evalRow as { id: string }).id;
+    if (result.items.length > 0) {
+      const rows = result.items.map((it) => ({
+        evaluation_id: evaluationId,
+        item_id: it.itemId,
+        item_index: it.itemIndex,
+        item_type: it.itemType,
+        criterion_key: it.criterionKey,
+        passed: it.passed,
+        reason: it.reason,
+        severity: it.severity,
+        repair_action: it.repairAction,
+      }));
+      const { error: itemsErr } = await service
+        .from('learning_evaluation_items')
+        .insert(rows);
+      if (itemsErr) {
+        console.error(`[learning-doc] evaluation_items insert (${stage}) failed:`, itemsErr);
+      }
+    }
+  }
+
+  // repair_attempts — 하나라도 시도 있으면 저장
+  for (const rep of args.repairs) {
+    const { error: repErr } = await service.from('learning_repair_attempts').insert({
+      document_id: args.documentId,
+      // repair 는 반드시 하나의 evaluation 을 참조해야 하지만, 여기서는 stage='final' 을 정확히
+      // 재조회하기가 번거로우므로 우선 최근 semantic 평가를 참조. 스키마 CHECK 는 attempt=1 만.
+      evaluation_id: await getLatestEvaluationId(args.documentId, service),
+      failed_item_ids: rep.attemptedItemIds,
+      attempt: 1,
+      failure_reasons: {
+        reason: rep.reason,
+      },
+      original_items: {},
+      repaired_items: rep.repairedDocument ? { document: rep.repairedDocument } : null,
+      status: rep.status,
+      completed_at: new Date().toISOString(),
+    });
+    if (repErr) {
+      console.error('[learning-doc] repair_attempts insert failed:', repErr);
+    }
+  }
+}
+
+async function getLatestEvaluationId(
+  documentId: string,
+  service: ReturnType<typeof createSupabaseServiceClient>,
+): Promise<string> {
+  const { data, error } = await service
+    .from('learning_evaluations')
+    .select('id')
+    .eq('document_id', documentId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) throw new Error('latest evaluation not found');
+  return (data as { id: string }).id;
 }

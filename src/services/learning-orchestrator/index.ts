@@ -175,7 +175,47 @@ function validateAndNormalize(
     );
   }
 
+  assignItemIds(sections);
   return { meta, sections };
+}
+
+// ============================================================
+// itemId 자동 부여 (M2-1.8)
+//   부분 재생성 대상 지정용 안정 식별자. kind별 카운터로 "q_01", "act_02" 등.
+//   AI 응답에 itemId 가 이미 있으면 존중 (중복은 회피).
+// ============================================================
+const ITEM_KIND_PREFIX: Partial<Record<Section['kind'], string>> = {
+  question: 'q',
+  activity: 'act',
+  table: 'tbl',
+  'worksheet-table': 'ws',
+  'blank-space': 'bs',
+};
+
+function assignItemIds(sections: Section[]): void {
+  const counters = new Map<string, number>();
+  const used = new Set<string>();
+
+  for (const sec of sections) {
+    const prefix = ITEM_KIND_PREFIX[sec.kind];
+    if (!prefix) continue;
+
+    const existing = (sec as { itemId?: string }).itemId;
+    if (typeof existing === 'string' && existing.trim() && !used.has(existing)) {
+      used.add(existing);
+      continue;
+    }
+
+    let n = (counters.get(prefix) ?? 0) + 1;
+    let id = `${prefix}_${String(n).padStart(2, '0')}`;
+    while (used.has(id)) {
+      n += 1;
+      id = `${prefix}_${String(n).padStart(2, '0')}`;
+    }
+    counters.set(prefix, n);
+    used.add(id);
+    (sec as { itemId?: string }).itemId = id;
+  }
 }
 
 function mapSubject(code: SubjectCode): SchemaSubject {
