@@ -256,6 +256,15 @@ export function LearningPageClientV2({
     setSuggestError(null);
   }, [form.grade, form.subject]);
 
+  // 학년이 바뀔 때 현재 과목이 지원되지 않으면 첫 지원 과목으로 자동 전환
+  useEffect(() => {
+    if (supportedSubjects.size === 0) return;
+    if (!supportedSubjects.has(form.subject)) {
+      const first = Array.from(supportedSubjects)[0];
+      if (first) setForm((prev) => ({ ...prev, subject: first as SubjectCode }));
+    }
+  }, [supportedSubjects, form.subject]);
+
   // 단원 변경 시 추천 초기화
   useEffect(() => {
     setSuggestions(null);
@@ -427,20 +436,26 @@ export function LearningPageClientV2({
               {ALL_GRADES.map((g) => {
                 const hasProfile = supportedSubjectsForGrade(supportMatrix, g).size > 0;
                 const selected = form.grade === g;
+                const disabled = !hasProfile;
                 return (
                   <button
                     key={g}
                     type="button"
-                    onClick={() => patch({ grade: g })}
+                    onClick={() => !disabled && patch({ grade: g })}
+                    disabled={disabled}
+                    aria-disabled={disabled}
+                    title={disabled ? '준비 중인 학년이에요' : undefined}
                     className={
-                      selected
-                        ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
-                        : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
+                      disabled
+                        ? 'cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-400'
+                        : selected
+                          ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
+                          : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
                     }
                   >
                     {g}학년
-                    {!hasProfile && (
-                      <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
+                    {disabled && (
+                      <span className="ml-2 rounded-md bg-slate-200 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
                         준비 중
                       </span>
                     )}
@@ -457,20 +472,26 @@ export function LearningPageClientV2({
               {LEARNING_SUBJECTS.map((s) => {
                 const hasProfile = supportedSubjects.has(s.code);
                 const selected = form.subject === s.code;
+                const disabled = !hasProfile;
                 return (
                   <button
                     key={s.code}
                     type="button"
-                    onClick={() => patch({ subject: s.code })}
+                    onClick={() => !disabled && patch({ subject: s.code })}
+                    disabled={disabled}
+                    aria-disabled={disabled}
+                    title={disabled ? '이 학년에서는 준비 중인 과목이에요' : undefined}
                     className={
-                      selected
-                        ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
-                        : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
+                      disabled
+                        ? 'cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-400'
+                        : selected
+                          ? 'rounded-lg border-2 border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm ring-2 ring-primary/20'
+                          : 'rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-muted'
                     }
                   >
                     {s.nameKo}
-                    {gradeSupported && !hasProfile && (
-                      <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
+                    {disabled && (
+                      <span className="ml-2 rounded-md bg-slate-200 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
                         준비 중
                       </span>
                     )}
