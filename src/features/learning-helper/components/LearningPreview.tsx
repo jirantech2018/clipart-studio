@@ -8,6 +8,10 @@ import type { LearningDocument, Section } from '@/services/learning-renderer/sch
 interface Props {
   document: LearningDocument;
   variant?: 'student' | 'teacher' | 'combined';
+  /** 서버가 사용한 생성 방식. 결과 카드 상단에 배지로 표시. */
+  generationMode?: 'v1' | 'v2C';
+  /** 병합된 프로필 체인 요약 (예: "초등 공통 → 2학년 수학 → 수학 수와 연산 영역"). */
+  appliedProfile?: string;
 }
 
 const SUBJECT_LABEL: Record<string, string> = {
@@ -15,7 +19,12 @@ const SUBJECT_LABEL: Record<string, string> = {
   MATH: '수학',
 };
 
-export function LearningPreview({ document: doc, variant = 'student' }: Props) {
+export function LearningPreview({
+  document: doc,
+  variant = 'student',
+  generationMode,
+  appliedProfile,
+}: Props) {
   // student variant 는 answer-key 섹션 숨김, 인라인 정답 숨김.
   const visibleSections =
     variant === 'student' ? doc.sections.filter((s) => s.kind !== 'answer-key') : doc.sections;
@@ -24,17 +33,41 @@ export function LearningPreview({ document: doc, variant = 'student' }: Props) {
     <article className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       {/* meta bar */}
       <header className="mb-4 border-b-2 border-indigo-700 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-xl font-bold text-indigo-900">{doc.meta.title}</h2>
           <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
             {variant === 'student' ? '학생용' : variant === 'teacher' ? '교사용' : '학생 + 정답'}
           </span>
+          {generationMode === 'v2C' && (
+            <span
+              className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700"
+              title="공통 프롬프트 · 프로필 기반 (실험 모드)"
+            >
+              생성 방식: V2
+            </span>
+          )}
+          {generationMode === 'v1' && (
+            <span
+              className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600"
+              title="기존 케이스별 프롬프트 · 3계층 검증"
+            >
+              생성 방식: V1
+            </span>
+          )}
         </div>
         <p className="mt-1 text-sm text-slate-500">
           {doc.meta.grade}학년 · {SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject}
           {doc.meta.estimatedMinutes ? ` · 예상 ${doc.meta.estimatedMinutes}분` : ''}
           {' · '}AI 초안이며 교사 검토가 필요합니다.
         </p>
+        {appliedProfile && appliedProfile !== '(활성 프로필 없음)' && (
+          <p className="mt-1 text-xs text-emerald-700">
+            적용된 프로필: <span className="font-medium">{appliedProfile}</span>
+          </p>
+        )}
+        {appliedProfile === '(활성 프로필 없음)' && generationMode === 'v1' && (
+          <p className="mt-1 text-xs text-slate-500">적용된 프로필: 없음 (기존 흐름 사용)</p>
+        )}
       </header>
 
       <div className="space-y-4">

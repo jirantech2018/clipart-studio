@@ -162,6 +162,7 @@ export async function POST(request: Request) {
       jobId,
       userId: user.id,
       organizationId,
+      orgSlug: body.orgSlug,
       grade: body.grade as 1 | 2 | 3 | 4 | 5 | 6,
       subject: body.subject as 'KOR' | 'MATH',
       materialType: body.materialType as
@@ -183,6 +184,8 @@ export async function POST(request: Request) {
         documentId: result.documentId,
         document: result.document,
         creditsUsed: LEARNING_DOC_CREDITS,
+        generationMode: result.generationMode,
+        appliedProfile: result.appliedProfileSummary,
       },
       201,
     );

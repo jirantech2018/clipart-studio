@@ -41,6 +41,8 @@ interface GenerateResponse {
   documentId: string;
   document: LearningDocument;
   creditsUsed: number;
+  generationMode?: 'v1' | 'v2C';
+  appliedProfile?: string;
 }
 
 interface ErrorBody {
@@ -309,7 +311,12 @@ export function LearningPageClient({ orgSlug, orgName, initialCredits }: Props) 
                 )}
               </Button>
             </div>
-            <LearningPreview document={result.document} variant="student" />
+            <LearningPreview
+              document={result.document}
+              variant="student"
+              generationMode={result.generationMode}
+              appliedProfile={result.appliedProfile}
+            />
           </section>
         )}
       </div>

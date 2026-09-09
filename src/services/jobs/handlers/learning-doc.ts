@@ -1,14 +1,9 @@
-// kind='learning_doc' job handler (M2-1.8 재구축).
+// kind='learning_doc' job handler.
 //
-// 흐름:
-//   1) orchestrator 호출 → LearningDocument (itemId 자동 부여됨)
-//   2) LearningProfile 조회 + 계층 병합 → ResolvedLearningProfile
-//   3) 정답 위치 셔플 (GPT position bias 회피)
-//   4) 3계층 검증 실행 (L1 structural + L2 deterministic + L3 semantic AI)
-//   5) legacy guards 병행 실행 (드리프트 감지 + 안전망)
-//   6) 실패한 item_id 가 있으면 최대 1회 부분 재생성
-//   7) evaluations + evaluation_items + repair_attempts 저장 (profile snapshot 포함)
-//   8) learning_documents INSERT + job 완료
+// V1 (기본): 기존 orchestrator + legacy guards + 3-layer 검증.
+// V2 (기능 플래그 `LEARNING_GENERATION_V2` 뒤): GenerationContext + 공통 프롬프트
+//    단일 호출. subject/topic 코드 분기 없음. 활성 프로필이 없거나 V2 호출이
+//    실패하면 자동으로 V1 폴백 (사용자 요청은 실패 없이 완료).
 //
 // 실패 시 예외를 던진다. 크레딧 환불·job 정리는 호출자(API route) 책임.
 
@@ -31,17 +26,44 @@ import {
   runLegacyValidators,
   shuffleMcSections,
 } from '@/services/learning-validators/legacy-guards';
+import { buildGenerationContext } from '@/services/learning-generation/context-builder';
+import { generateLearningDocumentV2 } from '@/services/learning-orchestrator/orchestrator-v2';
 
 export interface LearningDocJobInput extends OrchestratorInput {
   jobId: string;
   userId: string;
   organizationId: string;
+  /** Organization slug — needed for LEARNING_GENERATION_V2=slug:foo,bar whitelist. */
+  orgSlug?: string;
 }
 
 export interface LearningDocJobResult {
   documentId: string;
   document: LearningDocument;
   usage?: GenerateResult['rawUsage'];
+  /** Which generation flow actually ran. */
+  generationMode: 'v1' | 'v2C';
+  /** Human-readable profile chain summary. '(활성 프로필 없음)' when empty. */
+  appliedProfileSummary: string;
+}
+
+// ============================================================
+// Feature flag
+//   LEARNING_GENERATION_V2=false | 'true' | 'slug:foo,bar'
+//   Default: false (V1 only).
+// ============================================================
+function shouldTryV2(orgSlug?: string): boolean {
+  const raw = (process.env.LEARNING_GENERATION_V2 ?? 'false').trim();
+  if (raw === 'true' || raw === '1') return true;
+  if (raw.startsWith('slug:') && orgSlug) {
+    const whitelist = raw
+      .slice('slug:'.length)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return whitelist.includes(orgSlug);
+  }
+  return false;
 }
 
 const MAX_REPAIR_ATTEMPTS = 1;
@@ -54,14 +76,119 @@ export async function runLearningDocJob(
   // 1) job running
   await service.from('generation_jobs').update({ status: 'running' }).eq('id', input.jobId);
 
+  // ============================================================
+  // V2 시도 경로 (활성 프로필 있고, 기능 플래그 켜진 경우)
+  // ============================================================
+  if (shouldTryV2(input.orgSlug)) {
+    const context = await buildGenerationContext({
+      grade: input.grade,
+      subject: input.subject,
+      materialType: input.materialType,
+      unit: input.unit,
+      topic: input.topic,
+      questionCount: input.questionCount,
+      difficulty: input.difficulty,
+      additionalRequest: input.additionalRequest,
+    });
+
+    if (context.hasActiveProfile) {
+      const v2 = await generateLearningDocumentV2(context);
+      if (v2.ok) {
+        // V2 성공 → 최소 구조 확인 후 그대로 저장. 케이스별 검증기·legacy 실행하지 않는다.
+        const doc = v2.document;
+        const topicForStorage = `${input.unit} · ${input.topic}`;
+        const { data: docRow, error: docErr } = await service
+          .from('learning_documents')
+          .insert({
+            user_id: input.userId,
+            organization_id: input.organizationId,
+            title: doc.meta.title,
+            grade: input.grade,
+            subject_code: input.subject,
+            material_type_code: input.materialType,
+            topic: topicForStorage,
+            difficulty: input.difficulty,
+            question_count: input.questionCount,
+            document_json: doc,
+          })
+          .select('id')
+          .single();
+
+        if (docErr || !docRow) {
+          throw new Error(`learning_documents insert 실패 (v2): ${docErr?.message ?? 'unknown'}`);
+        }
+        const documentId = (docRow as { id: string }).id;
+
+        // V2 감사 로그: final stage 1건만 (context snapshot 포함).
+        try {
+          await service.from('learning_evaluations').insert({
+            document_id: documentId,
+            evaluation_stage: 'final',
+            attempt: 1,
+            passed: true,
+            summary: `v2C 단일 호출 · ${context.appliedProfileSummary}`,
+            evaluator_type: 'code',
+            profile_snapshot: {
+              variant: 'v2C',
+              profileSetCode: '(from context)',
+              scopeChain: context.curriculum.profileChain,
+              appliedProfileSummary: context.appliedProfileSummary,
+              hasActiveProfile: context.hasActiveProfile,
+            },
+            result: { context, itemCount: doc.sections.length },
+            input_tokens: v2.inputTokens,
+            output_tokens: v2.outputTokens,
+            duration_ms: v2.durationMs,
+          });
+        } catch (persistErr) {
+          console.error('[learning-doc] v2 evaluation persist failed (non-fatal):', persistErr);
+        }
+
+        await service
+          .from('generation_jobs')
+          .update({
+            status: 'done',
+            completed_at: new Date().toISOString(),
+            learning_document_id: documentId,
+          })
+          .eq('id', input.jobId);
+
+        return {
+          documentId,
+          document: doc,
+          usage: v2.inputTokens || v2.outputTokens
+            ? {
+                promptTokens: v2.inputTokens ?? 0,
+                completionTokens: v2.outputTokens ?? 0,
+              }
+            : undefined,
+          generationMode: 'v2C',
+          appliedProfileSummary: context.appliedProfileSummary,
+        };
+      }
+      // V2 실패 → V1 폴백 (요청 실패 방지)
+      console.warn('[learning-doc] v2 failed, falling back to v1:', v2.reason);
+    } else {
+      // 활성 프로필 없음 → V1
+      console.info('[learning-doc] no active profile, using v1');
+    }
+  }
+
+  // ============================================================
+  // V1 경로 (기존 그대로)
+  // ============================================================
   // 2) LearningProfile resolve (원격 실패 시 EMPTY_PROFILE 로 폴백)
   let profile: ResolvedLearningProfile;
+  let appliedProfileSummary = '(활성 프로필 없음)';
   try {
     profile = await resolveLearningProfile({
       subjectCode: input.subject,
       grade: input.grade,
       unitName: input.unit,
     });
+    if (profile.scopeChain.length > 0) {
+      appliedProfileSummary = profile.scopeChain.map((s) => s.title).join(' → ');
+    }
   } catch (err) {
     // 프로필 조회 실패는 서비스 중단이 아니라 폴백 (EMPTY_PROFILE 동일 동작)
     console.warn('[learning-doc] profile resolve failed, using empty profile:', err);
@@ -204,6 +331,8 @@ export async function runLearningDocJob(
     documentId,
     document,
     usage: firstGen.rawUsage,
+    generationMode: 'v1',
+    appliedProfileSummary,
   };
 }
 
