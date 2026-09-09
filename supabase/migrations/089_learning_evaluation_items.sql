@@ -1,7 +1,7 @@
--- DRAFT — 원격 apply 금지.
---
--- Migration draft: 089_learning_evaluation_items
+-- Migration: 089_learning_evaluation_items
 -- Feature: learning-helper (Phase 1 M2-1.8)
+--
+-- 적용 이력: 2026-09-09 Studio 수동 실행 → 같은 날 CLI repair 로 이력 정합화.
 --
 -- 목적:
 --   문항·활동 단위 검수 결과. item_id (안정 식별자) 로 부분 재생성 대상 지정.

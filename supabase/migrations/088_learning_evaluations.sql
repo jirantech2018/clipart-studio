@@ -1,7 +1,7 @@
--- DRAFT — 원격 apply 금지.
---
--- Migration draft: 088_learning_evaluations
+-- Migration: 088_learning_evaluations
 -- Feature: learning-helper (Phase 1 M2-1.8)
+--
+-- 적용 이력: 2026-09-09 Studio 수동 실행 → 같은 날 CLI repair 로 이력 정합화.
 --
 -- 목적:
 --   각 학습자료 문서의 3계층 검증 결과 저장 (structure / deterministic /

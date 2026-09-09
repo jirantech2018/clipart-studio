@@ -1,7 +1,7 @@
--- DRAFT — 원격 apply 금지.
---
--- Migration draft: 086_learning_profiles
+-- Migration: 086_learning_profiles
 -- Feature: learning-helper (Phase 1 M2-1.8)
+--
+-- 적용 이력: 2026-09-09 Studio 수동 실행 → 같은 날 CLI repair 로 이력 정합화.
 --
 -- 목적:
 --   교육과정 공통 · 학년+과목 · 영역 · 단원 · 예외 수준의 학습 프로필.

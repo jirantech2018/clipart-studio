@@ -1,13 +1,13 @@
--- DRAFT — 원격 apply 금지, supabase/migrations/ 로 이동 금지.
--- 사용자 승인 전에는 문서 초안 상태로만 유지.
---
--- Migration draft: 084_learning_profile_sets
--- Feature: learning-helper (Phase 1 M2-1.8 §M2-1.8)
+-- Migration: 084_learning_profile_sets
+-- Feature: learning-helper (Phase 1 M2-1.8)
 -- Plan Ref: docs/03-analysis/learning-profile-design.md
 --
 -- 목적:
---   교육과정·버전별로 프로필 세트를 관리. draft → active → archived 상태 전이
---   지원. 실제 apply 는 승인 후 supabase/migrations/084_*.sql 로 이동해 db push.
+--   교육과정·버전별로 프로필 세트를 관리. draft → active → archived 상태 전이 지원.
+--
+-- 적용 이력:
+--   2026-09-09 원격 프로덕션에 Studio SQL Editor 수동 실행으로 적용됨.
+--   같은 날 supabase migration repair --status applied 084 로 CLI 이력 정합화.
 
 CREATE TABLE IF NOT EXISTS public.learning_profile_sets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

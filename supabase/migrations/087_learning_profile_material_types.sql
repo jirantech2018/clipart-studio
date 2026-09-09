@@ -1,7 +1,7 @@
--- DRAFT — 원격 apply 금지.
---
--- Migration draft: 087_learning_profile_material_types
+-- Migration: 087_learning_profile_material_types
 -- Feature: learning-helper (Phase 1 M2-1.8)
+--
+-- 적용 이력: 2026-09-09 Studio 수동 실행 → 같은 날 CLI repair 로 이력 정합화.
 --
 -- 목적:
 --   프로필 × 자료유형 결합. 자료유형별 권장·허용·비권장 설정 + guidance.

@@ -1,7 +1,7 @@
--- DRAFT — 원격 apply 금지. 필요 시 이번 단계 보류 가능.
---
--- Migration draft: 090_learning_repair_attempts
+-- Migration: 090_learning_repair_attempts
 -- Feature: learning-helper (Phase 1 M2-1.8)
+--
+-- 적용 이력: 2026-09-09 Studio 수동 실행 → 같은 날 CLI repair 로 이력 정합화.
 --
 -- 목적:
 --   부분 재생성 시도 기록. 문항별 최대 1회 재생성 정책 강제 + 감사 로그.

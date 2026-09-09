@@ -1,26 +1,29 @@
--- DRAFT — 원격 apply 금지. 스키마 (084~090) apply 검증 후 별도 apply.
---
--- Migration draft: 091_learning_profile_minimum_seed
+-- Migration: 091_learning_profile_minimum_seed
 -- Feature: learning-helper (Phase 1 M2-1.8)
 --
 -- 목적:
 --   최소 seed. 1~6학년 전체가 아니라 검증 스코프만 (초등 공통 + 1~2학년 국·수 +
---   대표 영역/단원 프로필). draft 상태로만 삽입. 회귀 통과 전 active 전환 X.
+--   대표 영역/단원 프로필). 모두 draft 상태로만 삽입. active 전환은 회귀 통과 후 별도.
 --
--- ⚠ 반드시 스키마 마이그레이션 (084~089) apply 완료 후 이 파일 apply.
---
--- Seed 대상:
+-- Seed 대상 (총 9 profile + 1 profile_set + 4 domain):
 --   - profile_set: KR_ELEM_2022_V1
---   - domains: 국어 읽기, 수학 수와 연산
---   - profiles (draft):
---       초등 공통 / 1학년 국어 / 2학년 국어 / 1학년 수학 / 2학년 수학 /
+--   - domains: 국어 읽기/쓰기/문법, 수학 수와 연산
+--   - profiles (draft): 초등 공통 / 1·2학년 국어 / 1·2학년 수학 /
 --       국어 읽기 영역 / 수학 수와 연산 영역 /
 --       1학년 국어 "낱말과 문장" 단원 / 2학년 수학 "덧셈과 뺄셈" 단원
 --
--- ⚠ 단원명은 실제 learning_common_topics.unit 값과 정확히 일치해야 함.
---   현재 seed 기준 아래 두 단원명이 이미 존재하는지 확인:
---     · 1학년 · KOR · "낱말과 문장"
---     · 2학년 · MATH · "덧셈과 뺄셈"
+-- 단원명은 실제 learning_common_topics.unit 값과 정확히 일치 (2026-09-09 확인):
+--   - 1학년 · KOR · "낱말과 문장"  ← 079 seed에 존재
+--   - 2학년 · MATH · "덧셈과 뺄셈" ← 079 seed에 존재
+--
+-- 재실행 안전:
+--   - profile_set / domains: ON CONFLICT DO NOTHING
+--   - profiles: NOT EXISTS 서브쿼리로 중복 방지
+--
+-- 이전 실행 (2026-09-09) 실패 원인 및 수정:
+--   3-h가 존재하지 않는 컬럼 `recommended_scope` 참조 → 전체 트랜잭션 ROLLBACK
+--   수정: `recommended_scope` → `allowed_scope` (실 스키마의 JSONB 컬럼)
+--         `NULL` → `'[]'::JSONB` (allowed_scope의 default와 동일)
 
 -- 1) profile_set
 INSERT INTO public.learning_profile_sets (code, name, curriculum_version, status, description)
@@ -160,13 +163,13 @@ WHERE ps.code = 'KR_ELEM_2022_V1'
       AND p.subject_code='MATH' AND p.domain_id=d.id
   );
 
--- 3-h) 1학년 국어 "낱말과 문장" 단원 (실 seed 확인 필요)
+-- 3-h) 1학년 국어 "낱말과 문장" 단원
 INSERT INTO public.learning_profiles (
   profile_set_id, subject_code, unit_name, scope_type, grade_min, grade_max, title,
-  recommended_scope, semantic_criteria
+  allowed_scope, semantic_criteria
 )
 SELECT ps.id, 'KOR', '낱말과 문장', 'unit', 1, 1, '1학년 국어 · 낱말과 문장',
-  NULL,
+  '[]'::JSONB,
   '[{"key":"topicAlignment","required":true,"instruction":"낱말·짧은 문장 수준을 벗어난 문항 금지. 자모(자음/모음) 식별로 대체 금지."}]'::JSONB
 FROM public.learning_profile_sets ps
 WHERE ps.code='KR_ELEM_2022_V1'
@@ -175,9 +178,6 @@ WHERE ps.code='KR_ELEM_2022_V1'
     WHERE p.profile_set_id=ps.id AND p.scope_type='unit'
       AND p.subject_code='KOR' AND p.grade_min=1 AND p.unit_name='낱말과 문장'
   );
--- ⚠ recommended_scope 컬럼 확인 필요. 위 draft 스키마에는 없음. 실제 apply 시엔
---    allowed_scope / excluded_scope JSONB 를 사용. 이 seed 는 예시라 컬럼 미스매치.
---    최종 apply 전 컬럼명 맞춤.
 
 -- 3-i) 2학년 수학 "덧셈과 뺄셈" 단원
 INSERT INTO public.learning_profiles (

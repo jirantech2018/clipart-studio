@@ -1,7 +1,7 @@
--- DRAFT — 원격 apply 금지, supabase/migrations/ 로 이동 금지.
---
--- Migration draft: 085_learning_domains
+-- Migration: 085_learning_domains
 -- Feature: learning-helper (Phase 1 M2-1.8)
+--
+-- 적용 이력: 2026-09-09 Studio 수동 실행 → 같은 날 CLI repair 로 이력 정합화.
 --
 -- 목적:
 --   과목 아래 교육 영역 (예: 국어 → 읽기/쓰기/문법, 수학 → 수와 연산/도형).
