@@ -32,6 +32,7 @@ import {
 import { SUBJECT_LABEL } from '@/features/learning-helper/domain/subjects';
 import { materialTypeLabel } from '@/features/learning-helper/domain/material-types';
 import { createLearningDocumentSchema } from '@/features/learning-helper/lib/schemas';
+import { isAdmin } from '@/lib/admin';
 
 // M1 크레딧 정책: 임시로 3 (Phase 1 관측 후 §7.3 매트릭스 반영).
 const LEARNING_DOC_CREDITS = 3;
@@ -158,11 +159,16 @@ export async function POST(request: Request) {
 
   // Dispatch — orchestrator 호출 (동기).
   try {
+    // Admin 사용자에게 V2 자동 활성화 (Railway env 설정 없이 검증 가능).
+    // 활성 프로필이 없거나 V2 호출 실패 시 handler 가 자동으로 V1 로 폴백.
+    const enableV2ForAdmin = isAdmin(user.email);
+
     const result = await dispatchLearningDoc({
       jobId,
       userId: user.id,
       organizationId,
       orgSlug: body.orgSlug,
+      enableV2Override: enableV2ForAdmin,
       grade: body.grade as 1 | 2 | 3 | 4 | 5 | 6,
       subject: body.subject as 'KOR' | 'MATH',
       materialType: body.materialType as

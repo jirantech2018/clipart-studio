@@ -35,6 +35,14 @@ export interface LearningDocJobInput extends OrchestratorInput {
   organizationId: string;
   /** Organization slug — needed for LEARNING_GENERATION_V2=slug:foo,bar whitelist. */
   orgSlug?: string;
+  /**
+   * Explicit V2 override from API layer. When true, V2 is attempted regardless
+   * of LEARNING_GENERATION_V2 env value. Still falls back to V1 if no active
+   * profile is resolved or the V2 call fails. API layer sets this to true for
+   * admin users so the developer can verify V2 end-to-end without changing
+   * Railway env vars.
+   */
+  enableV2Override?: boolean;
 }
 
 export interface LearningDocJobResult {
@@ -52,16 +60,17 @@ export interface LearningDocJobResult {
 //   LEARNING_GENERATION_V2=false | 'true' | 'slug:foo,bar'
 //   Default: false (V1 only).
 // ============================================================
-function shouldTryV2(orgSlug?: string): boolean {
+function shouldTryV2(input: LearningDocJobInput): boolean {
+  if (input.enableV2Override === true) return true;
   const raw = (process.env.LEARNING_GENERATION_V2 ?? 'false').trim();
   if (raw === 'true' || raw === '1') return true;
-  if (raw.startsWith('slug:') && orgSlug) {
+  if (raw.startsWith('slug:') && input.orgSlug) {
     const whitelist = raw
       .slice('slug:'.length)
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    return whitelist.includes(orgSlug);
+    return whitelist.includes(input.orgSlug);
   }
   return false;
 }
@@ -79,7 +88,7 @@ export async function runLearningDocJob(
   // ============================================================
   // V2 시도 경로 (활성 프로필 있고, 기능 플래그 켜진 경우)
   // ============================================================
-  if (shouldTryV2(input.orgSlug)) {
+  if (shouldTryV2(input)) {
     const context = await buildGenerationContext({
       grade: input.grade,
       subject: input.subject,
