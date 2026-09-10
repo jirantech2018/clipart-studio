@@ -70,6 +70,7 @@ src/
 4. **Community = 명시적 공개만**: 기본 Private. `is_public=TRUE` 토글 없이는 절대 타 계정 노출 금지 (RLS로 강제).
 5. **School Profile은 Optional**: 미보유자는 "🏫 학교 스타일 적용" 토글 UI 자체가 렌더링되지 않아야 함.
 6. **Pending 자동 삭제**: 생성물 24시간 미저장 시 자동 삭제 배치 (module-2에서 구현).
+7. **학습자료 생성 원칙**: `docs/03-analysis/learning-generation-principles.md` 를 반드시 준수. 학습자료 생성·프롬프트·검수·재생성·테스트 관련 모든 변경은 착수 전 §10 반사실 테스트(과목·단원·주제명을 다른 미지 교과로 바꿔도 유효한가)를 통과해야 한다. 사례별 if/else, 금지어 목록, 특정 문자열 검사, 특정 정답을 아는 테스트 코드는 공통 생성·검수 경로에 추가 금지.
 
 ## 6. Naming & Style
 
