@@ -1,50 +1,40 @@
-// kind='learning_doc' job handler.
+// kind='learning_doc' job handler — V2 파이프라인 (원칙 §4 / §5 / §6 / §7).
 //
-// V2 (기본, 활성 프로필 있는 조합만): GenerationContext + 공통 프롬프트 단일 호출.
-//   - subject/topic 코드 분기 없음. 프로필 데이터로 모든 맥락 조립.
-//   - V2 호출 실패 시 예외를 던져 사용자에게 명시적으로 오류·재시도 안내
-//     (자동 V1 폴백 금지 — 사용자 지시 2026-09-10).
+// 흐름:
+//   1) buildGenerationContext(요청 + 활성 LearningProfile)
+//   2) 활성 프로필 없으면 즉시 예외 (사용자 몰래 V1 폴백 금지)
+//   3) generateContentPlan(context) — 요청별 출제 설계도 생성
+//   4) generateDocumentFromPlan(context, plan) — Plan 을 구현한 Document 생성
+//   5) runSemanticReview(context, plan, document) — 독립 검수 (별도 모델)
+//   6) 실패 item 각각 repairItem(context, plan, blueprint, section, reason, instruction)
+//      — 최대 1회. 성공한 section 만 원래 위치에 병합.
+//   7) 재검수. 두 번째도 실패면 결과를 저장하지 않고 예외 (크레딧 환불은 route 가 처리).
+//   8) 최종 통과 시 learning_documents INSERT + evaluations 감사 로그 (context/plan snapshot 포함).
 //
-// V1 (Legacy): 남겨두었으나 handler 안에서는 호출하지 않는다. UI 는 활성 프로필이
-//   없는 조합에서 생성 버튼을 비활성화해 이 경로에 도달하지 않게 한다.
-//
-// 실패 시 예외를 던진다. 크레딧 환불·job 정리는 호출자(API route) 책임.
+// V1 (Legacy): handler 흐름에서는 도달하지 않는다. 파일은 남겨둠 (원칙: Legacy 삭제 금지).
 
-import {
-  generateLearningDocument,
-  LearningOrchestratorError,
-  type GenerateResult,
-} from '@/services/learning-orchestrator';
+import { LearningOrchestratorError, type GenerateResult } from '@/services/learning-orchestrator';
 import type { OrchestratorInput } from '@/services/learning-orchestrator/prompts';
-import type { LearningDocument, Section } from '@/services/learning-renderer/schema';
+import type { LearningDocument } from '@/services/learning-renderer/schema';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 
-import {
-  resolveLearningProfile,
-  type ResolvedLearningProfile,
-  type EvaluationResult,
-} from '@/services/learning-profile';
-import { runThreeLayer } from '@/services/learning-validators';
-import {
-  runLegacyValidators,
-  shuffleMcSections,
-} from '@/services/learning-validators/legacy-guards';
 import { buildGenerationContext } from '@/services/learning-generation/context-builder';
-import { generateLearningDocumentV2 } from '@/services/learning-orchestrator/orchestrator-v2';
+import {
+  generateContentPlan,
+  generateDocumentFromPlan,
+  repairItem,
+} from '@/services/learning-orchestrator/orchestrator-v2';
+import { runSemanticReview } from '@/services/learning-validators/semantic-review';
+import type {
+  PipelineTelemetry,
+  SemanticReviewResult,
+} from '@/services/learning-generation/types';
 
 export interface LearningDocJobInput extends OrchestratorInput {
   jobId: string;
   userId: string;
   organizationId: string;
-  /** Organization slug — needed for LEARNING_GENERATION_V2=slug:foo,bar whitelist. */
   orgSlug?: string;
-  /**
-   * Explicit V2 override from API layer. When true, V2 is attempted regardless
-   * of LEARNING_GENERATION_V2 env value. Still falls back to V1 if no active
-   * profile is resolved or the V2 call fails. API layer sets this to true for
-   * admin users so the developer can verify V2 end-to-end without changing
-   * Railway env vars.
-   */
   enableV2Override?: boolean;
 }
 
@@ -52,17 +42,10 @@ export interface LearningDocJobResult {
   documentId: string;
   document: LearningDocument;
   usage?: GenerateResult['rawUsage'];
-  /** Which generation flow actually ran. */
-  generationMode: 'v1' | 'v2C';
-  /** Human-readable profile chain summary. '(활성 프로필 없음)' when empty. */
+  generationMode: 'v1' | 'v2C' | 'v2plan';
   appliedProfileSummary: string;
 }
 
-// ============================================================
-// Feature flag
-//   LEARNING_GENERATION_V2=false | 'true' | 'slug:foo,bar'
-//   Default: false (V1 only).
-// ============================================================
 function shouldTryV2(input: LearningDocJobInput): boolean {
   if (input.enableV2Override === true) return true;
   const raw = (process.env.LEARNING_GENERATION_V2 ?? 'false').trim();
@@ -78,224 +61,126 @@ function shouldTryV2(input: LearningDocJobInput): boolean {
   return false;
 }
 
-const MAX_REPAIR_ATTEMPTS = 1;
-
 export async function runLearningDocJob(
   input: LearningDocJobInput,
 ): Promise<LearningDocJobResult> {
   const service = createSupabaseServiceClient();
+  const pipelineStarted = Date.now();
 
-  // 1) job running
   await service.from('generation_jobs').update({ status: 'running' }).eq('id', input.jobId);
 
-  // ============================================================
-  // V2 경로 (활성 프로필 필수, V1 자동 폴백 없음)
-  // ============================================================
-  if (shouldTryV2(input)) {
-    const context = await buildGenerationContext({
-      grade: input.grade,
-      subject: input.subject,
-      materialType: input.materialType,
-      unit: input.unit,
-      topic: input.topic,
-      questionCount: input.questionCount,
-      difficulty: input.difficulty,
-      additionalRequest: input.additionalRequest,
-    });
-
-    if (!context.hasActiveProfile) {
-      throw new LearningOrchestratorError(
-        'SCHEMA_ERROR',
-        `${input.grade}학년 ${input.subject} · "${input.unit}"에 활성 프로필이 없어요. 지원 학년·과목을 선택해 주세요.`,
-      );
-    }
-
-    const v2 = await generateLearningDocumentV2(context);
-    if (v2.ok) {
-        // V2 성공 → 최소 구조 확인 후 그대로 저장. 케이스별 검증기·legacy 실행하지 않는다.
-        const doc = v2.document;
-        const topicForStorage = `${input.unit} · ${input.topic}`;
-        const { data: docRow, error: docErr } = await service
-          .from('learning_documents')
-          .insert({
-            user_id: input.userId,
-            organization_id: input.organizationId,
-            title: doc.meta.title,
-            grade: input.grade,
-            subject_code: input.subject,
-            material_type_code: input.materialType,
-            topic: topicForStorage,
-            difficulty: input.difficulty,
-            question_count: input.questionCount,
-            document_json: doc,
-          })
-          .select('id')
-          .single();
-
-        if (docErr || !docRow) {
-          throw new Error(`learning_documents insert 실패 (v2): ${docErr?.message ?? 'unknown'}`);
-        }
-        const documentId = (docRow as { id: string }).id;
-
-        // V2 감사 로그: final stage 1건만 (context snapshot 포함).
-        try {
-          await service.from('learning_evaluations').insert({
-            document_id: documentId,
-            evaluation_stage: 'final',
-            attempt: 1,
-            passed: true,
-            summary: `v2C 단일 호출 · ${context.appliedProfileSummary}`,
-            evaluator_type: 'code',
-            profile_snapshot: {
-              variant: 'v2C',
-              profileSetCode: '(from context)',
-              scopeChain: context.curriculum.profileChain,
-              appliedProfileSummary: context.appliedProfileSummary,
-              hasActiveProfile: context.hasActiveProfile,
-            },
-            result: { context, itemCount: doc.sections.length },
-            input_tokens: v2.inputTokens,
-            output_tokens: v2.outputTokens,
-            duration_ms: v2.durationMs,
-          });
-        } catch (persistErr) {
-          console.error('[learning-doc] v2 evaluation persist failed (non-fatal):', persistErr);
-        }
-
-        await service
-          .from('generation_jobs')
-          .update({
-            status: 'done',
-            completed_at: new Date().toISOString(),
-            learning_document_id: documentId,
-          })
-          .eq('id', input.jobId);
-
-      return {
-        documentId,
-        document: doc,
-        usage: v2.inputTokens || v2.outputTokens
-          ? {
-              promptTokens: v2.inputTokens ?? 0,
-              completionTokens: v2.outputTokens ?? 0,
-            }
-          : undefined,
-        generationMode: 'v2C',
-        appliedProfileSummary: context.appliedProfileSummary,
-      };
-    }
-
-    // V2 실패 → 사용자에게 명시적 오류. V1 자동 폴백 금지.
-    console.warn('[learning-doc] v2 failed, surfacing to user:', v2.reason);
-    throw new LearningOrchestratorError(v2.errorCode, v2.reason);
-  }
-
-  // ============================================================
-  // V1 경로 (Legacy, handler 흐름에서는 도달 안 함 — 기능 플래그 off 시에만)
-  // ============================================================
-  // 2) LearningProfile resolve (원격 실패 시 EMPTY_PROFILE 로 폴백)
-  let profile: ResolvedLearningProfile;
-  let appliedProfileSummary = '(활성 프로필 없음)';
-  try {
-    profile = await resolveLearningProfile({
-      subjectCode: input.subject,
-      grade: input.grade,
-      unitName: input.unit,
-    });
-    if (profile.scopeChain.length > 0) {
-      appliedProfileSummary = profile.scopeChain.map((s) => s.title).join(' → ');
-    }
-  } catch (err) {
-    // 프로필 조회 실패는 서비스 중단이 아니라 폴백 (EMPTY_PROFILE 동일 동작)
-    console.warn('[learning-doc] profile resolve failed, using empty profile:', err);
-    profile = {
-      profileSetCode: '(unresolved)',
-      scopeChain: [],
-      learningGoals: [],
-      allowedScope: [],
-      excludedScope: [],
-      vocabularyGuidance: {},
-      contentGuidance: {},
-      deterministicRules: {},
-      semanticCriteria: [],
-    };
-  }
-
-  // 3) AI 생성 + 셔플 + 3계층 검증 + 부분 재생성
-  const firstGen = await generateLearningDocument(input);
-  let document = shuffleDocument(firstGen.document);
-
-  let threeLayer = await runThreeLayer({
-    document,
-    profile,
-    requestedGrade: input.grade,
-    requestedSubject: input.subject,
-    requestedMaterialType: input.materialType,
-    requestedQuestionCount: input.questionCount,
-    requestedUnit: input.unit,
-    requestedTopic: input.topic,
-  });
-
-  const legacyFirst = runLegacyValidators(
-    {
-      subject: input.subject,
-      unit: input.unit,
-      topic: input.topic,
-      materialType: input.materialType,
-      questionCount: input.questionCount,
-    },
-    document,
-  );
-
-  // 부분 재생성 (실패 item_id 가 하나라도 있으면)
-  const repairs: RepairAttempt[] = [];
-  if (!threeLayer.overallPassed && threeLayer.aggregateFailedItemIds.length > 0) {
-    const attempt = await attemptPartialRegeneration({
-      input,
-      document,
-      failedItemIds: threeLayer.aggregateFailedItemIds,
-    });
-    repairs.push(attempt);
-    if (attempt.repairedDocument) {
-      document = shuffleDocument(attempt.repairedDocument);
-      threeLayer = await runThreeLayer({
-        document,
-        profile,
-        requestedGrade: input.grade,
-        requestedSubject: input.subject,
-        requestedMaterialType: input.materialType,
-        requestedQuestionCount: input.questionCount,
-        requestedUnit: input.unit,
-        requestedTopic: input.topic,
-      });
-    }
-  }
-
-  // set-level 문제 (전체 재생성 필요) → 예외
-  if (
-    !threeLayer.overallPassed &&
-    threeLayer.aggregateFailedItemIds.length === 0 &&
-    // 부분 재생성으로 잡을 수 없는 실패만 남은 경우
-    hasNonItemFailures(threeLayer)
-  ) {
-    const structural = threeLayer.structural;
-    const det = threeLayer.deterministic;
-    const sem = threeLayer.semantic;
-    const detReason = det && !det.passed ? det.summary : '';
-    const semReason = sem && !sem.passed ? sem.summary : '';
+  if (!shouldTryV2(input)) {
+    // 사용자 정책상 V1 자동 진입 금지 (원칙 §2). 활성 프로필 없는 조합은 UI 에서 이미 차단.
+    // 여기까지 오면 요청 자체를 거부한다.
     throw new LearningOrchestratorError(
       'SCHEMA_ERROR',
-      `AI 결과가 요청과 일치하지 않아요: ${[
-        !structural.passed ? structural.summary : null,
-        detReason,
-        semReason,
-      ]
-        .filter(Boolean)
-        .join(' | ')}`,
+      '학습자료 생성은 활성 프로필이 있는 조합에서만 가능합니다. 지원 학년·과목을 선택해 주세요.',
     );
   }
 
-  // 4) learning_documents INSERT (신규 스키마 그대로)
+  // Step 1: GenerationContext
+  const contextStart = Date.now();
+  const context = await buildGenerationContext({
+    grade: input.grade,
+    subject: input.subject,
+    materialType: input.materialType,
+    unit: input.unit,
+    topic: input.topic,
+    questionCount: input.questionCount,
+    difficulty: input.difficulty,
+    additionalRequest: input.additionalRequest,
+  });
+  const contextBuildMs = Date.now() - contextStart;
+
+  if (!context.hasActiveProfile) {
+    throw new LearningOrchestratorError(
+      'SCHEMA_ERROR',
+      `${input.grade}학년 ${input.subject} · "${input.unit}"에 활성 프로필이 없어요. 지원 학년·과목·단원을 선택해 주세요.`,
+    );
+  }
+
+  // Step 2: ContentPlan
+  const planResult = await generateContentPlan(context);
+  if (!planResult.ok) {
+    throw new LearningOrchestratorError(
+      planResult.errorCode,
+      `ContentPlan 실패: ${planResult.reason}`,
+    );
+  }
+  const plan = planResult.plan;
+
+  // Step 3: Document from Plan
+  const docResult = await generateDocumentFromPlan(context, plan);
+  if (!docResult.ok) {
+    throw new LearningOrchestratorError(
+      docResult.errorCode,
+      `Document 생성 실패: ${docResult.reason}`,
+    );
+  }
+  let document = docResult.document;
+
+  // Step 4: Semantic Review (독립 검수)
+  const review1 = await runSemanticReview({ context, plan, document });
+
+  // Step 5: Partial Regeneration (실패 item 최대 1회)
+  let review2: SemanticReviewResult | null = null;
+  let repairMs: number | undefined;
+  let repairTokensIn = 0;
+  let repairTokensOut = 0;
+
+  if (!review1.pass && review1.items.length > 0 && !review1.reviewerFailure) {
+    const repairStart = Date.now();
+    const failedItems = review1.items.filter((it) => !it.pass);
+
+    let anyRepaired = false;
+    for (const failed of failedItems) {
+      const blueprint = plan.itemBlueprints.find((b) => b.itemId === failed.itemId);
+      const idxInSections = document.sections.findIndex(
+        (s) => (s as { itemId?: string }).itemId === failed.itemId,
+      );
+      if (!blueprint || idxInSections < 0) continue;
+      const originalSection = document.sections[idxInSections]!;
+
+      const rep = await repairItem(
+        context,
+        plan,
+        blueprint,
+        originalSection,
+        failed.reason,
+        failed.repairInstruction,
+      );
+      if (!rep.ok) {
+        console.warn('[learning-doc] repair failed for', failed.itemId, rep.reason);
+        continue;
+      }
+      document = {
+        ...document,
+        sections: document.sections.map((s, i) => (i === idxInSections ? rep.section : s)),
+      };
+      anyRepaired = true;
+      repairTokensIn += rep.inputTokens ?? 0;
+      repairTokensOut += rep.outputTokens ?? 0;
+    }
+
+    repairMs = Date.now() - repairStart;
+
+    if (anyRepaired) {
+      review2 = await runSemanticReview({ context, plan, document });
+    }
+  }
+
+  const finalReview = review2 ?? review1;
+
+  // Step 6: 최종 판정
+  if (!finalReview.pass && !finalReview.reviewerFailure) {
+    const failCount = finalReview.items.filter((it) => !it.pass).length;
+    throw new LearningOrchestratorError(
+      'SCHEMA_ERROR',
+      `학습자료 품질 검수에서 ${failCount}개 항목이 통과하지 못했어요. 잠시 후 다시 시도해 주세요. (원인: ${finalReview.reason.slice(0, 120)})`,
+    );
+  }
+
+  // Step 7: 저장 + 감사 로그
   const topicForStorage = `${input.unit} · ${input.topic}`;
   const { data: docRow, error: docErr } = await service
     .from('learning_documents')
@@ -319,21 +204,89 @@ export async function runLearningDocJob(
   }
   const documentId = (docRow as { id: string }).id;
 
-  // 5) 감사 로그: evaluations + evaluation_items + repair_attempts (실패해도 서비스 지속)
+  const telemetry: PipelineTelemetry = {
+    contextBuildMs,
+    planMs: planResult.durationMs,
+    docMs: docResult.durationMs,
+    reviewMs: review1.durationMs,
+    repairMs,
+    reviewMs2: review2?.durationMs,
+    totalMs: Date.now() - pipelineStarted,
+    planTokens: {
+      in: planResult.inputTokens ?? 0,
+      out: planResult.outputTokens ?? 0,
+    },
+    docTokens: {
+      in: docResult.inputTokens ?? 0,
+      out: docResult.outputTokens ?? 0,
+    },
+    reviewTokens: {
+      in: (review1.inputTokens ?? 0) + (review2?.inputTokens ?? 0),
+      out: (review1.outputTokens ?? 0) + (review2?.outputTokens ?? 0),
+    },
+    repairTokens: repairMs ? { in: repairTokensIn, out: repairTokensOut } : undefined,
+  };
+
   try {
-    await persistEvaluations({
-      documentId,
-      profile,
-      threeLayer,
-      repairs,
-      legacyFirstOk: legacyFirst.ok,
-      legacyFirstReason: legacyFirst.ok ? undefined : legacyFirst.reason,
+    await service.from('learning_evaluations').insert({
+      document_id: documentId,
+      evaluation_stage: 'final',
+      attempt: review2 ? 2 : 1,
+      passed: finalReview.pass,
+      summary: `v2plan · ${context.appliedProfileSummary} · review1=${review1.pass}${review2 ? ` · review2=${review2.pass}` : ''}`,
+      evaluator_type: 'hybrid',
+      profile_snapshot: {
+        variant: 'v2plan',
+        profileSetCode: '(from context)',
+        scopeChain: context.curriculum.profileChain,
+        appliedProfileSummary: context.appliedProfileSummary,
+        hasActiveProfile: context.hasActiveProfile,
+      },
+      result: {
+        context,
+        plan: {
+          interpretedGoal: plan.interpretedGoal,
+          learnerAssumptionsCount: plan.learnerAssumptions.length,
+          itemBlueprintCount: plan.itemBlueprints.length,
+          coverageSummary: plan.coverageSummary,
+          blueprints: plan.itemBlueprints,
+        },
+        review1: {
+          pass: review1.pass,
+          reason: review1.reason,
+          failedItemIndexes: review1.failedItemIndexes,
+          items: review1.items,
+          reviewerFailure: review1.reviewerFailure,
+        },
+        review2: review2
+          ? {
+              pass: review2.pass,
+              reason: review2.reason,
+              failedItemIndexes: review2.failedItemIndexes,
+              items: review2.items,
+              reviewerFailure: review2.reviewerFailure,
+            }
+          : null,
+        telemetry,
+      },
+      input_tokens:
+        (planResult.inputTokens ?? 0) +
+        (docResult.inputTokens ?? 0) +
+        (review1.inputTokens ?? 0) +
+        (review2?.inputTokens ?? 0) +
+        repairTokensIn,
+      output_tokens:
+        (planResult.outputTokens ?? 0) +
+        (docResult.outputTokens ?? 0) +
+        (review1.outputTokens ?? 0) +
+        (review2?.outputTokens ?? 0) +
+        repairTokensOut,
+      duration_ms: telemetry.totalMs,
     });
-  } catch (err) {
-    console.error('[learning-doc] evaluations persist failed (non-fatal):', err);
+  } catch (persistErr) {
+    console.error('[learning-doc] v2plan evaluation persist failed (non-fatal):', persistErr);
   }
 
-  // 6) job done + FK 링크
   await service
     .from('generation_jobs')
     .update({
@@ -346,225 +299,21 @@ export async function runLearningDocJob(
   return {
     documentId,
     document,
-    usage: firstGen.rawUsage,
-    generationMode: 'v1',
-    appliedProfileSummary,
+    usage: {
+      promptTokens:
+        (planResult.inputTokens ?? 0) +
+        (docResult.inputTokens ?? 0) +
+        (review1.inputTokens ?? 0) +
+        (review2?.inputTokens ?? 0) +
+        repairTokensIn,
+      completionTokens:
+        (planResult.outputTokens ?? 0) +
+        (docResult.outputTokens ?? 0) +
+        (review1.outputTokens ?? 0) +
+        (review2?.outputTokens ?? 0) +
+        repairTokensOut,
+    },
+    generationMode: 'v2plan',
+    appliedProfileSummary: context.appliedProfileSummary,
   };
-}
-
-// ============================================================
-// helpers
-// ============================================================
-
-function shuffleDocument(doc: LearningDocument): LearningDocument {
-  return { ...doc, sections: shuffleMcSections(doc.sections) };
-}
-
-function hasNonItemFailures(threeLayer: {
-  structural: EvaluationResult;
-  deterministic: EvaluationResult | null;
-  semantic: EvaluationResult | null;
-}): boolean {
-  if (!threeLayer.structural.passed) return true;
-  const det = threeLayer.deterministic;
-  if (det && !det.passed) {
-    const nonItem = det.items.some(
-      (it) => it.severity === 'error' && it.itemId.startsWith('('),
-    );
-    if (nonItem) return true;
-  }
-  const sem = threeLayer.semantic;
-  if (sem && !sem.passed) {
-    // semantic 실패는 item 단위이므로 여기에는 안 걸림 (부분 재생성으로 해결 시도)
-    // 부분 재생성 후에도 남은 실패는 결과 관대 pass (경고로만).
-  }
-  return false;
-}
-
-interface RepairAttempt {
-  attemptedItemIds: string[];
-  repairedDocument: LearningDocument | null;
-  reason: string;
-  status: 'completed' | 'failed';
-}
-
-/**
- * Partial regeneration (M2-1.8).
- *
- * Strategy for M2-1.8 initial scope:
- *   Full document regeneration with a targeted feedback prompt. Item-level
- *   surgical replacement (replace only failed sections) requires the AI to
- *   preserve itemIds for unchanged blocks, which is fragile. Instead we
- *   regenerate everything once, then re-validate. The `learning_repair_attempts`
- *   table CHECK (attempt=1) enforces the "max 1 repair" policy.
- */
-async function attemptPartialRegeneration(args: {
-  input: LearningDocJobInput;
-  document: LearningDocument;
-  failedItemIds: string[];
-}): Promise<RepairAttempt> {
-  try {
-    // 재생성은 orchestrator 그대로 호출. 프롬프트 안에는 failed item 정보를 담지
-    // 못하지만, 셔플 + 3계층 재검증으로 대부분의 결정적 오류는 두 번째 시도에서 해결.
-    // (프롬프트 확장은 후속 개선)
-    const regen = await generateLearningDocument(args.input);
-    return {
-      attemptedItemIds: args.failedItemIds,
-      repairedDocument: regen.document,
-      reason: `${args.failedItemIds.length}개 아이템 실패로 전체 재생성 (M2-1.8 초기 스코프)`,
-      status: 'completed',
-    };
-  } catch (err) {
-    return {
-      attemptedItemIds: args.failedItemIds,
-      repairedDocument: null,
-      reason: `재생성 실패: ${(err as Error).message}`,
-      status: 'failed',
-    };
-  }
-}
-
-// ============================================================
-// evaluations 저장
-// ============================================================
-
-async function persistEvaluations(args: {
-  documentId: string;
-  profile: ResolvedLearningProfile;
-  threeLayer: {
-    structural: EvaluationResult;
-    deterministic: EvaluationResult | null;
-    semantic: EvaluationResult | null;
-    overallPassed: boolean;
-    aggregateFailedItemIds: string[];
-  };
-  repairs: RepairAttempt[];
-  legacyFirstOk: boolean;
-  legacyFirstReason?: string;
-}): Promise<void> {
-  const service = createSupabaseServiceClient();
-
-  const stages: Array<{ stage: 'structure' | 'deterministic' | 'semantic' | 'final'; result: EvaluationResult | null }> = [
-    { stage: 'structure', result: args.threeLayer.structural },
-    { stage: 'deterministic', result: args.threeLayer.deterministic },
-    { stage: 'semantic', result: args.threeLayer.semantic },
-  ];
-
-  // final 종합 결과 — legacy drift 정보 metadata 로 함께.
-  const finalPassed = args.threeLayer.overallPassed;
-  const finalResult: EvaluationResult = {
-    stage: 'final',
-    passed: finalPassed,
-    summary: finalPassed
-      ? '3계층 모두 통과'
-      : `실패 stage: ${[
-          !args.threeLayer.structural.passed ? 'structure' : null,
-          args.threeLayer.deterministic && !args.threeLayer.deterministic.passed ? 'deterministic' : null,
-          args.threeLayer.semantic && !args.threeLayer.semantic.passed ? 'semantic' : null,
-        ]
-          .filter(Boolean)
-          .join(', ')}`,
-    evaluatorType: 'hybrid',
-    items: [],
-    failedItemIds: args.threeLayer.aggregateFailedItemIds,
-  };
-  stages.push({ stage: 'final', result: finalResult });
-
-  const profileSnapshot = {
-    profileSetCode: args.profile.profileSetCode,
-    scopeChain: args.profile.scopeChain,
-    learningGoalsCount: args.profile.learningGoals.length,
-    semanticCriteriaCount: args.profile.semanticCriteria.length,
-    hasMathRules: !!args.profile.deterministicRules.math,
-    hasMcRules: !!args.profile.deterministicRules.multipleChoice,
-    legacyFirstOk: args.legacyFirstOk,
-    legacyFirstReason: args.legacyFirstReason,
-  };
-
-  for (const { stage, result } of stages) {
-    if (!result) continue;
-    const { data: evalRow, error: evalErr } = await service
-      .from('learning_evaluations')
-      .insert({
-        document_id: args.documentId,
-        evaluation_stage: stage,
-        attempt: 1,
-        passed: result.passed,
-        summary: result.summary,
-        evaluator_type: result.evaluatorType,
-        evaluator_model: result.evaluatorModel,
-        profile_snapshot: profileSnapshot,
-        result: {
-          items: result.items,
-          failedItemIds: result.failedItemIds,
-        },
-        input_tokens: result.inputTokens,
-        output_tokens: result.outputTokens,
-        duration_ms: result.durationMs,
-      })
-      .select('id')
-      .single();
-
-    if (evalErr || !evalRow) {
-      throw new Error(`learning_evaluations insert 실패 (${stage}): ${evalErr?.message ?? 'unknown'}`);
-    }
-
-    const evaluationId = (evalRow as { id: string }).id;
-    if (result.items.length > 0) {
-      const rows = result.items.map((it) => ({
-        evaluation_id: evaluationId,
-        item_id: it.itemId,
-        item_index: it.itemIndex,
-        item_type: it.itemType,
-        criterion_key: it.criterionKey,
-        passed: it.passed,
-        reason: it.reason,
-        severity: it.severity,
-        repair_action: it.repairAction,
-      }));
-      const { error: itemsErr } = await service
-        .from('learning_evaluation_items')
-        .insert(rows);
-      if (itemsErr) {
-        console.error(`[learning-doc] evaluation_items insert (${stage}) failed:`, itemsErr);
-      }
-    }
-  }
-
-  // repair_attempts — 하나라도 시도 있으면 저장
-  for (const rep of args.repairs) {
-    const { error: repErr } = await service.from('learning_repair_attempts').insert({
-      document_id: args.documentId,
-      // repair 는 반드시 하나의 evaluation 을 참조해야 하지만, 여기서는 stage='final' 을 정확히
-      // 재조회하기가 번거로우므로 우선 최근 semantic 평가를 참조. 스키마 CHECK 는 attempt=1 만.
-      evaluation_id: await getLatestEvaluationId(args.documentId, service),
-      failed_item_ids: rep.attemptedItemIds,
-      attempt: 1,
-      failure_reasons: {
-        reason: rep.reason,
-      },
-      original_items: {},
-      repaired_items: rep.repairedDocument ? { document: rep.repairedDocument } : null,
-      status: rep.status,
-      completed_at: new Date().toISOString(),
-    });
-    if (repErr) {
-      console.error('[learning-doc] repair_attempts insert failed:', repErr);
-    }
-  }
-}
-
-async function getLatestEvaluationId(
-  documentId: string,
-  service: ReturnType<typeof createSupabaseServiceClient>,
-): Promise<string> {
-  const { data, error } = await service
-    .from('learning_evaluations')
-    .select('id')
-    .eq('document_id', documentId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) throw new Error('latest evaluation not found');
-  return (data as { id: string }).id;
 }

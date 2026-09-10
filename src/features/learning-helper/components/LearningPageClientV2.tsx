@@ -76,7 +76,7 @@ interface GenerateResponse {
   documentId: string;
   document: LearningDocument;
   creditsUsed: number;
-  generationMode?: 'v1' | 'v2C';
+  generationMode?: 'v1' | 'v2C' | 'v2plan';
   appliedProfile?: string;
 }
 interface ErrorBody {

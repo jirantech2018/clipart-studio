@@ -9,7 +9,7 @@ interface Props {
   document: LearningDocument;
   variant?: 'student' | 'teacher' | 'combined';
   /** 서버가 사용한 생성 방식. 결과 카드 상단에 배지로 표시. */
-  generationMode?: 'v1' | 'v2C';
+  generationMode?: 'v1' | 'v2C' | 'v2plan';
   /** 병합된 프로필 체인 요약 (예: "초등 공통 → 2학년 수학 → 수학 수와 연산 영역"). */
   appliedProfile?: string;
 }
@@ -38,10 +38,18 @@ export function LearningPreview({
           <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
             {variant === 'student' ? '학생용' : variant === 'teacher' ? '교사용' : '학생 + 정답'}
           </span>
+          {generationMode === 'v2plan' && (
+            <span
+              className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700"
+              title="Plan → Document → 독립 의미 검수 → (실패 시 부분 재생성)"
+            >
+              생성 방식: V2·Plan
+            </span>
+          )}
           {generationMode === 'v2C' && (
             <span
               className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700"
-              title="공통 프롬프트 · 프로필 기반 (실험 모드)"
+              title="공통 프롬프트 · 프로필 기반 단일 호출"
             >
               생성 방식: V2
             </span>
