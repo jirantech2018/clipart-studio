@@ -82,6 +82,13 @@ interface GenerateResponse {
 interface ErrorBody {
   error: { code: string; message: string; details?: Record<string, unknown> };
 }
+interface FailureInfo {
+  message: string;
+  creditsRefunded: boolean;
+  refundedAmount: number;
+  failedStage: string;
+  canRetry: boolean;
+}
 interface RecentDocument {
   id: string;
   title: string;
@@ -171,6 +178,7 @@ export function LearningPageClientV2({
 
   const [submitting, setSubmitting] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<FailureInfo | null>(null);
   const [result, setResult] = useState<GenerateResponse | null>(null);
 
   const [downloading, setDownloading] = useState(false);
@@ -304,6 +312,7 @@ export function LearningPageClientV2({
   const handleSubmit = useCallback(async () => {
     setSubmitting(true);
     setGenError(null);
+    setFailure(null);
     setResult(null);
     try {
       const res = await fetch('/api/learning/documents', {
@@ -323,14 +332,28 @@ export function LearningPageClientV2({
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as ErrorBody | null;
-        setGenError(body?.error?.message ?? `HTTP ${res.status}`);
+        const details = (body?.error?.details ?? {}) as Partial<FailureInfo>;
+        setFailure({
+          message: body?.error?.message ?? `HTTP ${res.status}`,
+          creditsRefunded: !!details.creditsRefunded,
+          refundedAmount:
+            typeof details.refundedAmount === 'number' ? details.refundedAmount : 0,
+          failedStage: typeof details.failedStage === 'string' ? details.failedStage : 'unknown',
+          canRetry: details.canRetry !== false,
+        });
         return;
       }
       const body = (await res.json()) as { data: GenerateResponse };
       setResult(body.data);
       setCredits((prev) => Math.max(0, prev - body.data.creditsUsed));
     } catch (err) {
-      setGenError((err as Error).message || '네트워크 오류');
+      setFailure({
+        message: (err as Error).message || '네트워크 오류',
+        creditsRefunded: false,
+        refundedAmount: 0,
+        failedStage: 'network',
+        canRetry: true,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -456,6 +479,7 @@ export function LearningPageClientV2({
                 submitting={submitting}
                 onSubmit={handleSubmit}
                 genError={genError}
+                failure={failure}
                 expectedCredits={LEARNING_DOC_CREDITS}
               />
             </div>
@@ -1027,6 +1051,7 @@ function RecommendationCard({
   submitting,
   onSubmit,
   genError,
+  failure,
   expectedCredits,
 }: {
   form: FormState;
@@ -1036,6 +1061,7 @@ function RecommendationCard({
   submitting: boolean;
   onSubmit: () => void;
   genError: string | null;
+  failure: FailureInfo | null;
   expectedCredits: number;
 }) {
   const amountLabel = amountSpec.options.find((o) => o.value === form.questionCount)?.label ?? '';
@@ -1150,29 +1176,68 @@ function RecommendationCard({
               현재 학년·과목은 준비 중이에요. 지원 조합을 선택하면 생성할 수 있어요.
             </p>
           )}
-          {genError && (
-            <div className="space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
-              <p className="text-xs font-medium text-red-700">{genError}</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onSubmit}
-                disabled={submitting || !canSubmit}
-                className="w-full text-xs"
-              >
-                <Loader2
-                  className={cn('mr-2 h-3.5 w-3.5', submitting && 'animate-spin')}
-                  aria-hidden="true"
-                />
-                다시 시도하기
-              </Button>
+          {failure && (
+            <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3">
+              <p className="text-sm font-semibold text-red-800">{failure.message}</p>
+              <ul className="space-y-1 text-xs text-red-700">
+                <li>
+                  · 크레딧:{' '}
+                  {failure.creditsRefunded
+                    ? `사용한 ${failure.refundedAmount} 크레딧이 반환되었어요.`
+                    : '반환 처리 중 문제가 있었어요. 잠시 후 잔액을 확인해 주세요.'}
+                </li>
+                <li>· 실패 단계: {stageLabel(failure.failedStage)}</li>
+                <li>
+                  · 다시 생성:{' '}
+                  {failure.canRetry
+                    ? '지금 바로 다시 시도할 수 있어요.'
+                    : '이 조합은 아직 준비 중이라 지금은 생성할 수 없어요.'}
+                </li>
+              </ul>
+              {failure.canRetry && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onSubmit}
+                  disabled={submitting || !canSubmit}
+                  className="w-full text-xs"
+                >
+                  <Loader2
+                    className={cn('mr-2 h-3.5 w-3.5', submitting && 'animate-spin')}
+                    aria-hidden="true"
+                  />
+                  다시 시도하기
+                </Button>
+              )}
             </div>
+          )}
+          {!failure && genError && (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {genError}
+            </p>
           )}
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function stageLabel(stage: string): string {
+  switch (stage) {
+    case 'timeout':
+      return 'AI 응답 대기';
+    case 'ai-upstream':
+      return 'AI 서비스 연결';
+    case 'ai-parse':
+      return 'AI 응답 해석';
+    case 'quality-check':
+      return '품질 검수';
+    case 'network':
+      return '네트워크';
+    default:
+      return stage;
+  }
 }
 
 // ============================================================

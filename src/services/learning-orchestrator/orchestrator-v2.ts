@@ -177,7 +177,7 @@ function normalizeContentPlan(raw: unknown, expectedCount: number): ContentPlan 
       informationInsideItem: str(r.informationInsideItem),
       successCriterion: str(r.successCriterion),
       distractorDesignPrinciple: str(r.distractorDesignPrinciple),
-      hintRole: str(r.hintRole),
+      hintPlan: normalizeHintPlan(r.hintPlan, r.hintRole),
       gradeSuitabilityReason: str(r.gradeSuitabilityReason),
       distinctRoleFromOthers: str(r.distinctRoleFromOthers),
       difficultyReason: str(r.difficultyReason),
@@ -195,6 +195,38 @@ function normalizeContentPlan(raw: unknown, expectedCount: number): ContentPlan 
 }
 function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
+}
+
+/**
+ * Normalize hintPlan. Supports two shapes:
+ *   - New: { needed, strategy?, rationale }
+ *   - Legacy: hintRole string (from an earlier plan schema). Treated as
+ *     needed=true with rationale carrying the original string.
+ * Default when missing: needed=false with an explanatory rationale.
+ */
+function normalizeHintPlan(
+  raw: unknown,
+  legacyHintRole: unknown,
+): { needed: boolean; strategy?: string; rationale: string } {
+  if (raw && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    const needed = typeof r.needed === 'boolean' ? r.needed : false;
+    const strategy = typeof r.strategy === 'string' && r.strategy.trim() ? r.strategy.trim() : undefined;
+    const rationale =
+      typeof r.rationale === 'string' && r.rationale.trim()
+        ? r.rationale.trim()
+        : needed
+          ? '힌트가 사고를 도울 수 있다고 판단'
+          : '힌트가 정답을 시사할 위험이 있어 생략';
+    return needed ? { needed, strategy, rationale } : { needed, rationale };
+  }
+  if (typeof legacyHintRole === 'string' && legacyHintRole.trim()) {
+    return { needed: true, strategy: legacyHintRole.trim(), rationale: 'legacy hintRole 유지' };
+  }
+  return {
+    needed: false,
+    rationale: 'hintPlan 미제공 — 기본적으로 힌트 없이 진행',
+  };
 }
 
 // ============================================================

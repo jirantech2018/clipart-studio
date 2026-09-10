@@ -205,6 +205,7 @@ export async function POST(request: Request) {
         completed_at: new Date().toISOString(),
       })
       .eq('id', jobId);
+    let refunded = false;
     try {
       await refundOrgTokens({
         organizationId,
@@ -212,28 +213,44 @@ export async function POST(request: Request) {
         jobId,
         reason: 'learning-doc generation failed',
       });
+      refunded = true;
     } catch (refundErr) {
       console.error('[learning/documents POST] refund failed', refundErr);
     }
 
+    // 상세 원인은 감사 로그로만 (내부 err.message). 사용자에게는 짧은 안내.
+    console.error('[learning/documents POST] pipeline failed:', err);
+
     if (err instanceof LearningOrchestratorError) {
-      // Phase 1 M2-2 진단 임시: 세트 검증 실패 원인을 응답 message 에 상세 노출.
-      // 이 상세는 프롬프트/검증 튜닝이 안정되면 다시 축약된 문구로 되돌린다.
-      const baseMessage =
+      const failedStage =
         err.code === 'AI_TIMEOUT'
-          ? 'AI 응답이 너무 오래 걸렸어요. 잠시 후 다시 시도해주세요.'
+          ? 'timeout'
           : err.code === 'AI_UPSTREAM'
-            ? 'AI 서비스에 일시적 문제가 있어요. 잠시 후 다시 시도해주세요.'
-            : err.code === 'PARSE_ERROR' || err.code === 'SCHEMA_ERROR'
-              ? 'AI 응답 형식이 올바르지 않아 다시 만들어야 해요.'
-              : 'AI 생성 중 오류가 발생했어요.';
-      const detail =
-        err.code === 'SCHEMA_ERROR' && err.message
-          ? ` (원인: ${err.message.slice(0, 300)})`
-          : '';
-      return apiError('UPSTREAM_UNAVAILABLE', baseMessage + detail);
+            ? 'ai-upstream'
+            : err.code === 'PARSE_ERROR'
+              ? 'ai-parse'
+              : 'quality-check';
+      const canRetry = err.code !== 'SCHEMA_ERROR' || !err.message.includes('활성 프로필');
+      const message =
+        err.code === 'AI_TIMEOUT'
+          ? 'AI 응답이 너무 오래 걸렸어요.'
+          : err.code === 'AI_UPSTREAM'
+            ? 'AI 서비스에 일시적인 문제가 있어요.'
+            : err.code === 'SCHEMA_ERROR' && err.message.includes('활성 프로필')
+              ? '이 학년·과목 조합은 아직 준비 중이라 생성할 수 없어요.'
+              : '생성한 자료가 품질 기준을 통과하지 못해 제공하지 않았어요.';
+      return apiError('UPSTREAM_UNAVAILABLE', message, {
+        creditsRefunded: refunded,
+        refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
+        failedStage,
+        canRetry,
+      });
     }
-    console.error('[learning/documents POST] dispatch failed', err);
-    return apiError('INTERNAL_ERROR', '학습자료 생성 중 오류가 발생했어요. 다시 시도해주세요.');
+    return apiError('INTERNAL_ERROR', '학습자료 생성 중 오류가 발생했어요.', {
+      creditsRefunded: refunded,
+      refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
+      failedStage: 'unknown',
+      canRetry: true,
+    });
   }
 }
