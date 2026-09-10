@@ -1,9 +1,12 @@
 // kind='learning_doc' job handler.
 //
-// V1 (기본): 기존 orchestrator + legacy guards + 3-layer 검증.
-// V2 (기능 플래그 `LEARNING_GENERATION_V2` 뒤): GenerationContext + 공통 프롬프트
-//    단일 호출. subject/topic 코드 분기 없음. 활성 프로필이 없거나 V2 호출이
-//    실패하면 자동으로 V1 폴백 (사용자 요청은 실패 없이 완료).
+// V2 (기본, 활성 프로필 있는 조합만): GenerationContext + 공통 프롬프트 단일 호출.
+//   - subject/topic 코드 분기 없음. 프로필 데이터로 모든 맥락 조립.
+//   - V2 호출 실패 시 예외를 던져 사용자에게 명시적으로 오류·재시도 안내
+//     (자동 V1 폴백 금지 — 사용자 지시 2026-09-10).
+//
+// V1 (Legacy): 남겨두었으나 handler 안에서는 호출하지 않는다. UI 는 활성 프로필이
+//   없는 조합에서 생성 버튼을 비활성화해 이 경로에 도달하지 않게 한다.
 //
 // 실패 시 예외를 던진다. 크레딧 환불·job 정리는 호출자(API route) 책임.
 
@@ -86,7 +89,7 @@ export async function runLearningDocJob(
   await service.from('generation_jobs').update({ status: 'running' }).eq('id', input.jobId);
 
   // ============================================================
-  // V2 시도 경로 (활성 프로필 있고, 기능 플래그 켜진 경우)
+  // V2 경로 (활성 프로필 필수, V1 자동 폴백 없음)
   // ============================================================
   if (shouldTryV2(input)) {
     const context = await buildGenerationContext({
@@ -100,9 +103,15 @@ export async function runLearningDocJob(
       additionalRequest: input.additionalRequest,
     });
 
-    if (context.hasActiveProfile) {
-      const v2 = await generateLearningDocumentV2(context);
-      if (v2.ok) {
+    if (!context.hasActiveProfile) {
+      throw new LearningOrchestratorError(
+        'SCHEMA_ERROR',
+        `${input.grade}학년 ${input.subject} · "${input.unit}"에 활성 프로필이 없어요. 지원 학년·과목을 선택해 주세요.`,
+      );
+    }
+
+    const v2 = await generateLearningDocumentV2(context);
+    if (v2.ok) {
         // V2 성공 → 최소 구조 확인 후 그대로 저장. 케이스별 검증기·legacy 실행하지 않는다.
         const doc = v2.document;
         const topicForStorage = `${input.unit} · ${input.topic}`;
@@ -162,29 +171,27 @@ export async function runLearningDocJob(
           })
           .eq('id', input.jobId);
 
-        return {
-          documentId,
-          document: doc,
-          usage: v2.inputTokens || v2.outputTokens
-            ? {
-                promptTokens: v2.inputTokens ?? 0,
-                completionTokens: v2.outputTokens ?? 0,
-              }
-            : undefined,
-          generationMode: 'v2C',
-          appliedProfileSummary: context.appliedProfileSummary,
-        };
-      }
-      // V2 실패 → V1 폴백 (요청 실패 방지)
-      console.warn('[learning-doc] v2 failed, falling back to v1:', v2.reason);
-    } else {
-      // 활성 프로필 없음 → V1
-      console.info('[learning-doc] no active profile, using v1');
+      return {
+        documentId,
+        document: doc,
+        usage: v2.inputTokens || v2.outputTokens
+          ? {
+              promptTokens: v2.inputTokens ?? 0,
+              completionTokens: v2.outputTokens ?? 0,
+            }
+          : undefined,
+        generationMode: 'v2C',
+        appliedProfileSummary: context.appliedProfileSummary,
+      };
     }
+
+    // V2 실패 → 사용자에게 명시적 오류. V1 자동 폴백 금지.
+    console.warn('[learning-doc] v2 failed, surfacing to user:', v2.reason);
+    throw new LearningOrchestratorError(v2.errorCode, v2.reason);
   }
 
   // ============================================================
-  // V1 경로 (기존 그대로)
+  // V1 경로 (Legacy, handler 흐름에서는 도달 안 함 — 기능 플래그 off 시에만)
   // ============================================================
   // 2) LearningProfile resolve (원격 실패 시 EMPTY_PROFILE 로 폴백)
   let profile: ResolvedLearningProfile;

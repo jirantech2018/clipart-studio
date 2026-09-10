@@ -1132,7 +1132,7 @@ function RecommendationCard({
           >
             {submitting ? (
               <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 생성 중…
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> AI가 학습지를 만들고 있어요…
               </>
             ) : (
               <>
@@ -1140,14 +1140,33 @@ function RecommendationCard({
               </>
             )}
           </Button>
+          {submitting && (
+            <p className="text-center text-xs text-muted-foreground">
+              AI 생성은 20~60초 걸릴 수 있어요. 이 화면을 닫지 말고 잠시만 기다려 주세요.
+            </p>
+          )}
           {!combinationSupported && (
             <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
               현재 학년·과목은 준비 중이에요. 지원 조합을 선택하면 생성할 수 있어요.
             </p>
           )}
           {genError && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {genError}
+            <div className="space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
+              <p className="text-xs font-medium text-red-700">{genError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onSubmit}
+                disabled={submitting || !canSubmit}
+                className="w-full text-xs"
+              >
+                <Loader2
+                  className={cn('mr-2 h-3.5 w-3.5', submitting && 'animate-spin')}
+                  aria-hidden="true"
+                />
+                다시 시도하기
+              </Button>
             </div>
           )}
         </div>
