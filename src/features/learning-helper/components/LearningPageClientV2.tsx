@@ -1,26 +1,20 @@
-// LearningPageClientV2 — 목표 UI 반영본 (Phase 2.5).
-//
-// 구조:
-//   1) Header (제목 + 설명 + 사용 가이드 / 새로운 대화)
-//   2) 제작 방식 카드 4개 (직접 글로 / 참조 이미지 / 라이브러리 / 초등 학습도우미)
-//      · 현재 페이지는 "초등 학습도우미" 카드가 선택 상태 (보라 테두리)
-//      · 다른 카드 클릭 시 기존 관련 경로로 이동 (기존 /generate 코드는 수정하지 않음)
-//   3) 본문 좌측 (2-column):
-//      · 1. 수업 정보를 알려주세요 (학년/과목/자료유형/수량/단원/세부 주제/추가 요청/배포·형식)
-//      · 2. AI 추천 제작 구성 (실시간 요약 + 예상 크레딧 + 학습자료 만들기 버튼)
-//   4) 본문 아래: 생성 결과 미리보기 (생성 전엔 예상 카드 4종, 생성 후 실제 미리보기)
-//   5) 우측 사이드바: 크레딧 정보 + 최근 학습자료 7건
+// LearningPageClientV2 — /generate 디자인 시스템 재사용.
 //
 // 원칙:
-//   - 생성 엔진·저장·크레딧·렌더러·권한 코드 그대로. UI 배치만.
-//   - 지원되지 않는 학년·과목은 회색 준비 중 배지 + disabled.
-//   - 클립아트는 3단계 예정 상태 표시만 (실제 연결 없음).
+//   - Card / CardHeader / CardTitle / CardContent (@/components/ui/card) 재사용
+//   - Sidebar w-[280px] shrink-0 sticky top-20 (ConversationSidebar 와 동일 규격)
+//   - 헤더 text-2xl font-semibold tracking-tight + text-xs text-muted-foreground
+//   - Button / Input / Label / Textarea 는 @/components/ui 재사용
+//   - 최대 폭 mx-auto max-w-7xl gap-6
+//   - 생성/저장/크레딧/렌더러 코드 변경 없음. UI 배치만.
+//   - 3열 = main 안 (입력 | 추천) 2컬럼 + 우측 sidebar 1컬럼
 
 'use client';
 
 import {
   BookOpen,
   ChevronDown,
+  Coins,
   Download,
   Files,
   GraduationCap,
@@ -36,6 +30,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,7 +54,6 @@ import type { LearningDocument } from '@/services/learning-renderer/schema';
 // ============================================================
 // Types
 // ============================================================
-
 interface Props {
   orgSlug: string;
   orgName: string;
@@ -149,7 +143,7 @@ const REC_TYPE_LABEL: Record<Recommendation['type'], string> = {
 };
 
 // ============================================================
-// Support matrix helpers (subject-invariant)
+// Support helpers
 // ============================================================
 function supportedSubjectsForGrade(matrix: SupportMatrix, grade: number): Set<string> {
   const set = new Set<string>();
@@ -399,27 +393,26 @@ export function LearningPageClientV2({
     !submitting;
 
   const projectedCredits = Math.max(0, credits - LEARNING_DOC_CREDITS);
+  const insufficientCredits = credits < LEARNING_DOC_CREDITS;
 
-  const generatePath =
-    orgSlug === '' ? '/organization/my/generate' : `/organization/${orgSlug}/generate`;
-  const libraryPath =
-    orgSlug === '' ? '/organization/my/library' : `/organization/${orgSlug}/library`;
+  const generatePath = `/organization/my/generate`;
+  const libraryPath = `/organization/my/library`;
 
   // ============================================================
-  // Render
+  // Render — /generate 와 동일한 컨테이너 + sidebar 규격
   // ============================================================
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      {/* ============ 1. Header ============ */}
+    <div className="mx-auto max-w-7xl">
+      {/* ============ 1. Header (Generate와 동일 스타일) ============ */}
       <header className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            <h1 className="text-2xl font-semibold tracking-tight">
               수업에 필요한 학습자료를 AI와 함께 만들어보세요.
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               초등 학년과 과목에 맞는 문제·활동·클립아트를 한 번에 만들 수 있어요.
-              <span className="ml-1 text-xs">
+              <span className="ml-1">
                 (현재 워크스페이스: <span className="font-medium text-foreground">{orgName}</span>)
               </span>
             </p>
@@ -428,7 +421,7 @@ export function LearningPageClientV2({
             <button
               type="button"
               onClick={() => setGuideOpen((v) => !v)}
-              className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-primary hover:opacity-80"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary transition-opacity hover:opacity-80"
             >
               <HelpCircle className="h-4 w-4" />
               사용 가이드
@@ -436,13 +429,6 @@ export function LearningPageClientV2({
                 className={cn('h-4 w-4 transition-transform', guideOpen && 'rotate-180')}
               />
             </button>
-            <Link
-              href={generatePath}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              <Plus className="h-4 w-4" />
-              새로운 대화
-            </Link>
           </div>
         </div>
         {guideOpen && (
@@ -454,43 +440,46 @@ export function LearningPageClientV2({
       </header>
 
       {/* ============ 2. 제작 방식 카드 4개 ============ */}
-      <ModeCards generatePath={generatePath} libraryPath={libraryPath} />
+      <div className="mt-6">
+        <ModeCards generatePath={generatePath} libraryPath={libraryPath} />
+      </div>
 
-      {/* ============ Body 2-column layout ============ */}
-      <div className="flex flex-col gap-6 lg:flex-row">
+      {/* ============ Body 2-column (main + 280px sidebar) — /generate 규격 ============ */}
+      <div className="mt-6 flex gap-6">
         <main className="min-w-0 flex-1 space-y-6">
           {/* 입력 + 추천 2-column */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* 1. 수업 정보 입력 */}
-            <InputCard
-              form={form}
-              patch={patch}
-              supportMatrix={supportMatrix}
-              supportedSubjects={supportedSubjects}
-              gradeSupported={gradeSupported}
-              combinationSupported={combinationSupported}
-              supportedUnits={supportedUnits}
-              units={units}
-              unitsLoading={unitsLoading}
-              amountSpec={amountSpec}
-              suggestions={suggestions}
-              suggesting={suggesting}
-              suggestError={suggestError}
-              onRequestSuggestions={handleRequestSuggestions}
-              canSuggest={canSuggest}
-            />
-
-            {/* 2. AI 추천 제작 구성 + 생성 버튼 */}
-            <RecommendationCard
-              form={form}
-              amountSpec={amountSpec}
-              combinationSupported={combinationSupported}
-              canSubmit={canSubmit}
-              submitting={submitting}
-              onSubmit={handleSubmit}
-              genError={genError}
-              expectedCredits={LEARNING_DOC_CREDITS}
-            />
+          <div className="grid gap-6 lg:grid-cols-5">
+            <div className="lg:col-span-3">
+              <InputCard
+                form={form}
+                patch={patch}
+                supportMatrix={supportMatrix}
+                supportedSubjects={supportedSubjects}
+                gradeSupported={gradeSupported}
+                combinationSupported={combinationSupported}
+                supportedUnits={supportedUnits}
+                units={units}
+                unitsLoading={unitsLoading}
+                amountSpec={amountSpec}
+                suggestions={suggestions}
+                suggesting={suggesting}
+                suggestError={suggestError}
+                onRequestSuggestions={handleRequestSuggestions}
+                canSuggest={canSuggest}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <RecommendationCard
+                form={form}
+                amountSpec={amountSpec}
+                combinationSupported={combinationSupported}
+                canSubmit={canSubmit}
+                submitting={submitting}
+                onSubmit={handleSubmit}
+                genError={genError}
+                expectedCredits={LEARNING_DOC_CREDITS}
+              />
+            </div>
           </div>
 
           {/* 미리보기 */}
@@ -502,22 +491,109 @@ export function LearningPageClientV2({
           />
         </main>
 
-        {/* ============ 우측 사이드바 ============ */}
-        <aside className="w-full space-y-4 lg:w-80 lg:shrink-0">
-          <div className="sticky top-4 space-y-4">
-            <CreditsCard
-              credits={credits}
-              expected={LEARNING_DOC_CREDITS}
-              projected={projectedCredits}
-            />
-            <RecentSidebar
-              documents={recent}
-              loading={recentLoading}
-              downloading={downloading}
-              expanded={recentExpanded}
-              onToggle={() => setRecentExpanded((v) => !v)}
-              onDownload={(id, title) => doDownload(id, 'pdf', 'student', title)}
-            />
+        {/* ============ Sidebar (/generate와 동일 폭 280px + sticky) ============ */}
+        <aside
+          className={cn(
+            'hidden w-[280px] shrink-0 flex-col gap-2',
+            'lg:sticky lg:top-20 lg:flex lg:max-h-[calc(100vh-6rem)]',
+          )}
+        >
+          <Link
+            href={generatePath}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition hover:opacity-90"
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            새로운 대화
+          </Link>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">크레딧 정보</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5 text-xs">
+              <Row label="보유 크레딧">
+                <span className="inline-flex items-center gap-1">
+                  <Coins className="h-3.5 w-3.5 text-amber-500" />
+                  <strong className="tabular-nums text-primary">{credits}</strong>
+                </span>
+              </Row>
+              <Row label="이번 사용">
+                <span className="tabular-nums text-muted-foreground">-{LEARNING_DOC_CREDITS}</span>
+              </Row>
+              <div className="my-1 border-t border-border/60" />
+              <Row label="생성 후 예상">
+                <strong
+                  className={cn(
+                    'tabular-nums',
+                    insufficientCredits ? 'text-destructive' : 'text-primary',
+                  )}
+                >
+                  {projectedCredits}
+                </strong>
+              </Row>
+            </CardContent>
+          </Card>
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            <Card className="flex max-h-full flex-col overflow-hidden">
+              <CardHeader className="shrink-0 pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  최근 학습자료
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="min-h-0 flex-1 space-y-1 overflow-auto">
+                {recentLoading ? (
+                  <p className="text-xs text-muted-foreground">불러오는 중…</p>
+                ) : recent.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    아직 생성한 학습자료가 없어요.
+                  </p>
+                ) : (
+                  <>
+                    <ul className="space-y-1">
+                      {(recentExpanded ? recent : recent.slice(0, 7)).map((d) => (
+                        <li
+                          key={d.id}
+                          className="group flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-xs font-medium text-foreground">
+                              {d.title}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {d.grade}학년 ·{' '}
+                              {SUBJECT_LABEL[d.subjectCode as 'KOR' | 'MATH'] ?? d.subjectCode}
+                              <span className="ml-1">· {formatRelative(d.createdAt)}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => doDownload(d.id, 'pdf', 'student', d.title)}
+                            disabled={downloading}
+                            title="학생용 PDF로 재다운로드"
+                            className="inline-flex shrink-0 items-center rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-muted"
+                          >
+                            <RefreshCw className="mr-0.5 h-3 w-3" /> PDF
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {recent.length > 7 && (
+                      <div className="mt-2 border-t border-border pt-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setRecentExpanded((v) => !v)}
+                          className="text-xs font-medium text-primary hover:opacity-80"
+                        >
+                          {recentExpanded ? '접기' : `전체 보기 (${recent.length}건)`}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </aside>
       </div>
@@ -526,7 +602,7 @@ export function LearningPageClientV2({
 }
 
 // ============================================================
-// 2. Mode cards (제작 방식 4개)
+// 2. Mode cards
 // ============================================================
 function ModeCards({
   generatePath,
@@ -540,7 +616,7 @@ function ModeCards({
     Icon: typeof PenLine;
     subtitle: string;
     description: string;
-    tone: { iconBg: string; iconColor: string };
+    tone: { iconBg: string; iconColor: string; subtitleColor: string };
     selected?: boolean;
   }> = [
     {
@@ -548,7 +624,11 @@ function ModeCards({
       Icon: PenLine,
       subtitle: '직접 글로 적어서 만들기',
       description: '원하는 내용을 자유롭게 입력하면 AI가 새로운 학습자료를 만들어드립니다.',
-      tone: { iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
+      tone: {
+        iconBg: 'bg-purple-100',
+        iconColor: 'text-purple-600',
+        subtitleColor: 'text-purple-600',
+      },
     },
     {
       href: `${generatePath}?mode=reference`,
@@ -556,47 +636,59 @@ function ModeCards({
       subtitle: '참조 이미지 이용하여 만들기',
       description:
         '내가 등록한 학교 이미지나 학교·기관의 이미지를 바탕으로 학습자료를 생성합니다.',
-      tone: { iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
+      tone: {
+        iconBg: 'bg-blue-100',
+        iconColor: 'text-blue-600',
+        subtitleColor: 'text-blue-600',
+      },
     },
     {
       href: libraryPath,
       Icon: Files,
       subtitle: '라이브러리 이용하여 만들기',
       description: '공유 라이브러리의 클립아트나 템플릿을 선택해 새로운 학습자료를 만듭니다.',
-      tone: { iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
+      tone: {
+        iconBg: 'bg-emerald-100',
+        iconColor: 'text-emerald-600',
+        subtitleColor: 'text-emerald-600',
+      },
     },
     {
       href: null,
       Icon: GraduationCap,
       subtitle: '초등 학습도우미',
       description: '학년·과목·주제를 선택하면 문제와 그림이 포함된 학습자료를 만들어드립니다.',
-      tone: { iconBg: 'bg-primary/10', iconColor: 'text-primary' },
+      tone: {
+        iconBg: 'bg-primary/10',
+        iconColor: 'text-primary',
+        subtitleColor: 'text-primary',
+      },
       selected: true,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {items.map((item) => {
         const inner = (
           <div
             className={cn(
-              'flex h-full flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm transition',
+              'card flex h-full flex-col gap-3 p-4 transition',
               item.selected
                 ? 'border-2 border-primary ring-2 ring-primary/20'
-                : 'border-border hover:border-primary/50 hover:shadow-md',
+                : 'hover:border-primary/50 hover:shadow-md',
             )}
           >
             <div className="flex items-center gap-2">
               <div
                 className={cn(
-                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
                   item.tone.iconBg,
                 )}
               >
-                <item.Icon className={cn('h-5 w-5', item.tone.iconColor)} />
+                <item.Icon className={cn('h-4 w-4', item.tone.iconColor)} />
               </div>
-              <p className={cn('text-sm font-semibold', item.selected ? 'text-primary' : 'text-foreground')}>
+              <p className={cn('text-sm font-semibold', item.tone.subtitleColor)}>
                 {item.subtitle}
               </p>
             </div>
@@ -621,7 +713,7 @@ function ModeCards({
 }
 
 // ============================================================
-// Input card
+// Input card (Card 컴포넌트 재사용)
 // ============================================================
 interface InputCardProps {
   form: FormState;
@@ -659,20 +751,23 @@ function InputCard({
   canSuggest,
 }: InputCardProps) {
   const chipBase =
-    'inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium transition';
+    'inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition';
   const chipSelected =
-    'border-2 border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/20';
+    'border-2 border-primary bg-primary text-primary-foreground shadow-sm';
   const chipIdle =
     'border-border bg-background text-foreground hover:border-primary/50 hover:bg-muted';
-  const chipDisabled =
-    'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400';
+  const chipDisabled = 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400';
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-      <SectionHeader index={1} title="수업 정보를 알려주세요" />
-      <div className="mt-4 space-y-5">
-        {/* 학년 · 과목 2열 */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <NumberBadge>1</NumberBadge>
+          수업 정보를 알려주세요
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div>
             <Label className="mb-2 block text-sm font-semibold">학년</Label>
             <div className="flex flex-wrap gap-1.5">
@@ -686,10 +781,7 @@ function InputCard({
                     disabled={!has}
                     onClick={() => has && patch({ grade: g })}
                     title={!has ? '준비 중인 학년이에요' : undefined}
-                    className={cn(
-                      chipBase,
-                      !has ? chipDisabled : selected ? chipSelected : chipIdle,
-                    )}
+                    className={cn(chipBase, !has ? chipDisabled : selected ? chipSelected : chipIdle)}
                   >
                     {g}학년
                     {!has && (
@@ -715,10 +807,7 @@ function InputCard({
                     disabled={!has}
                     onClick={() => has && patch({ subject: s.code })}
                     title={!has ? '이 학년에서는 준비 중인 과목이에요' : undefined}
-                    className={cn(
-                      chipBase,
-                      !has ? chipDisabled : selected ? chipSelected : chipIdle,
-                    )}
+                    className={cn(chipBase, !has ? chipDisabled : selected ? chipSelected : chipIdle)}
                   >
                     {s.nameKo}
                     {gradeSupported && !has && (
@@ -733,8 +822,7 @@ function InputCard({
           </div>
         </div>
 
-        {/* 자료유형 · 수량 2열 */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div>
             <Label className="mb-2 block text-sm font-semibold">자료 유형</Label>
             <div className="flex flex-wrap gap-1.5">
@@ -775,13 +863,12 @@ function InputCard({
           </div>
         </div>
 
-        {/* 단원 (풀너비) */}
         <div>
           <Label className="mb-2 block text-sm font-semibold">단원</Label>
           {!combinationSupported ? (
             <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
               {form.grade}학년 {SUBJECT_LABEL[form.subject as 'KOR' | 'MATH'] ?? form.subject}은
-              아직 프로필이 준비되지 않았어요. 지원 학년·과목을 선택하면 단원 목록이 나타납니다.
+              아직 프로필이 준비되지 않았어요.
             </p>
           ) : unitsLoading ? (
             <p className="text-xs text-muted-foreground">단원 목록 불러오는 중…</p>
@@ -812,7 +899,6 @@ function InputCard({
           )}
         </div>
 
-        {/* 세부 주제 + 도움받기 (풀너비) */}
         <div>
           <div className="mb-2 flex items-center justify-between">
             <Label className="text-sm font-semibold">세부 주제</Label>
@@ -858,7 +944,6 @@ function InputCard({
           )}
         </div>
 
-        {/* 추가 요청 (풀너비) */}
         <div>
           <Label className="mb-2 block text-sm font-semibold">
             추가 요청사항 <span className="text-xs font-normal text-muted-foreground">(선택)</span>
@@ -872,8 +957,7 @@ function InputCard({
           />
         </div>
 
-        {/* 배포 대상 · 출력 형식 2열 */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div>
             <Label className="mb-2 block text-sm font-semibold">배포 대상</Label>
             <div className="flex flex-wrap gap-1.5">
@@ -912,13 +996,13 @@ function InputCard({
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
 // ============================================================
-// Recommendation card (실시간 요약 + 생성 버튼)
+// Recommendation card
 // ============================================================
 function RecommendationCard({
   form,
@@ -939,8 +1023,7 @@ function RecommendationCard({
   genError: string | null;
   expectedCredits: number;
 }) {
-  const amountLabel =
-    amountSpec.options.find((o) => o.value === form.questionCount)?.label ?? '';
+  const amountLabel = amountSpec.options.find((o) => o.value === form.questionCount)?.label ?? '';
   const materialLabel =
     LEARNING_MATERIAL_TYPES.find((m) => m.code === form.materialType)?.nameKo ?? form.materialType;
 
@@ -971,61 +1054,69 @@ function RecommendationCard({
   ];
 
   return (
-    <section className="flex flex-col rounded-xl border border-border bg-card p-6 shadow-sm">
-      <SectionHeader index={2} title="AI 추천 제작 구성" />
-      <div className="mt-4 flex-1 space-y-3">
-        {bullets.map((b, i) => (
-          <div key={i} className="flex items-start gap-3">
-            <div
-              className={cn(
-                'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
-                b.check ? 'bg-primary text-primary-foreground' : 'bg-slate-200 text-slate-500',
-              )}
-            >
-              {b.check ? '✓' : '…'}
+    <Card className="flex h-full flex-col">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <NumberBadge>2</NumberBadge>
+          AI 추천 제작 구성
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col">
+        <div className="flex-1 space-y-3">
+          {bullets.map((b, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <div
+                className={cn(
+                  'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-xs font-bold',
+                  b.check ? 'bg-primary text-primary-foreground' : 'bg-slate-200 text-slate-500',
+                )}
+              >
+                {b.check ? '✓' : '…'}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-foreground">{b.title}</div>
+                <div className="text-xs text-muted-foreground">{b.detail}</div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-foreground">{b.title}</div>
-              <div className="text-xs text-muted-foreground">{b.detail}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6 space-y-3">
-        <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-          <span className="text-sm text-muted-foreground">예상 사용 크레딧</span>
-          <span className="text-lg font-bold text-primary">{expectedCredits}</span>
+          ))}
         </div>
-        <Button
-          type="button"
-          onClick={onSubmit}
-          disabled={!canSubmit}
-          size="lg"
-          className="w-full text-base font-semibold"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 생성 중…
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-5 w-5" /> 학습자료 만들기
-            </>
-          )}
-        </Button>
-        {!combinationSupported && (
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            현재 학년·과목은 준비 중이에요. 지원 조합을 선택하면 생성할 수 있어요.
-          </p>
-        )}
-        {genError && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {genError}
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
+            <span className="text-sm text-muted-foreground">예상 사용 크레딧</span>
+            <span className="inline-flex items-center gap-1 text-lg font-bold text-primary">
+              <Coins className="h-4 w-4 text-amber-500" /> {expectedCredits}
+            </span>
           </div>
-        )}
-      </div>
-    </section>
+          <Button
+            type="button"
+            onClick={onSubmit}
+            disabled={!canSubmit}
+            size="lg"
+            className="w-full text-base font-semibold"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 생성 중…
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-5 w-5" /> 학습자료 만들기
+              </>
+            )}
+          </Button>
+          {!combinationSupported && (
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              현재 학년·과목은 준비 중이에요. 지원 조합을 선택하면 생성할 수 있어요.
+            </p>
+          )}
+          {genError && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {genError}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1045,26 +1136,28 @@ function PreviewSection({
 }) {
   if (!result) {
     return (
-      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-lg font-bold">생성될 자료 미리보기</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">생성될 자료 미리보기</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-xs text-muted-foreground">
             학습자료 만들기를 누르면 아래 순서로 준비돼요.
           </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <PlaceholderCard label={`학생용 ${form.grade}`} tone="primary" Icon={BookOpen} />
-          <PlaceholderCard label={`학생용 ${form.grade}학년`} tone="primary" Icon={BookOpen} />
-          <PlaceholderCard label="교사용" tone="rose" Icon={GraduationCap} />
-          <PlaceholderCard label="클립아트" tone="emerald" Icon={ImageIcon} note="3단계 예정" />
-        </div>
-      </section>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <PlaceholderCard label={`학생용 ${form.grade}학년`} tone="primary" Icon={BookOpen} />
+            <PlaceholderCard label={`학생용 예시`} tone="primary" Icon={BookOpen} />
+            <PlaceholderCard label="교사용" tone="rose" Icon={GraduationCap} />
+            <PlaceholderCard label="클립아트" tone="emerald" Icon={ImageIcon} note="3단계 예정" />
+          </div>
+        </CardContent>
+      </Card>
     );
   }
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold">생성 결과</h2>
+        <h2 className="text-lg font-semibold tracking-tight">생성 결과</h2>
         <Button
           type="button"
           onClick={() =>
@@ -1109,12 +1202,12 @@ function PlaceholderCard({
 }) {
   const toneCls =
     tone === 'primary'
-      ? 'bg-primary/5 text-primary'
+      ? 'bg-primary/10 text-primary'
       : tone === 'rose'
-        ? 'bg-rose-50 text-rose-500'
-        : 'bg-emerald-50 text-emerald-600';
+        ? 'bg-rose-100 text-rose-500'
+        : 'bg-emerald-100 text-emerald-600';
   return (
-    <div className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-lg border border-border bg-slate-50 p-3 text-center">
+    <div className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-center">
       <div className={cn('mb-1 flex h-10 w-10 items-center justify-center rounded-full', toneCls)}>
         <Icon className="h-5 w-5" />
       </div>
@@ -1129,119 +1222,21 @@ function PlaceholderCard({
 }
 
 // ============================================================
-// Credits card
+// Small utilities
 // ============================================================
-function CreditsCard({
-  credits,
-  expected,
-  projected,
-}: {
-  credits: number;
-  expected: number;
-  projected: number;
-}) {
+function NumberBadge({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="text-sm font-bold">크레딧 정보</div>
-      <div className="mt-3 space-y-2 text-sm">
-        <div className="flex items-baseline justify-between">
-          <span className="text-muted-foreground">보유 크레딧</span>
-          <span className="text-2xl font-bold text-foreground">{credits}</span>
-        </div>
-        <div className="flex items-baseline justify-between">
-          <span className="text-muted-foreground">이번 사용</span>
-          <span className="text-base font-semibold text-rose-500">-{expected}</span>
-        </div>
-        <div className="flex items-baseline justify-between border-t border-border pt-2">
-          <span className="text-muted-foreground">생성 후 예상</span>
-          <span className="text-lg font-bold text-primary">{projected}</span>
-        </div>
-      </div>
-    </div>
+    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+      {children}
+    </span>
   );
 }
 
-// ============================================================
-// Recent (sidebar)
-// ============================================================
-function RecentSidebar({
-  documents,
-  loading,
-  downloading,
-  expanded,
-  onToggle,
-  onDownload,
-}: {
-  documents: RecentDocument[];
-  loading: boolean;
-  downloading: boolean;
-  expanded: boolean;
-  onToggle: () => void;
-  onDownload: (id: string, title: string) => void;
-}) {
-  const visible = expanded ? documents : documents.slice(0, 7);
-  const hasMore = documents.length > 7;
-
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-2 flex items-center gap-2">
-        <div className="text-sm font-bold">최근 학습자료</div>
-      </div>
-      {loading ? (
-        <p className="text-xs text-muted-foreground">불러오는 중…</p>
-      ) : documents.length === 0 ? (
-        <p className="text-xs text-muted-foreground">아직 생성한 학습자료가 없어요.</p>
-      ) : (
-        <>
-          <ul className="divide-y divide-border">
-            {visible.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-2 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-foreground">{d.title}</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {d.grade}학년 · {SUBJECT_LABEL[d.subjectCode as 'KOR' | 'MATH'] ?? d.subjectCode}
-                    <span className="ml-1">{formatRelative(d.createdAt)}</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onDownload(d.id, d.title)}
-                  disabled={downloading}
-                  title="학생용 PDF로 재다운로드"
-                  className="inline-flex shrink-0 items-center rounded-md border border-border bg-background px-2 py-1 text-[11px] font-semibold text-primary hover:bg-muted"
-                >
-                  <RefreshCw className="mr-1 h-3 w-3" /> PDF
-                </button>
-              </li>
-            ))}
-          </ul>
-          {hasMore && (
-            <div className="mt-2 border-t border-border pt-2 text-center">
-              <button
-                type="button"
-                onClick={onToggle}
-                className="text-xs font-medium text-primary hover:opacity-80"
-              >
-                {expanded ? '접기' : `전체 보기 (${documents.length}건)`}
-              </button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-// ============================================================
-// Utilities
-// ============================================================
-function SectionHeader({ index, title }: { index: number; title: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-        {index}
-      </div>
-      <h2 className="text-lg font-bold">{title}</h2>
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      {children}
     </div>
   );
 }
