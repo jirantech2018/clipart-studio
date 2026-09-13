@@ -15,7 +15,7 @@ export const maxDuration = 90;
 
 import { ZodError } from 'zod';
 
-import { apiError, apiOk } from '@/lib/api-error';
+import { apiError, apiOk, type ErrorCode } from '@/lib/api-error';
 import {
   InsufficientPoolBalanceError,
   PoolNotFoundError,
@@ -24,6 +24,7 @@ import {
 } from '@/services/credit';
 import { dispatchLearningDoc } from '@/services/jobs/dispatcher';
 import { LearningOrchestratorError } from '@/services/learning-orchestrator';
+import { LearningPipelineError } from '@/services/jobs/handlers/learning-doc';
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -221,35 +222,68 @@ export async function POST(request: Request) {
     // 상세 원인은 감사 로그로만 (내부 err.message). 사용자에게는 짧은 안내.
     console.error('[learning/documents POST] pipeline failed:', err);
 
-    if (err instanceof LearningOrchestratorError) {
-      const failedStage =
-        err.code === 'AI_TIMEOUT'
-          ? 'timeout'
-          : err.code === 'AI_UPSTREAM'
-            ? 'ai-upstream'
-            : err.code === 'PARSE_ERROR'
-              ? 'ai-parse'
-              : 'quality-check';
-      const canRetry = err.code !== 'SCHEMA_ERROR' || !err.message.includes('활성 프로필');
-      const message =
-        err.code === 'AI_TIMEOUT'
-          ? 'AI 응답이 너무 오래 걸렸어요.'
-          : err.code === 'AI_UPSTREAM'
-            ? 'AI 서비스에 일시적인 문제가 있어요.'
-            : err.code === 'SCHEMA_ERROR' && err.message.includes('활성 프로필')
-              ? '이 학년·과목 조합은 아직 준비 중이라 생성할 수 없어요.'
-              : '생성한 자료가 품질 기준을 통과하지 못해 제공하지 않았어요.';
-      return apiError('UPSTREAM_UNAVAILABLE', message, {
+    // 오류 분류: 품질 검수 실패 vs 외부 장애 vs 지원 안됨 vs 내부 오류 (사용자 지시).
+    if (err instanceof LearningPipelineError) {
+      const map: Record<
+        LearningPipelineError['code'],
+        { apiCode: ErrorCode; message: string; canRetry: boolean }
+      > = {
+        unsupported_combination: {
+          apiCode: 'UNSUPPORTED_COMBINATION',
+          message: '이 학년·과목 조합은 아직 준비 중이라 생성할 수 없어요.',
+          canRetry: false,
+        },
+        ai_upstream: {
+          apiCode: 'UPSTREAM_UNAVAILABLE',
+          message: 'AI 서비스에 일시적인 문제가 있어요.',
+          canRetry: true,
+        },
+        ai_timeout: {
+          apiCode: 'UPSTREAM_TIMEOUT',
+          message: 'AI 응답이 너무 오래 걸렸어요.',
+          canRetry: true,
+        },
+        ai_parse: {
+          apiCode: 'UPSTREAM_INVALID_RESPONSE',
+          message: 'AI 응답 형식이 올바르지 않아 다시 생성해야 해요.',
+          canRetry: true,
+        },
+        quality_check_failed: {
+          apiCode: 'QUALITY_CHECK_FAILED',
+          message: '생성한 자료가 품질 기준을 통과하지 못해 제공하지 않았어요.',
+          canRetry: true,
+        },
+        internal_error: {
+          apiCode: 'INTERNAL_ERROR',
+          message: '학습자료 생성 중 문제가 발생했어요.',
+          canRetry: true,
+        },
+      };
+      const mapped = map[err.code];
+      return apiError(mapped.apiCode, mapped.message, {
         creditsRefunded: refunded,
         refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
-        failedStage,
-        canRetry,
+        failedStage: err.stage,
+        errorCode: err.code,
+        canRetry: mapped.canRetry,
+      });
+    }
+
+    // 하위호환: LearningOrchestratorError 경로 (dead code, 남겨둠)
+    if (err instanceof LearningOrchestratorError) {
+      return apiError('UPSTREAM_UNAVAILABLE', 'AI 서비스에 일시적인 문제가 있어요.', {
+        creditsRefunded: refunded,
+        refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
+        failedStage: 'ai-upstream',
+        errorCode: 'ai_upstream',
+        canRetry: true,
       });
     }
     return apiError('INTERNAL_ERROR', '학습자료 생성 중 오류가 발생했어요.', {
       creditsRefunded: refunded,
       refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
       failedStage: 'unknown',
+      errorCode: 'internal_error',
       canRetry: true,
     });
   }

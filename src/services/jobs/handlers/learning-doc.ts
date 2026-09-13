@@ -18,7 +18,10 @@ import type { OrchestratorInput } from '@/services/learning-orchestrator/prompts
 import type { LearningDocument } from '@/services/learning-renderer/schema';
 import { createSupabaseServiceClient } from '@/services/supabase/server';
 
-import { buildGenerationContext } from '@/services/learning-generation/context-builder';
+import {
+  buildGenerationContext,
+  type GenerationContext,
+} from '@/services/learning-generation/context-builder';
 import {
   generateContentPlan,
   generateDocumentFromPlan,
@@ -26,9 +29,67 @@ import {
 } from '@/services/learning-orchestrator/orchestrator-v2';
 import { runSemanticReview } from '@/services/learning-validators/semantic-review';
 import type {
+  ContentPlan,
   PipelineTelemetry,
   SemanticReviewResult,
 } from '@/services/learning-generation/types';
+
+/**
+ * Pipeline error codes (semantic classification — distinct from HTTP status).
+ *
+ * - unsupported_combination: no active LearningProfile for the request
+ * - ai_upstream: OpenAI HTTP error (non-2xx, network)
+ * - ai_timeout: OpenAI response exceeded per-step timeout
+ * - ai_parse: OpenAI returned malformed JSON or violated schema
+ * - quality_check_failed: semantic review rejected the result (after repair)
+ * - internal_error: anything else (DB insert, unexpected)
+ */
+export type LearningPipelineErrorCode =
+  | 'unsupported_combination'
+  | 'ai_upstream'
+  | 'ai_timeout'
+  | 'ai_parse'
+  | 'quality_check_failed'
+  | 'internal_error';
+
+/**
+ * Which pipeline stage produced the error.
+ */
+export type LearningPipelineStage =
+  | 'init'
+  | 'context'
+  | 'plan'
+  | 'document'
+  | 'review'
+  | 'repair'
+  | 'save';
+
+export class LearningPipelineError extends Error {
+  code: LearningPipelineErrorCode;
+  stage: LearningPipelineStage;
+  constructor(code: LearningPipelineErrorCode, stage: LearningPipelineStage, message: string) {
+    super(message);
+    this.code = code;
+    this.stage = stage;
+    this.name = 'LearningPipelineError';
+  }
+}
+
+function orchestratorCodeToPipeline(
+  code: 'AI_UPSTREAM' | 'AI_TIMEOUT' | 'PARSE_ERROR' | 'SCHEMA_ERROR',
+): LearningPipelineErrorCode {
+  switch (code) {
+    case 'AI_UPSTREAM':
+      return 'ai_upstream';
+    case 'AI_TIMEOUT':
+      return 'ai_timeout';
+    case 'PARSE_ERROR':
+    case 'SCHEMA_ERROR':
+      return 'ai_parse';
+    default:
+      return 'internal_error';
+  }
+}
 
 export interface LearningDocJobInput extends OrchestratorInput {
   jobId: string;
@@ -44,6 +105,64 @@ export interface LearningDocJobResult {
   usage?: GenerateResult['rawUsage'];
   generationMode: 'v1' | 'v2C' | 'v2plan';
   appliedProfileSummary: string;
+}
+
+interface FailurePersistInput {
+  jobId: string;
+  code: LearningPipelineErrorCode;
+  stage: LearningPipelineStage;
+  message: string;
+  context?: GenerationContext;
+  plan?: ContentPlan;
+  document?: LearningDocument;
+  review1?: SemanticReviewResult;
+  review2?: SemanticReviewResult;
+  telemetry?: PipelineTelemetry;
+  tokensIn?: number;
+  tokensOut?: number;
+}
+
+async function persistFailureRun(input: FailurePersistInput): Promise<void> {
+  const service = createSupabaseServiceClient();
+  try {
+    await service.from('learning_evaluations').insert({
+      document_id: null,
+      job_id: input.jobId,
+      evaluation_stage: 'final',
+      attempt: input.review2 ? 2 : 1,
+      passed: false,
+      run_status: input.code,
+      error_stage: input.stage,
+      error_code: input.code,
+      error_message: input.message.slice(0, 1000),
+      summary: `v2plan failure · stage=${input.stage} · code=${input.code}`,
+      evaluator_type: 'hybrid',
+      profile_snapshot: input.context
+        ? {
+            variant: 'v2plan',
+            profileSetCode: '(from context)',
+            scopeChain: input.context.curriculum.profileChain,
+            appliedProfileSummary: input.context.appliedProfileSummary,
+            hasActiveProfile: input.context.hasActiveProfile,
+          }
+        : { variant: 'v2plan', hasActiveProfile: false },
+      result: {
+        context: input.context ?? null,
+        plan: input.plan ?? null,
+        // document 는 저장하되 학생 원문 노출 위험이 낮은 최소 구조만 (감사·재현 목적).
+        document: input.document ?? null,
+        review1: input.review1 ?? null,
+        review2: input.review2 ?? null,
+        telemetry: input.telemetry ?? null,
+      },
+      input_tokens: input.tokensIn,
+      output_tokens: input.tokensOut,
+      duration_ms: input.telemetry?.totalMs,
+    });
+  } catch (err) {
+    // 감사 로그 자체 실패는 서비스 흐름을 막지 않고 서버 로그로만 남긴다.
+    console.error('[learning-doc] failure audit persist failed:', err);
+  }
 }
 
 function shouldTryV2(input: LearningDocJobInput): boolean {
@@ -70,12 +189,15 @@ export async function runLearningDocJob(
   await service.from('generation_jobs').update({ status: 'running' }).eq('id', input.jobId);
 
   if (!shouldTryV2(input)) {
-    // 사용자 정책상 V1 자동 진입 금지 (원칙 §2). 활성 프로필 없는 조합은 UI 에서 이미 차단.
-    // 여기까지 오면 요청 자체를 거부한다.
-    throw new LearningOrchestratorError(
-      'SCHEMA_ERROR',
-      '학습자료 생성은 활성 프로필이 있는 조합에서만 가능합니다. 지원 학년·과목을 선택해 주세요.',
-    );
+    const msg =
+      '학습자료 생성은 활성 프로필이 있는 조합에서만 가능합니다. 지원 학년·과목을 선택해 주세요.';
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: 'unsupported_combination',
+      stage: 'init',
+      message: msg,
+    });
+    throw new LearningPipelineError('unsupported_combination', 'init', msg);
   }
 
   // Step 1: GenerationContext
@@ -93,18 +215,32 @@ export async function runLearningDocJob(
   const contextBuildMs = Date.now() - contextStart;
 
   if (!context.hasActiveProfile) {
-    throw new LearningOrchestratorError(
-      'SCHEMA_ERROR',
-      `${input.grade}학년 ${input.subject} · "${input.unit}"에 활성 프로필이 없어요. 지원 학년·과목·단원을 선택해 주세요.`,
-    );
+    const msg = `${input.grade}학년 ${input.subject} · "${input.unit}"에 활성 프로필이 없어요. 지원 학년·과목·단원을 선택해 주세요.`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: 'unsupported_combination',
+      stage: 'context',
+      message: msg,
+      context,
+    });
+    throw new LearningPipelineError('unsupported_combination', 'context', msg);
   }
 
   // Step 2: ContentPlan
   const planResult = await generateContentPlan(context);
   if (!planResult.ok) {
-    throw new LearningOrchestratorError(
-      planResult.errorCode,
-      `ContentPlan 실패: ${planResult.reason}`,
+    const msg = `ContentPlan 실패: ${planResult.reason}`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: orchestratorCodeToPipeline(planResult.errorCode),
+      stage: 'plan',
+      message: msg,
+      context,
+    });
+    throw new LearningPipelineError(
+      orchestratorCodeToPipeline(planResult.errorCode),
+      'plan',
+      msg,
     );
   }
   const plan = planResult.plan;
@@ -112,9 +248,19 @@ export async function runLearningDocJob(
   // Step 3: Document from Plan
   const docResult = await generateDocumentFromPlan(context, plan);
   if (!docResult.ok) {
-    throw new LearningOrchestratorError(
-      docResult.errorCode,
-      `Document 생성 실패: ${docResult.reason}`,
+    const msg = `Document 생성 실패: ${docResult.reason}`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: orchestratorCodeToPipeline(docResult.errorCode),
+      stage: 'document',
+      message: msg,
+      context,
+      plan,
+    });
+    throw new LearningPipelineError(
+      orchestratorCodeToPipeline(docResult.errorCode),
+      'document',
+      msg,
     );
   }
   let document = docResult.document;
@@ -171,13 +317,54 @@ export async function runLearningDocJob(
 
   const finalReview = review2 ?? review1;
 
-  // Step 6: 최종 판정
+  // Step 6: 최종 판정 — 품질 검수 실패 (외부 장애와 구분되는 코드)
   if (!finalReview.pass && !finalReview.reviewerFailure) {
     const failCount = finalReview.items.filter((it) => !it.pass).length;
-    throw new LearningOrchestratorError(
-      'SCHEMA_ERROR',
-      `학습자료 품질 검수에서 ${failCount}개 항목이 통과하지 못했어요. 잠시 후 다시 시도해 주세요. (원인: ${finalReview.reason.slice(0, 120)})`,
-    );
+    const msg = `학습자료 품질 검수에서 ${failCount}개 항목이 통과하지 못했어요.`;
+
+    const failureTelemetry: PipelineTelemetry = {
+      contextBuildMs,
+      planMs: planResult.durationMs,
+      docMs: docResult.durationMs,
+      reviewMs: review1.durationMs,
+      repairMs,
+      reviewMs2: review2?.durationMs,
+      totalMs: Date.now() - pipelineStarted,
+      planTokens: { in: planResult.inputTokens ?? 0, out: planResult.outputTokens ?? 0 },
+      docTokens: { in: docResult.inputTokens ?? 0, out: docResult.outputTokens ?? 0 },
+      reviewTokens: {
+        in: (review1.inputTokens ?? 0) + (review2?.inputTokens ?? 0),
+        out: (review1.outputTokens ?? 0) + (review2?.outputTokens ?? 0),
+      },
+      repairTokens: repairMs ? { in: repairTokensIn, out: repairTokensOut } : undefined,
+    };
+
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: 'quality_check_failed',
+      stage: review2 ? 'repair' : 'review',
+      message: `${msg} (${finalReview.reason.slice(0, 200)})`,
+      context,
+      plan,
+      document,
+      review1,
+      review2: review2 ?? undefined,
+      telemetry: failureTelemetry,
+      tokensIn:
+        (planResult.inputTokens ?? 0) +
+        (docResult.inputTokens ?? 0) +
+        (review1.inputTokens ?? 0) +
+        (review2?.inputTokens ?? 0) +
+        repairTokensIn,
+      tokensOut:
+        (planResult.outputTokens ?? 0) +
+        (docResult.outputTokens ?? 0) +
+        (review1.outputTokens ?? 0) +
+        (review2?.outputTokens ?? 0) +
+        repairTokensOut,
+    });
+
+    throw new LearningPipelineError('quality_check_failed', review2 ? 'repair' : 'review', msg);
   }
 
   // Step 7: 저장 + 감사 로그
