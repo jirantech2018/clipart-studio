@@ -28,6 +28,7 @@ import {
   repairItem,
 } from '@/services/learning-orchestrator/orchestrator-v2';
 import { runSemanticReview } from '@/services/learning-validators/semantic-review';
+import { findClipartsForItems, type ClipartMatch } from '@/services/learning-clipart';
 import type {
   ContentPlan,
   PipelineTelemetry,
@@ -105,6 +106,8 @@ export interface LearningDocJobResult {
   usage?: GenerateResult['rawUsage'];
   generationMode: 'v1' | 'v2C' | 'v2plan';
   appliedProfileSummary: string;
+  /** 자동 삽입된 클립아트 개수 (라이브러리 매칭 수). */
+  clipartInsertedCount?: number;
 }
 
 interface FailurePersistInput {
@@ -367,6 +370,43 @@ export async function runLearningDocJob(
     throw new LearningPipelineError('quality_check_failed', review2 ? 'repair' : 'review', msg);
   }
 
+  // Step 6.5: Clipart 라이브러리 매칭 (blueprint.clipartHint 기반)
+  //   - subject/topic 문자열 검사 없음. Plan 이 요청마다 결정한 서술적 hint 로만 검색.
+  //   - 매칭 성공 시 해당 item 뒤에 { kind:'image', source:'clipart' } section 삽입.
+  //   - 매칭 실패 시 이미지 없이 진행.
+  const clipartUsages: Array<{ itemId: string; match: ClipartMatch }> = [];
+  try {
+    const hintByItem = plan.itemBlueprints
+      .filter((b) => b.clipartHint && b.clipartHint.trim())
+      .map((b) => ({ itemId: b.itemId, clipartHint: b.clipartHint }));
+    if (hintByItem.length > 0) {
+      const matches = await findClipartsForItems(hintByItem);
+      if (matches.size > 0) {
+        const nextSections: typeof document.sections = [];
+        for (const sec of document.sections) {
+          nextSections.push(sec);
+          const secItemId = (sec as { itemId?: string }).itemId;
+          if (!secItemId) continue;
+          const match = matches.get(secItemId);
+          if (!match) continue;
+          // 렌더러는 assetRef 를 그대로 loadImage 에 넘긴다 (HTTP URL 지원).
+          // R2 public URL 을 assetRef 로 저장. 이미지 id 는 usage 테이블로 별도 추적.
+          nextSections.push({
+            kind: 'image',
+            source: 'external',
+            assetRef: match.thumbnailUrl,
+            widthPct: 45,
+          });
+          clipartUsages.push({ itemId: secItemId, match });
+        }
+        document = { ...document, sections: nextSections };
+      }
+    }
+  } catch (clipartErr) {
+    // 클립아트 매칭 실패는 서비스 흐름을 막지 않음. 이미지 없이 진행.
+    console.warn('[learning-doc] clipart match failed (non-fatal):', clipartErr);
+  }
+
   // Step 7: 저장 + 감사 로그
   const topicForStorage = `${input.unit} · ${input.topic}`;
   const { data: docRow, error: docErr } = await service
@@ -390,6 +430,25 @@ export async function runLearningDocJob(
     throw new Error(`learning_documents insert 실패: ${docErr?.message ?? 'unknown'}`);
   }
   const documentId = (docRow as { id: string }).id;
+
+  // Step 7.5: 클립아트 사용 이력 저장 (감사·재사용 추적)
+  if (clipartUsages.length > 0) {
+    try {
+      const usageRows = clipartUsages.map((u) => ({
+        document_id: documentId,
+        item_id: u.itemId,
+        image_id: u.match.imageId,
+        source: u.match.source,
+        hint: plan.itemBlueprints.find((b) => b.itemId === u.itemId)?.clipartHint ?? null,
+      }));
+      await service.from('learning_document_clipart_usage').insert(usageRows);
+    } catch (usageErr) {
+      console.error(
+        '[learning-doc] clipart usage persist failed (non-fatal):',
+        usageErr,
+      );
+    }
+  }
 
   const telemetry: PipelineTelemetry = {
     contextBuildMs,
@@ -502,5 +561,6 @@ export async function runLearningDocJob(
     },
     generationMode: 'v2plan',
     appliedProfileSummary: context.appliedProfileSummary,
+    clipartInsertedCount: clipartUsages.length,
   };
 }

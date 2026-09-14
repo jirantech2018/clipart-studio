@@ -12,6 +12,8 @@ interface Props {
   generationMode?: 'v1' | 'v2C' | 'v2plan';
   /** 병합된 프로필 체인 요약 (예: "초등 공통 → 2학년 수학 → 수학 수와 연산 영역"). */
   appliedProfile?: string;
+  /** 자동 삽입된 클립아트 개수. 있으면 배지로 표시. */
+  clipartInsertedCount?: number;
 }
 
 const SUBJECT_LABEL: Record<string, string> = {
@@ -24,6 +26,7 @@ export function LearningPreview({
   variant = 'student',
   generationMode,
   appliedProfile,
+  clipartInsertedCount,
 }: Props) {
   // student variant 는 answer-key 섹션 숨김, 인라인 정답 숨김.
   const visibleSections =
@@ -60,6 +63,14 @@ export function LearningPreview({
               title="기존 케이스별 프롬프트 · 3계층 검증"
             >
               생성 방식: V1
+            </span>
+          )}
+          {clipartInsertedCount !== undefined && clipartInsertedCount > 0 && (
+            <span
+              className="rounded bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700"
+              title="공유 라이브러리에서 매칭된 클립아트를 자동 삽입했어요."
+            >
+              클립아트 {clipartInsertedCount}개 삽입됨
             </span>
           )}
         </div>

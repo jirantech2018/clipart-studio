@@ -49,6 +49,16 @@ export interface ItemBlueprint {
   distinctRoleFromOthers: string;
   /** 난이도 근거. */
   difficultyReason: string;
+  /**
+   * 이 문항/활동에 어울리는 클립아트 라이브러리 검색용 서술적 힌트.
+   * - 특정 정답 단어나 오답 단어를 담지 않고 시각적 소재만 서술한다.
+   *   예: "종이 위의 연필과 지우개", "체육복을 입은 학생 손"
+   * - 이미지가 오히려 학생 사고를 방해하거나 정답을 시사하게 될 문항이면 빈 문자열.
+   * - 서버가 이 문자열로 R2 라이브러리를 검색해 매칭되는 이미지가 있으면
+   *   해당 blueprint 뒤에 image section 을 자동 삽입한다. 매칭 실패 시 이미지
+   *   없이 진행한다 (새 이미지 생성은 이번 스코프 X).
+   */
+  clipartHint: string;
 }
 
 export interface ContentPlan {

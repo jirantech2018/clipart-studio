@@ -193,6 +193,7 @@ export async function POST(request: Request) {
         creditsUsed: LEARNING_DOC_CREDITS,
         generationMode: result.generationMode,
         appliedProfile: result.appliedProfileSummary,
+        clipartInsertedCount: result.clipartInsertedCount ?? 0,
       },
       201,
     );

@@ -78,6 +78,7 @@ interface GenerateResponse {
   creditsUsed: number;
   generationMode?: 'v1' | 'v2C' | 'v2plan';
   appliedProfile?: string;
+  clipartInsertedCount?: number;
 }
 interface ErrorBody {
   error: { code: string; message: string; details?: Record<string, unknown> };
@@ -1304,6 +1305,7 @@ function PreviewSection({
         variant={form.variant}
         generationMode={result.generationMode}
         appliedProfile={result.appliedProfile}
+        clipartInsertedCount={result.clipartInsertedCount}
       />
     </section>
   );

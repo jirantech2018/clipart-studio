@@ -181,6 +181,7 @@ function normalizeContentPlan(raw: unknown, expectedCount: number): ContentPlan 
       gradeSuitabilityReason: str(r.gradeSuitabilityReason),
       distinctRoleFromOthers: str(r.distinctRoleFromOthers),
       difficultyReason: str(r.difficultyReason),
+      clipartHint: str(r.clipartHint),
     });
   }
 
