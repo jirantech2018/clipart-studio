@@ -213,6 +213,8 @@ const HARD_CRITERIA = new Set([
   'selfContainedness',
   'unitTopicAlignment',
   'hintLeakage',
+  // 정답·문항·이미지 소재 간 논리 불일치는 하드 실패로 판정 (오답이 아닌 자체 모순).
+  'internalConsistency',
 ]);
 const ADVISORY_CRITERIA = new Set([
   'distractorQuality',
@@ -220,7 +222,6 @@ const ADVISORY_CRITERIA = new Set([
   'diversity',
   'materialFit',
   'usabilityAsMaterial',
-  'internalConsistency',
 ]);
 
 function filterAdvisoryOnly(result: SemanticReviewResult): SemanticReviewResult {

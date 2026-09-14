@@ -125,7 +125,9 @@ function normalizeSection(raw: unknown): Section | null {
         ? (s.choices.filter((c) => typeof c === 'string') as string[])
         : undefined;
       const answer = typeof s.answer === 'string' ? s.answer : undefined;
-      const hint = typeof s.hint === 'string' ? s.hint : undefined;
+      // 빈 문자열 hint 는 undefined 로 정규화 (reviewer 가 "hint 필요 없는데 존재" 로 오판정하지 않도록).
+      const hintRaw = typeof s.hint === 'string' ? s.hint.trim() : '';
+      const hint = hintRaw ? hintRaw : undefined;
       const number = typeof s.number === 'number' ? s.number : undefined;
       return {
         kind: 'question',

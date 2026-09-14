@@ -271,6 +271,24 @@ export async function runLearningDocJob(
   }
   let document = docResult.document;
 
+  // 구조적 hintPlan 준수 강제: blueprint.hintPlan.needed === false 인 문항의 hint 필드 제거.
+  // AI 가 계약을 어기고 빈/의미없는 hint 를 추가한 경우 reviewer 가 반복적으로 hintQuality
+  // 실패로 판정하는 노이즈를 원천 차단한다 (특정 과목·정답 문자열에 의존하지 않는 일반 규칙).
+  document = {
+    ...document,
+    sections: document.sections.map((sec) => {
+      if (sec.kind !== 'question') return sec;
+      const secItemId = (sec as { itemId?: string }).itemId;
+      if (!secItemId) return sec;
+      const bp = plan.itemBlueprints.find((b) => b.itemId === secItemId);
+      if (!bp || bp.hintPlan.needed !== false) return sec;
+      if (!('hint' in sec) || (sec as { hint?: string }).hint === undefined) return sec;
+      const { hint: _hint, ...rest } = sec as typeof sec & { hint?: string };
+      void _hint;
+      return rest;
+    }),
+  };
+
   interface UsedClipart {
     itemId: string;
     slotIndex: number;
