@@ -25,6 +25,7 @@ export interface GenerationContextInput {
   questionCount: number;
   difficulty: 'easy' | 'normal' | 'hard';
   additionalRequest?: string;
+  clipartMode?: 'auto' | 'none';
 }
 
 export interface GenerationContext {
@@ -50,6 +51,8 @@ export interface GenerationContext {
     amount: number;
     difficulty: string;
     additionalInstructions?: string;
+    /** 사용자 선택 — 'auto' 면 Plan 이 시각자료를 적극 설계, 'none' 이면 이미지 미사용. */
+    clipartMode: 'auto' | 'none';
   };
   qualityRubric: {
     criteria: Array<{ key: string; label?: string; instruction: string }>;
@@ -187,6 +190,7 @@ export async function buildGenerationContext(
       amount: input.questionCount,
       difficulty: input.difficulty,
       additionalInstructions: input.additionalRequest,
+      clipartMode: input.clipartMode ?? 'auto',
     },
     qualityRubric: {
       criteria: Array.from(mergedCriteria.values()),

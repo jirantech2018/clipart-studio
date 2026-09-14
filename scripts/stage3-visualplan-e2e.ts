@@ -22,6 +22,11 @@ import { createSupabaseServiceClient } from '../src/services/supabase/server';
 const OUT_DIR = path.resolve(process.cwd(), 'tmp', 'stage3-visualplan');
 const LEARNING_DOC_CREDITS = 3;
 
+// 관리자 무과금 검증 경로. 실제 pool 을 소비하지 않고 route.ts 와 동일한 순서로 실행.
+// 프로덕션 route 는 admin 이메일 + LEARNING_DEV_BYPASS_CREDITS=1 조합일 때만 bypass.
+// 이 스크립트는 서비스롤로 직접 handler 를 호출하므로 항상 bypass 로 둔다.
+const BYPASS_CREDITS = true;
+
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
 
@@ -63,7 +68,7 @@ async function main() {
       diversity_level: 0,
       reference_image_id: null,
       school_profile_applied: false,
-      reserved_credits: LEARNING_DOC_CREDITS,
+      reserved_credits: BYPASS_CREDITS ? 0 : LEARNING_DOC_CREDITS,
       status: 'queued',
       org_id: organizationId,
       kind: 'learning_doc',
@@ -75,25 +80,35 @@ async function main() {
     process.exit(3);
   }
   const jobId = (job as { id: string }).id;
-  console.log(`[stage3] job=${jobId} status=queued`);
+  console.log(`[stage3] job=${jobId} status=queued bypass=${BYPASS_CREDITS}`);
 
-  // 크레딧 차감 (route 와 같은 함수).
+  // 크레딧 차감 (bypass 아니면 route 와 같은 함수).
   let poolBalanceBefore = 0;
-  try {
-    const use = await useOrgTokens({
-      organizationId,
-      amount: LEARNING_DOC_CREDITS,
-      jobId,
-      actorUserId: userId,
-    });
-    poolBalanceBefore = use.balance + LEARNING_DOC_CREDITS;
-    console.log(
-      `[stage3] credits: used=${LEARNING_DOC_CREDITS} balance_after_use=${use.balance}`,
-    );
-  } catch (err) {
-    await service.from('generation_jobs').delete().eq('id', jobId);
-    console.error('use_tokens 실패:', err);
-    process.exit(4);
+  if (!BYPASS_CREDITS) {
+    try {
+      const use = await useOrgTokens({
+        organizationId,
+        amount: LEARNING_DOC_CREDITS,
+        jobId,
+        actorUserId: userId,
+      });
+      poolBalanceBefore = use.balance + LEARNING_DOC_CREDITS;
+      console.log(
+        `[stage3] credits: used=${LEARNING_DOC_CREDITS} balance_after_use=${use.balance}`,
+      );
+    } catch (err) {
+      await service.from('generation_jobs').delete().eq('id', jobId);
+      console.error('use_tokens 실패:', err);
+      process.exit(4);
+    }
+  } else {
+    const { data: p } = await service
+      .from('token_pools')
+      .select('balance')
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+    poolBalanceBefore = (p as { balance: number } | null)?.balance ?? 0;
+    console.log(`[stage3] credits: BYPASSED (pool unchanged=${poolBalanceBefore})`);
   }
 
   const started = Date.now();
@@ -113,7 +128,8 @@ async function main() {
       topic: '자음의 소리와 모양',
       questionCount: 5,
       difficulty: 'normal',
-      additionalRequest: '학생이 그림 관찰과 자음자 인식을 연결해 판단하도록 구성한다.',
+      additionalRequest: undefined,
+      clipartMode: 'auto',
     });
     console.log(
       `[stage3] pipeline done in ${Date.now() - started}ms, documentId=${result.documentId}`,
@@ -128,7 +144,7 @@ async function main() {
     }
   }
 
-  // route 실패 처리 (status=failed + refund).
+  // route 실패 처리 (status=failed + refund; bypass 인 경우 refund 스킵).
   if (pipelineErr) {
     await service
       .from('generation_jobs')
@@ -141,18 +157,22 @@ async function main() {
         completed_at: new Date().toISOString(),
       })
       .eq('id', jobId);
-    try {
-      const refund = await refundOrgTokens({
-        organizationId,
-        amount: LEARNING_DOC_CREDITS,
-        jobId,
-        reason: 'learning-doc generation failed (stage3-controlled)',
-      });
-      console.log(
-        `[stage3] refund: balance=${refund.balance} already_refunded=${refund.alreadyRefunded}`,
-      );
-    } catch (refundErr) {
-      console.error('[stage3] refund 실패:', refundErr);
+    if (!BYPASS_CREDITS) {
+      try {
+        const refund = await refundOrgTokens({
+          organizationId,
+          amount: LEARNING_DOC_CREDITS,
+          jobId,
+          reason: 'learning-doc generation failed (stage3-controlled)',
+        });
+        console.log(
+          `[stage3] refund: balance=${refund.balance} already_refunded=${refund.alreadyRefunded}`,
+        );
+      } catch (refundErr) {
+        console.error('[stage3] refund 실패:', refundErr);
+      }
+    } else {
+      console.log('[stage3] refund: BYPASSED');
     }
     process.exit(5);
   }

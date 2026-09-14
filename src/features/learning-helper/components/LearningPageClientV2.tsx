@@ -85,10 +85,16 @@ interface ErrorBody {
 }
 interface FailureInfo {
   message: string;
-  creditsRefunded: boolean;
+  /** 실제 refund 여부. INSUFFICIENT_CREDITS 처럼 애초에 차감 없이 반려된 응답에서는 undefined. */
+  creditsRefunded?: boolean;
   refundedAmount: number;
   failedStage: string;
   canRetry: boolean;
+  /** INSUFFICIENT_CREDITS 세부: 부족 안내에 사용. */
+  requiredCredits?: number;
+  remainingCredits?: number;
+  /** 에러 코드. INSUFFICIENT_CREDITS 등 특화 표시에 사용. */
+  errorCode?: string;
 }
 interface RecentDocument {
   id: string;
@@ -112,6 +118,8 @@ interface FormState {
   additionalRequest: string;
   variant: Variant;
   format: Format;
+  /** 클립아트 자동 삽입 여부. 'auto' → Plan 이 문항별로 판단해 신규 클립아트 생성. */
+  clipartMode: 'auto' | 'none';
 }
 const DEFAULT_FORM: FormState = {
   grade: 1,
@@ -124,6 +132,7 @@ const DEFAULT_FORM: FormState = {
   additionalRequest: '',
   variant: 'student',
   format: 'pdf',
+  clipartMode: 'auto',
 };
 
 const LEARNING_DOC_CREDITS = 3;
@@ -329,18 +338,38 @@ export function LearningPageClientV2({
           questionCount: form.questionCount,
           difficulty: form.difficulty,
           additionalRequest: form.additionalRequest.trim() || undefined,
+          clipartMode: form.clipartMode,
         }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as ErrorBody | null;
-        const details = (body?.error?.details ?? {}) as Partial<FailureInfo>;
+        const rawDetails = (body?.error?.details ?? {}) as Record<string, unknown>;
+        const errorCode = body?.error?.code;
         setFailure({
           message: body?.error?.message ?? `HTTP ${res.status}`,
-          creditsRefunded: !!details.creditsRefunded,
+          // INSUFFICIENT_CREDITS 응답에는 creditsRefunded 필드가 없다 (차감 자체가 안 됨).
+          creditsRefunded:
+            typeof rawDetails.creditsRefunded === 'boolean'
+              ? (rawDetails.creditsRefunded as boolean)
+              : undefined,
           refundedAmount:
-            typeof details.refundedAmount === 'number' ? details.refundedAmount : 0,
-          failedStage: typeof details.failedStage === 'string' ? details.failedStage : 'unknown',
-          canRetry: details.canRetry !== false,
+            typeof rawDetails.refundedAmount === 'number'
+              ? (rawDetails.refundedAmount as number)
+              : 0,
+          failedStage:
+            typeof rawDetails.failedStage === 'string'
+              ? (rawDetails.failedStage as string)
+              : 'unknown',
+          canRetry: rawDetails.canRetry !== false,
+          requiredCredits:
+            typeof rawDetails.requiredCredits === 'number'
+              ? (rawDetails.requiredCredits as number)
+              : undefined,
+          remainingCredits:
+            typeof rawDetails.remainingCredits === 'number'
+              ? (rawDetails.remainingCredits as number)
+              : undefined,
+          errorCode,
         });
         return;
       }
@@ -350,7 +379,7 @@ export function LearningPageClientV2({
     } catch (err) {
       setFailure({
         message: (err as Error).message || '네트워크 오류',
-        creditsRefunded: false,
+        creditsRefunded: undefined,
         refundedAmount: 0,
         failedStage: 'network',
         canRetry: true,
@@ -970,6 +999,19 @@ function InputCard({
           />
         </div>
 
+        {/* 클립아트 자동 삽입 */}
+        <div>
+          <Label className="mb-2 block text-sm font-semibold">클립아트 자동 삽입</Label>
+          <RadioRow
+            options={[
+              { value: 'auto', label: '자동 삽입', hint: '문항에 맞는 그림을 생성해 함께 배치' },
+              { value: 'none', label: '이미지 없이', hint: '텍스트만' },
+            ]}
+            value={form.clipartMode}
+            onChange={(v) => patch({ clipartMode: v as 'auto' | 'none' })}
+          />
+        </div>
+
         {/* 배포 대상 / 출력 형식 radio */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -1181,12 +1223,17 @@ function RecommendationCard({
             <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3">
               <p className="text-sm font-semibold text-red-800">{failure.message}</p>
               <ul className="space-y-1 text-xs text-red-700">
-                <li>
-                  · 크레딧:{' '}
-                  {failure.creditsRefunded
-                    ? `사용한 ${failure.refundedAmount} 크레딧이 반환되었어요.`
-                    : '반환 처리 중 문제가 있었어요. 잠시 후 잔액을 확인해 주세요.'}
-                </li>
+                {failure.errorCode === 'INSUFFICIENT_CREDITS' ? (
+                  <li>
+                    · 크레딧: 부족해 생성하지 못했어요. 필요한 크레딧{' '}
+                    {failure.requiredCredits ?? 3} / 보유 크레딧{' '}
+                    {failure.remainingCredits ?? 0}
+                  </li>
+                ) : failure.creditsRefunded === true ? (
+                  <li>· 크레딧: 사용한 {failure.refundedAmount} 크레딧이 반환되었어요.</li>
+                ) : failure.creditsRefunded === false ? (
+                  <li>· 크레딧: 반환 처리 중 문제가 있었어요. 잠시 후 잔액을 확인해 주세요.</li>
+                ) : null}
                 <li>· 실패 단계: {stageLabel(failure.failedStage)}</li>
                 <li>
                   · 다시 생성:{' '}

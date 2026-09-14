@@ -130,14 +130,23 @@ export async function POST(request: Request) {
   }
   const jobId = (job as { id: string }).id;
 
-  // 크레딧 차감. 실패 시 job 삭제.
+  // 관리자 무과금 검증 경로.
+  //   - LEARNING_DEV_BYPASS_CREDITS=1 && 요청자 = ADMIN_EMAIL 일 때만 크레딧 차감·환불 스킵.
+  //   - 프로덕션과 동일한 handler 경로를 사용자 pool 소비 없이 실행하기 위한 감사된 우회.
+  //   - Non-admin 이나 flag 미설정 시 기존 정책 그대로 (useOrgTokens/refundOrgTokens).
+  const bypassCredits =
+    process.env.LEARNING_DEV_BYPASS_CREDITS === '1' && isAdmin(user.email);
+
+  // 크레딧 차감. 실패 시 job 삭제. (bypass 인 경우 스킵)
   try {
-    await useOrgTokens({
-      organizationId,
-      amount: LEARNING_DOC_CREDITS,
-      jobId,
-      actorUserId: user.id,
-    });
+    if (!bypassCredits) {
+      await useOrgTokens({
+        organizationId,
+        amount: LEARNING_DOC_CREDITS,
+        jobId,
+        actorUserId: user.id,
+      });
+    }
   } catch (err) {
     await service.from('generation_jobs').delete().eq('id', jobId);
     if (err instanceof InsufficientPoolBalanceError) {
@@ -183,6 +192,7 @@ export async function POST(request: Request) {
       questionCount: body.questionCount,
       difficulty: body.difficulty,
       additionalRequest: body.additionalRequest,
+      clipartMode: body.clipartMode,
     });
 
     return apiOk(
@@ -190,7 +200,7 @@ export async function POST(request: Request) {
         jobId,
         documentId: result.documentId,
         document: result.document,
-        creditsUsed: LEARNING_DOC_CREDITS,
+        creditsUsed: bypassCredits ? 0 : LEARNING_DOC_CREDITS,
         generationMode: result.generationMode,
         appliedProfile: result.appliedProfileSummary,
         clipartInsertedCount: result.clipartInsertedCount ?? 0,
@@ -198,7 +208,7 @@ export async function POST(request: Request) {
       201,
     );
   } catch (err) {
-    // 실패 → job status='failed' + 크레딧 환불.
+    // 실패 → job status='failed' + 크레딧 환불 (bypass 인 경우 refund 도 스킵).
     await service
       .from('generation_jobs')
       .update({
@@ -208,16 +218,18 @@ export async function POST(request: Request) {
       })
       .eq('id', jobId);
     let refunded = false;
-    try {
-      await refundOrgTokens({
-        organizationId,
-        amount: LEARNING_DOC_CREDITS,
-        jobId,
-        reason: 'learning-doc generation failed',
-      });
-      refunded = true;
-    } catch (refundErr) {
-      console.error('[learning/documents POST] refund failed', refundErr);
+    if (!bypassCredits) {
+      try {
+        await refundOrgTokens({
+          organizationId,
+          amount: LEARNING_DOC_CREDITS,
+          jobId,
+          reason: 'learning-doc generation failed',
+        });
+        refunded = true;
+      } catch (refundErr) {
+        console.error('[learning/documents POST] refund failed', refundErr);
+      }
     }
 
     // 상세 원인은 감사 로그로만 (내부 err.message). 사용자에게는 짧은 안내.

@@ -216,6 +216,7 @@ export async function runLearningDocJob(
     questionCount: input.questionCount,
     difficulty: input.difficulty,
     additionalRequest: input.additionalRequest,
+    clipartMode: input.clipartMode,
   });
   const contextBuildMs = Date.now() - contextStart;
 

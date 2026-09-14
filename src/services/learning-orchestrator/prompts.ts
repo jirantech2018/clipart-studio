@@ -17,6 +17,14 @@ export interface OrchestratorInput {
   questionCount: number;
   difficulty: Difficulty;
   additionalRequest?: string;
+  /**
+   * 클립아트 자동 삽입 모드.
+   *   - 'auto': ContentPlan 이 학습 목표와 문항 구성에 따라 시각자료를 적극적으로 설계.
+   *             교육적으로 도움이 되지 않는 문항만 visualPlan=null 허용.
+   *   - 'none': 이미지 없이 텍스트만.
+   * 서버 handler / context / Plan prompt 모두 이 값을 참조한다.
+   */
+  clipartMode?: 'auto' | 'none';
 }
 
 // ============================================================
