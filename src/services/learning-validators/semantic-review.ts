@@ -206,12 +206,12 @@ export async function runSemanticReview(
 
 const HARD_CRITERIA = new Set([
   'answerValidity',
-  'hintQuality',
   'goalCoverage',
   'gradeSuitability',
   'selfContained',
   'selfContainedness',
   'unitTopicAlignment',
+  // hintLeakage 는 힌트가 정답을 그대로 담는 정답 노출 (실질 leak) 를 지칭 — 하드.
   'hintLeakage',
   // 정답·문항·이미지 소재 간 논리 불일치는 하드 실패로 판정 (오답이 아닌 자체 모순).
   'internalConsistency',
@@ -222,6 +222,8 @@ const ADVISORY_CRITERIA = new Set([
   'diversity',
   'materialFit',
   'usabilityAsMaterial',
+  // hintQuality 는 스타일 판정으로 오판정이 잦아 advisory. 실질 leak 는 hintLeakage 로 처리.
+  'hintQuality',
 ]);
 
 function filterAdvisoryOnly(result: SemanticReviewResult): SemanticReviewResult {
