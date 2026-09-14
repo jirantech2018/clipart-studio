@@ -7,7 +7,7 @@
 
 import type { LearningDocument, Section } from '@/services/learning-renderer/schema';
 import type { GenerationContext } from '@/services/learning-generation/context-builder';
-import type { ContentPlan, ItemBlueprint } from '@/services/learning-generation/types';
+import type { ContentPlan, ItemBlueprint, VisualPlan } from '@/services/learning-generation/types';
 
 import {
   v2SystemPromptCommon,
@@ -123,8 +123,8 @@ export type PlanResult =
 
 export async function generateContentPlan(context: GenerationContext): Promise<PlanResult> {
   const call = await callOpenAI(v2UserPromptContentPlan(context), {
-    timeoutMs: 45_000,
-    maxTokens: 2000,
+    timeoutMs: 60_000,
+    maxTokens: 4000,
     temperature: 0.3,
   });
   if (!call.ok) return call;
@@ -181,7 +181,7 @@ function normalizeContentPlan(raw: unknown, expectedCount: number): ContentPlan 
       gradeSuitabilityReason: str(r.gradeSuitabilityReason),
       distinctRoleFromOthers: str(r.distinctRoleFromOthers),
       difficultyReason: str(r.difficultyReason),
-      clipartHint: str(r.clipartHint),
+      visualPlan: normalizeVisualPlan(r.visualPlan),
     });
   }
 
@@ -196,6 +196,39 @@ function normalizeContentPlan(raw: unknown, expectedCount: number): ContentPlan 
 }
 function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
+}
+
+/**
+ * VisualPlan 정규화. null 또는 필수 필드 부족 시 null 로 처리 (이미지 없이 진행).
+ */
+function normalizeVisualPlan(raw: unknown): VisualPlan | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const purpose = str(r.purpose).trim();
+  const studentObservation = str(r.studentObservation).trim();
+  const subjectMatter = str(r.subjectMatter).trim();
+  if (!purpose || !subjectMatter) return null;
+  const rawCount = typeof r.imageCount === 'number' ? r.imageCount : 1;
+  const imageCount = Math.min(3, Math.max(1, Math.floor(rawCount) || 1));
+  const educationalRoles = Array.isArray(r.educationalRoles)
+    ? (r.educationalRoles.filter((s) => typeof s === 'string') as string[])
+    : [];
+  while (educationalRoles.length < imageCount) educationalRoles.push('학습 목표 시각화');
+  return {
+    purpose,
+    studentObservation: studentObservation || purpose,
+    subjectMatter,
+    imageCount,
+    educationalRoles: educationalRoles.slice(0, imageCount),
+    composition: str(r.composition) || '중앙 정렬, 배경 최소화',
+    ageAppropriateStyle: str(r.ageAppropriateStyle) || '학년 수준에 맞는 단순한 표현',
+    textPolicy: str(r.textPolicy) || '이미지 안에 문자 넣지 않기',
+    answerLeakPolicy: str(r.answerLeakPolicy) || '정답 단어·기호를 이미지 안에 넣지 않기',
+    styleGuide:
+      str(r.styleGuide) ||
+      '우리학교 클립아트 스타일: 단순하고 밝은 색, 웃는 표정, 배경 최소화, 학생 친화적',
+  };
 }
 
 /**

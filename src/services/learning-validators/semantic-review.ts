@@ -54,6 +54,20 @@ const REVIEW_SYSTEM_PROMPT = [
   `- needed === true 인 문항만 hint 존재·품질을 평가한다. 이 경우 hint 가 hintPlan.strategy 에`,
   `  부합하고 정답 그 자체·동의어·정의를 담지 않는지만 본다.`,
   ``,
+  `이미지 계획 존중 (매우 중요):`,
+  `- 각 아이템의 blueprint.visualPlan 이 non-null 이면 이 아이템에는 이후 단계에서 실제 이미지가 생성·삽입된다.`,
+  `- 너는 텍스트만 볼 뿐이고, 이 시점에 이미지는 아직 생성되지 않았다. 이미지의 내용·품질·연관성을 절대 추측하지 마라.`,
+  `- visualPlan 이 non-null 인 아이템에 대해서는 selfContained·selfContainedness 를 평가에서 제외한다`,
+  `  (stem 만으로 정답 결정 요구는 이미지 기반 학습 목표를 오판정하므로).`,
+  `- 대신 그 아이템의 stem 이 학생에게 관찰·행동 지시를 명확히 하는지, 선택지·정답·힌트가 blueprint 와 일관되는지 등`,
+  `  텍스트로 판정 가능한 부분만 평가한다.`,
+  `- visualPlan 이 null 인 아이템은 기존 루브릭 전체 적용.`,
+  ``,
+  `객관식 선택지 판정 (매우 중요):`,
+  `- 객관식 문항의 선택지 중 답이 아닌 것 (오답) 은 "정답과 다른 특성"을 보이는 것이 정상이다.`,
+  `- 오답이 정답과 같은 특성을 공유하지 않는다는 이유만으로 goalCoverage 또는 internalConsistency 를 실패로 판정하지 마라.`,
+  `- 오답 판정은 오직 distractorQuality (교육적으로 타당한 오답인가) 로만 한다.`,
+  ``,
   `각 재생성 가능 아이템 (question / activity) 에 대해 판정한다.`,
   ``,
   `반드시 다음 JSON 형식으로만 응답하라. 다른 텍스트 금지.`,
@@ -89,6 +103,9 @@ export async function runSemanticReview(
 ): Promise<SemanticReviewResult> {
   const started = Date.now();
 
+  // 텍스트 검수는 모든 아이템 대상. 이미지가 계획된 (visualPlan 존재) 아이템도 텍스트
+  // (stem/choices/answer/hint) 는 여기서 판정한다. 이미지 내용은 뒤에서 vision 검수가 담당하며
+  // 이 단계에서 이미지 품질을 추측하지 않는다 (프롬프트에서 명시).
   const targets = extractTargets(input.document.sections);
   if (targets.length === 0) {
     return {
@@ -173,13 +190,62 @@ export async function runSemanticReview(
 
   const normalized = normalizeReviewJson(parsed, targets);
 
+  // Advisory-only 실패는 파이프라인을 막지 않는다.
+  //   - 하드 실패 기준 (정답·힌트·학년·자기완결성·목표 부합 등) 은 그대로 fail.
+  //   - Advisory 는 리뷰어의 주관적 스타일 판단 (오답 유사성·역할 구별·다양성·자료 사용성 등)
+  //     이며 fail 시 감사 로그에는 남기되 pipeline 은 계속 진행한다.
+  const filtered = filterAdvisoryOnly(normalized);
+
   return {
-    ...normalized,
+    ...filtered,
     inputTokens: json.usage?.prompt_tokens,
     outputTokens: json.usage?.completion_tokens,
     durationMs: Date.now() - started,
   };
 }
+
+const HARD_CRITERIA = new Set([
+  'answerValidity',
+  'hintQuality',
+  'goalCoverage',
+  'gradeSuitability',
+  'selfContained',
+  'selfContainedness',
+  'unitTopicAlignment',
+  'hintLeakage',
+]);
+const ADVISORY_CRITERIA = new Set([
+  'distractorQuality',
+  'distinctRoles',
+  'diversity',
+  'materialFit',
+  'usabilityAsMaterial',
+  'internalConsistency',
+]);
+
+function filterAdvisoryOnly(result: SemanticReviewResult): SemanticReviewResult {
+  if (result.items.length === 0) return result;
+  // 각 실패 아이템에 대해 하드 실패 존재 여부 판단.
+  const strictlyFailedItems = result.items.filter(
+    (it) => !it.pass && it.criteria.some((c) => HARD_CRITERIA.has(c)),
+  );
+  const advisoryOnly = result.items.filter(
+    (it) => !it.pass && !it.criteria.some((c) => HARD_CRITERIA.has(c)),
+  );
+
+  const pass = strictlyFailedItems.length === 0;
+  return {
+    ...result,
+    pass,
+    reason: pass
+      ? advisoryOnly.length > 0
+        ? `advisory-only failures: ${advisoryOnly.length}건 (파이프라인 통과)`
+        : result.reason
+      : result.reason,
+    // items 는 원본 그대로 유지 (감사 로그·repair 결정에 필요).
+  };
+}
+
 
 // ============================================================
 // helpers
@@ -220,12 +286,11 @@ function extractTargets(sections: Section[]): TargetSummary[] {
 
 function buildUserPrompt(input: SemanticReviewInput, targets: TargetSummary[]): string {
   const targetsBlock = targets
-    .map(
-      (t, i) =>
-        `[${i}] itemId=${t.itemId} · ${t.itemType}\n    ${t.text}\n    <blueprint>${JSON.stringify(
-          input.plan.itemBlueprints.find((b) => b.itemId === t.itemId) ?? null,
-        )}</blueprint>`,
-    )
+    .map((t, i) => {
+      const bp = input.plan.itemBlueprints.find((b) => b.itemId === t.itemId) ?? null;
+      const visualPlanned = bp?.visualPlan ? true : false;
+      return `[${i}] itemId=${t.itemId} · ${t.itemType} · visualPlanned=${visualPlanned}\n    ${t.text}\n    <blueprint>${JSON.stringify(bp)}</blueprint>`;
+    })
     .join('\n');
 
   return [
@@ -247,6 +312,18 @@ function buildUserPrompt(input: SemanticReviewInput, targets: TargetSummary[]): 
     `<GeneratedItems (index 는 items 배열의 순번)>`,
     targetsBlock,
     `</GeneratedItems>`,
+    ``,
+    `이미지 계획 관련 판정 규칙 (이미지는 이후 단계에서 생성됨, 지금은 텍스트만 존재):`,
+    `- visualPlanned=true 인 아이템은 blueprint.visualPlan 이 있어 이후에 이미지가 삽입된다.`,
+    `  이 단계에서 이미지는 아직 존재하지 않으므로 이미지 내용·품질을 추측하지 마라.`,
+    `  이런 아이템에서는 selfContained/selfContainedness 를 평가하지 않는다 (이미지 기반 학습 목표를 잘못 실패 처리하지 않도록).`,
+    `  대신 stem 이 관찰·행동 지시를 명확히 하는지, choices/answer/hint 가 blueprint 와 일관되는지만 본다.`,
+    `- visualPlanned=false 인 아이템은 기존대로 stem 만으로 자기완결성을 판정한다.`,
+    ``,
+    `객관식 오답 판정 규칙:`,
+    `- 정답이 아닌 선택지가 정답과 같은 특성을 공유하지 않는 것은 정상이다 (그래서 오답이다).`,
+    `- 오답이 학습 목표와 무관하다는 이유만으로 goalCoverage / internalConsistency 를 실패로 판정하지 마라.`,
+    `- 오답 판정은 distractorQuality 기준으로만 하며, "학습 목표에 부합하는 오해를 유도하는가" 를 본다.`,
     ``,
     `모든 아이템을 루브릭으로 판정하고, 하나라도 실패면 pass=false 로 응답하라.`,
     `실패한 아이템은 items[] 에 반드시 포함하고 repairInstruction 을 채운다.`,

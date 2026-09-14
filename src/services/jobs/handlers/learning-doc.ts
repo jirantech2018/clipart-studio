@@ -28,7 +28,9 @@ import {
   repairItem,
 } from '@/services/learning-orchestrator/orchestrator-v2';
 import { runSemanticReview } from '@/services/learning-validators/semantic-review';
-import { findClipartsForItems, type ClipartMatch } from '@/services/learning-clipart';
+import { generateVisual, type GeneratedVisual } from '@/services/learning-clipart-gen';
+import { reviewClipart } from '@/services/learning-clipart-review';
+import { deleteObject } from '@/services/r2/upload';
 import type {
   ContentPlan,
   PipelineTelemetry,
@@ -268,7 +270,17 @@ export async function runLearningDocJob(
   }
   let document = docResult.document;
 
-  // Step 4: Semantic Review (독립 검수)
+  interface UsedClipart {
+    itemId: string;
+    slotIndex: number;
+    visual: GeneratedVisual;
+    reviewStatus: 'pass' | 'retry_pass';
+    reviewReason: string;
+    sectionPosition: number;
+  }
+  const clipartUsages: UsedClipart[] = [];
+
+  // Step 4: Semantic Review (텍스트 검수 — 이미지 생성 이전, 비용 절감)
   const review1 = await runSemanticReview({ context, plan, document });
 
   // Step 5: Partial Regeneration (실패 item 최대 1회)
@@ -370,41 +382,165 @@ export async function runLearningDocJob(
     throw new LearningPipelineError('quality_check_failed', review2 ? 'repair' : 'review', msg);
   }
 
-  // Step 6.5: Clipart 라이브러리 매칭 (blueprint.clipartHint 기반)
-  //   - subject/topic 문자열 검사 없음. Plan 이 요청마다 결정한 서술적 hint 로만 검색.
-  //   - 매칭 성공 시 해당 item 뒤에 { kind:'image', source:'clipart' } section 삽입.
-  //   - 매칭 실패 시 이미지 없이 진행.
-  const clipartUsages: Array<{ itemId: string; match: ClipartMatch }> = [];
+  // Step 6.5: 텍스트 검수 통과 후에만 VisualPlan → 신규 클립아트 생성 → Vision Review → 배치.
+  //   - 유료 이미지 생성은 텍스트 품질이 확정된 뒤에만 실행 (비용 절감).
+  //   - blueprint.visualPlan 이 non-null 이면 최종 문항 텍스트를 함께 Vision Review 에 전달.
+  //   - Vision 검수 실패 시 최대 1회 재생성. 통과 이미지만 문항 뒤에 삽입.
+  //   - 검수 실패로 최종에 쓰이지 않은 이미지는 R2 + images 테이블에서 삭제 (라이브러리에 남기지 않음).
+  const generatedButUnused: GeneratedVisual[] = [];
   try {
-    const hintByItem = plan.itemBlueprints
-      .filter((b) => b.clipartHint && b.clipartHint.trim())
-      .map((b) => ({ itemId: b.itemId, clipartHint: b.clipartHint }));
-    if (hintByItem.length > 0) {
-      const matches = await findClipartsForItems(hintByItem);
-      if (matches.size > 0) {
-        const nextSections: typeof document.sections = [];
-        for (const sec of document.sections) {
-          nextSections.push(sec);
-          const secItemId = (sec as { itemId?: string }).itemId;
-          if (!secItemId) continue;
-          const match = matches.get(secItemId);
-          if (!match) continue;
-          // 렌더러는 assetRef 를 그대로 loadImage 에 넘긴다 (HTTP URL 지원).
-          // R2 public URL 을 assetRef 로 저장. 이미지 id 는 usage 테이블로 별도 추적.
+    const perItemVisuals = new Map<string, GeneratedVisual[]>();
+    const perItemReviews = new Map<
+      string,
+      Array<{ status: 'pass' | 'retry_pass'; reason: string }>
+    >();
+
+    for (const blueprint of plan.itemBlueprints) {
+      if (!blueprint.visualPlan) continue;
+      const vp = blueprint.visualPlan;
+      const sectionForItem = document.sections.find(
+        (s) => (s as { itemId?: string }).itemId === blueprint.itemId,
+      );
+      const itemContext = {
+        stem:
+          sectionForItem && (sectionForItem as { stem?: string }).stem
+            ? String((sectionForItem as { stem?: string }).stem)
+            : blueprint.studentTask,
+        answer:
+          sectionForItem && (sectionForItem as { answer?: string }).answer
+            ? String((sectionForItem as { answer?: string }).answer)
+            : undefined,
+        hint:
+          sectionForItem && (sectionForItem as { hint?: string }).hint
+            ? String((sectionForItem as { hint?: string }).hint)
+            : undefined,
+      };
+
+      const acceptedVisuals: GeneratedVisual[] = [];
+      const reviewLog: Array<{ status: 'pass' | 'retry_pass'; reason: string }> = [];
+      for (let slot = 0; slot < vp.imageCount; slot++) {
+        let visual: GeneratedVisual;
+        try {
+          visual = await generateVisual({
+            itemId: blueprint.itemId,
+            visualPlan: vp,
+            userId: input.userId,
+            organizationId: input.organizationId,
+            slotIndex: slot,
+          });
+        } catch (genErr) {
+          console.warn('[learning-doc] visual gen failed:', blueprint.itemId, slot, genErr);
+          continue;
+        }
+
+        const rv1 = await reviewClipart({
+          itemId: blueprint.itemId,
+          visualPlan: vp,
+          imageUrl: visual.publicUrl,
+          itemContext,
+        });
+
+        if (rv1.pass) {
+          acceptedVisuals.push(visual);
+          reviewLog.push({ status: 'pass', reason: rv1.reason });
+          continue;
+        }
+        // review1 실패 이미지는 최종 미사용으로 마킹.
+        generatedButUnused.push(visual);
+
+        let retryVisual: GeneratedVisual | null = null;
+        try {
+          retryVisual = await generateVisual({
+            itemId: blueprint.itemId,
+            visualPlan: vp,
+            userId: input.userId,
+            organizationId: input.organizationId,
+            slotIndex: slot,
+          });
+        } catch (genErr) {
+          console.warn(
+            '[learning-doc] visual retry gen failed:',
+            blueprint.itemId,
+            slot,
+            genErr,
+          );
+        }
+        if (!retryVisual) continue;
+
+        const rv2 = await reviewClipart({
+          itemId: blueprint.itemId,
+          visualPlan: vp,
+          imageUrl: retryVisual.publicUrl,
+          itemContext,
+        });
+        if (rv2.pass) {
+          acceptedVisuals.push(retryVisual);
+          reviewLog.push({ status: 'retry_pass', reason: rv2.reason });
+        } else {
+          // retry 도 실패 → 최종 미사용.
+          generatedButUnused.push(retryVisual);
+        }
+      }
+
+      if (acceptedVisuals.length > 0) {
+        perItemVisuals.set(blueprint.itemId, acceptedVisuals);
+        perItemReviews.set(blueprint.itemId, reviewLog);
+      }
+    }
+
+    if (perItemVisuals.size > 0) {
+      const nextSections: typeof document.sections = [];
+      for (const sec of document.sections) {
+        nextSections.push(sec);
+        const secItemId = (sec as { itemId?: string }).itemId;
+        if (!secItemId) continue;
+        const visuals = perItemVisuals.get(secItemId);
+        const reviews = perItemReviews.get(secItemId);
+        if (!visuals || visuals.length === 0) continue;
+        visuals.forEach((v, i) => {
+          const sectionPosition = nextSections.length;
           nextSections.push({
             kind: 'image',
             source: 'external',
-            assetRef: match.thumbnailUrl,
+            assetRef: v.publicUrl,
             widthPct: 45,
           });
-          clipartUsages.push({ itemId: secItemId, match });
-        }
-        document = { ...document, sections: nextSections };
+          const rev = reviews?.[i] ?? { status: 'pass' as const, reason: '' };
+          clipartUsages.push({
+            itemId: secItemId,
+            slotIndex: v.slotIndex,
+            visual: v,
+            reviewStatus: rev.status,
+            reviewReason: rev.reason,
+            sectionPosition,
+          });
+        });
       }
+      document = { ...document, sections: nextSections };
     }
   } catch (clipartErr) {
-    // 클립아트 매칭 실패는 서비스 흐름을 막지 않음. 이미지 없이 진행.
-    console.warn('[learning-doc] clipart match failed (non-fatal):', clipartErr);
+    console.warn('[learning-doc] visual pipeline error (non-fatal):', clipartErr);
+  }
+
+  // Step 6.6: 최종 미사용 (Vision 검수 실패) 이미지 정리.
+  //   - R2 object 삭제 + images 테이블 삭제.
+  //   - 최종 자료에 사용하지 않은 실패 이미지는 라이브러리에 남기지 않는다 (사용자 지침).
+  //   - 정리 실패는 서비스 흐름을 막지 않는다 (감사 로그로만).
+  if (generatedButUnused.length > 0) {
+    await Promise.all(
+      generatedButUnused.map(async (v) => {
+        try {
+          await deleteObject(v.r2Key);
+        } catch (e) {
+          console.warn('[learning-doc] unused R2 delete failed:', v.r2Key, e);
+        }
+        try {
+          await service.from('images').delete().eq('id', v.imageId);
+        } catch (e) {
+          console.warn('[learning-doc] unused images row delete failed:', v.imageId, e);
+        }
+      }),
+    );
   }
 
   // Step 7: 저장 + 감사 로그
@@ -437,9 +573,14 @@ export async function runLearningDocJob(
       const usageRows = clipartUsages.map((u) => ({
         document_id: documentId,
         item_id: u.itemId,
-        image_id: u.match.imageId,
-        source: u.match.source,
-        hint: plan.itemBlueprints.find((b) => b.itemId === u.itemId)?.clipartHint ?? null,
+        image_id: u.visual.imageId,
+        source: 'generated',
+        hint: null,
+        section_position: u.sectionPosition,
+        visual_plan_snapshot:
+          plan.itemBlueprints.find((b) => b.itemId === u.itemId)?.visualPlan ?? null,
+        review_status: u.reviewStatus,
+        review_reason: u.reviewReason.slice(0, 500),
       }));
       await service.from('learning_document_clipart_usage').insert(usageRows);
     } catch (usageErr) {
