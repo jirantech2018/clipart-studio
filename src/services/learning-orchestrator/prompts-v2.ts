@@ -312,12 +312,25 @@ function v2DocumentSchemaSpec(worksheetMode = false): string {
     `- { "kind": "page-break", "reason": "..." }  // 새 페이지 강제.`,
     ``,
     `!! 매우 중요 !!  스키마의 예시 필드 값 (예: "실제 왼쪽 항목", "실제 연습 문제") 을 그대로 복사하지 말고, 이 요청의 실제 학습 내용으로 완전히 채워라. 자리표시자 그대로 반환하면 자료가 무용지물이 된다.`,
+    ``,
+    `활동 블록 품질 필수 규칙 (반드시 자체 검증 후 응답):`,
+    `- picture-choice: 선택지의 label 이 학생에게 정답을 직접 알려주지 않아야 한다.`,
+    `  예: 학습 목표가 "'ㄱ' 소리 인식" 이면 정답 선택지 label 을 "강아지" 로 두면 학생이 이미지 없이도 label 만 보고 정답을 안다.`,
+    `  이런 경우 label 을 비우거나 ("(그림)"), 그림 관찰이 필수가 되도록 stem 을 재구성한다.`,
+    `- matching: leftColumn 과 rightColumn 은 서로 다른 관점의 항목이어야 한다. 두 컬럼의 text 가 완전히 같은 목록이면 활동이 무의미하다.`,
+    `  예: 그림-단어 짝짓기라면 왼쪽은 그림, 오른쪽은 낱말. 개념-예시 짝짓기라면 왼쪽은 개념명, 오른쪽은 그 예시.`,
+    `- fill-blank: template 의 __ 을 채운 문장이 이미 문제 안에서 정답을 노출하고 있으면 안 된다.`,
+    `  예: "모자 __" 로 두고 answers=["모자"] 는 트리비얼. 학생이 스스로 낱말을 떠올려야 한다.`,
+    `- classification: items 의 text 가 그 자체로 정답 카테고리를 명시하면 안 된다.`,
+    `  예: text="'ㄷ' 소리 단어" 는 자체 노출. text="다람쥐" 처럼 학생이 판단해야 하는 실제 예시로 둔다.`,
+    `- 5개 blueprint 를 5개의 동일한 활동 타입으로 나열하지 말고, WorksheetPlan 이 지정한 활동 타입 조합을 그대로 반영한다.`,
   ].join('\n');
 
   const worksheetHint = worksheetMode
     ? [
         ``,
-        `Stage 4 활동형 학습지 모드 (WorksheetPlan 있음):`,
+        `!! Stage 4 활동형 학습지 모드 활성화 (WorksheetPlan 존재) !!`,
+        `- 이 모드에서는 legacy "question" 블록을 절대 사용하지 마라. 반드시 아래 Stage 4 활동 블록 종류만 사용한다.`,
         `- WorksheetPlan.pages 순서대로 section 을 생성한다. 각 page 사이에는 { "kind": "page-break" } 를 반드시 삽입.`,
         `- 각 페이지 첫 부분에 필요하면 heading (예: 페이지 목적) 을 넣고, 첫 페이지 최상단에는 student-header 를 넣는다.`,
         `- 각 WorksheetBlock 은 그 activityType 에 맞는 section 하나로 변환한다 (blockId 는 section.itemId 로 재사용).`,
