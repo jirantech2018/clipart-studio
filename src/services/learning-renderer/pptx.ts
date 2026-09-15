@@ -17,6 +17,61 @@ import PptxGenJS from 'pptxgenjs';
 import { fitDimensions, loadImage } from './image-loader';
 import type { LearningDocument, Section } from './schema';
 
+// Stage 4 활동 블록의 슬라이드용 텍스트 요약.
+function summarizeStage4Activity(s: Section): string {
+  switch (s.kind) {
+    case 'picture-choice': {
+      const list = s.choices
+        .map((c, i) => `${i + 1}) ${c.label ?? '(그림)'}`)
+        .join('   ');
+      return `보기 중 하나를 선택합니다.\n${list}`;
+    }
+    case 'matching': {
+      const left = s.leftColumn.map((x) => x.text ?? x.id).join(' / ');
+      const right = s.rightColumn.map((x) => x.text ?? x.id).join(' / ');
+      return `왼쪽과 오른쪽을 짝지어 연결합니다.\n왼쪽: ${left}\n오른쪽: ${right}`;
+    }
+    case 'classification': {
+      const items = s.items.map((it) => it.text ?? it.id).join(' · ');
+      return `기준별로 분류합니다.\n기준: ${s.categories.join(', ')}\n항목: ${items}`;
+    }
+    case 'fill-blank': {
+      const lines = s.sentences
+        .map((x, i) => `${i + 1}. ${x.template.replace(/__/g, '(  )')}`)
+        .join('\n');
+      return `빈 칸에 알맞은 낱말·수를 씁니다.\n${lines}`;
+    }
+    case 'writing-grid':
+      return `격자 위에 ${s.rowCount}줄 × ${s.cellsPerRow}칸을 채워 씁니다.${s.tracingText ? `\n견본: ${s.tracingText}` : ''}`;
+    case 'guided-practice': {
+      const steps = s.workedExample.solutionSteps
+        .map((x, i) => `  ${i + 1}단계. ${x}`)
+        .join('\n');
+      const prac = s.practiceProblems
+        .map((p, i) => `  ${i + 1}) ${p.problem}`)
+        .join('\n');
+      return `예시\n${s.workedExample.problem}\n${steps}\n\n연습\n${prac}`;
+    }
+    case 'independent-practice': {
+      return s.problems.map((p, i) => `${i + 1}) ${p.problem}`).join('\n');
+    }
+    case 'sequence': {
+      const list = s.items.map((it, i) => `[${i + 1}] ${it.text ?? it.id}`).join('  ');
+      return `순서대로 배열합니다.\n${list}`;
+    }
+    case 'observation':
+      return `그림을 관찰하고 질문에 답합니다.\n${s.observationPrompts.map((p, i) => `${i + 1}) ${p.prompt}`).join('\n')}`;
+    case 'open-response':
+      return `자유롭게 응답합니다 (${s.responseMode === 'lines' ? '줄' : s.responseMode === 'box' ? '상자' : '줄+상자'}).`;
+    case 'worksheet-table':
+      return `표의 빈 칸을 채웁니다.\n칼럼: ${s.headers?.join(' / ') ?? ''}`;
+    case 'blank-space':
+      return s.prompt ?? '빈 공간을 활용해 그리거나 씁니다.';
+    default:
+      return '';
+  }
+}
+
 // ============================================================
 // 발표용 상수. 슬라이드 크기 = LAYOUT_WIDE (13.333 x 7.5 inch).
 // ============================================================
@@ -149,6 +204,37 @@ export function splitIntoSlides(doc: LearningDocument): SlideChunk[] {
     if (s.kind === 'rubric') {
       flushText();
       chunks.push({ kind: 'table', title: `${currentSectionTitle} · 평가 기준`, sections: [s] });
+      continue;
+    }
+
+    // Stage 4 활동 블록: 각각 개별 슬라이드로 (activity chunk 재사용).
+    if (
+      s.kind === 'picture-choice' ||
+      s.kind === 'matching' ||
+      s.kind === 'classification' ||
+      s.kind === 'fill-blank' ||
+      s.kind === 'writing-grid' ||
+      s.kind === 'guided-practice' ||
+      s.kind === 'independent-practice' ||
+      s.kind === 'sequence' ||
+      s.kind === 'observation' ||
+      s.kind === 'open-response'
+    ) {
+      flushText();
+      chunks.push({ kind: 'activity', title: currentSectionTitle, sections: [s] });
+      continue;
+    }
+    if (s.kind === 'student-header') {
+      // 표지 슬라이드 하단에 자연스럽게 흡수. 별도 슬라이드 만들지 않고 skip.
+      continue;
+    }
+    if (s.kind === 'page-break') {
+      flushText();
+      continue;
+    }
+    if (s.kind === 'worksheet-table' || s.kind === 'blank-space') {
+      flushText();
+      chunks.push({ kind: 'activity', title: currentSectionTitle, sections: [s] });
       continue;
     }
 
@@ -374,7 +460,60 @@ async function drawBody(
 
     case 'activity': {
       const a = chunk.sections[0];
-      if (!a || a.kind !== 'activity') return;
+      if (!a) return;
+      // Stage 4 활동 블록 — 간단한 텍스트 기반 fallback.
+      if (
+        a.kind === 'picture-choice' ||
+        a.kind === 'matching' ||
+        a.kind === 'classification' ||
+        a.kind === 'fill-blank' ||
+        a.kind === 'writing-grid' ||
+        a.kind === 'guided-practice' ||
+        a.kind === 'independent-practice' ||
+        a.kind === 'sequence' ||
+        a.kind === 'observation' ||
+        a.kind === 'open-response' ||
+        a.kind === 'worksheet-table' ||
+        a.kind === 'blank-space'
+      ) {
+        const stem = 'stem' in a ? (a as { stem: string }).stem : '활동';
+        anySlide.addText(stem, {
+          x: S.x,
+          y: 1.7,
+          w: S.w,
+          h: 0.8,
+          fontSize: FONT_BODY + 2,
+          bold: true,
+          color: '1A1A1A',
+          fontFace: FONT_STACK,
+        });
+        // 활동 유형별 요약 텍스트.
+        const summary = summarizeStage4Activity(a);
+        anySlide.addText(summary, {
+          x: S.x,
+          y: 2.6,
+          w: S.w,
+          h: 4.5,
+          fontSize: FONT_BODY,
+          color: '374151',
+          fontFace: FONT_STACK,
+          valign: 'top',
+        });
+        // 안내 문구
+        anySlide.addText('세부 응답 공간은 PDF 학생용을 사용해 주세요.', {
+          x: S.x,
+          y: 6.6,
+          w: S.w,
+          h: 0.4,
+          fontSize: FONT_CAPTION,
+          italic: true,
+          color: COLOR_MUTED,
+          align: 'center',
+          fontFace: FONT_STACK,
+        });
+        return;
+      }
+      if (a.kind !== 'activity') return;
       // 활동 스텝 — 큰 번호 카드 스타일.
       const startY = 1.7;
       a.steps.forEach((step, i) => {

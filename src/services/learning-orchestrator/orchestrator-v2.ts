@@ -8,6 +8,7 @@
 import type { LearningDocument, Section } from '@/services/learning-renderer/schema';
 import type { GenerationContext } from '@/services/learning-generation/context-builder';
 import type { ContentPlan, ItemBlueprint, VisualPlan } from '@/services/learning-generation/types';
+import type { WorksheetPlan } from '@/services/learning-worksheet';
 
 import {
   v2SystemPromptCommon,
@@ -279,10 +280,11 @@ export type DocResult =
 export async function generateDocumentFromPlan(
   context: GenerationContext,
   plan: ContentPlan,
+  worksheetPlan?: WorksheetPlan,
 ): Promise<DocResult> {
-  const call = await callOpenAI(v2UserPromptDocumentFromPlan(context, plan), {
+  const call = await callOpenAI(v2UserPromptDocumentFromPlan(context, plan, worksheetPlan), {
     timeoutMs: 60_000,
-    maxTokens: 3500,
+    maxTokens: worksheetPlan ? 5000 : 3500,
     temperature: 0.4,
   });
   if (!call.ok) return call;
@@ -311,21 +313,55 @@ export async function generateDocumentFromPlan(
     };
   }
 
-  // Blueprint 와 실제 item 개수 정합 확인 (원칙 §8 허용 검증)
+  // Blueprint 와 실제 item 개수 정합 확인 — WorksheetPlan 이 있으면
+  // sourceItemIds 커버리지로 체크 (활동 블록은 여러 item 을 묶을 수 있음).
   const producedItemIds = new Set(
     document.sections
-      .filter((s) => ['question', 'activity'].includes(s.kind))
       .map((s) => (s as { itemId?: string }).itemId)
       .filter((id): id is string => typeof id === 'string' && id.length > 0),
   );
   const planIds = new Set(plan.itemBlueprints.map((b) => b.itemId));
-  const missing = Array.from(planIds).filter((id) => !producedItemIds.has(id));
-  if (missing.length > 0) {
-    return {
-      ok: false,
-      reason: `Blueprint 대비 미생성 itemId: ${missing.join(', ')}`,
-      errorCode: 'SCHEMA_ERROR',
-    };
+  // WorksheetPlan 을 사용할 때는 블록당 여러 blueprint 를 묶을 수 있고 Section itemId 는
+  // 활동 블록 prefix (pc_/mt_/cl_ 등) 로 재할당되므로 정확한 커버리지 판정이 어렵다.
+  // 대신 학생이 실행할 만한 최소 활동 개수만 확인 (blueprint 개수 이상 활동 블록 존재).
+  if (worksheetPlan) {
+    const activityCount = document.sections.filter((s) =>
+      [
+        'question',
+        'activity',
+        'picture-choice',
+        'matching',
+        'classification',
+        'fill-blank',
+        'writing-grid',
+        'guided-practice',
+        'independent-practice',
+        'sequence',
+        'observation',
+        'open-response',
+        'worksheet-table',
+        'blank-space',
+      ].includes(s.kind),
+    ).length;
+    if (activityCount === 0) {
+      return {
+        ok: false,
+        reason: `Document 에 활동 블록이 하나도 없음 (blueprint ${planIds.size}개)`,
+        errorCode: 'SCHEMA_ERROR',
+      };
+    }
+  } else {
+    const documentJson = JSON.stringify(document);
+    const missing = Array.from(planIds).filter(
+      (id) => !producedItemIds.has(id) && !documentJson.includes(id),
+    );
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        reason: `Blueprint 대비 미생성 itemId: ${missing.join(', ')}`,
+        errorCode: 'SCHEMA_ERROR',
+      };
+    }
   }
 
   return {

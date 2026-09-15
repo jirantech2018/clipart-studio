@@ -31,6 +31,7 @@ import { runSemanticReview } from '@/services/learning-validators/semantic-revie
 import { generateVisual, type GeneratedVisual } from '@/services/learning-clipart-gen';
 import { reviewClipart } from '@/services/learning-clipart-review';
 import { deleteObject } from '@/services/r2/upload';
+import { generateWorksheetPlan, type WorksheetPlan } from '@/services/learning-worksheet';
 import type {
   ContentPlan,
   PipelineTelemetry,
@@ -251,8 +252,32 @@ export async function runLearningDocJob(
   }
   const plan = planResult.plan;
 
-  // Step 3: Document from Plan
-  const docResult = await generateDocumentFromPlan(context, plan);
+  // Step 2.5: WorksheetPlan — Stage 4 활동형 학습지 조판 계획.
+  // 실패해도 Doc 생성이 이전 스타일 (기본 question/activity 나열) 로 진행 가능하도록 non-fatal.
+  let worksheetPlan: WorksheetPlan | undefined;
+  const worksheetStart = Date.now();
+  let worksheetMs = 0;
+  let worksheetPlanTokensIn = 0;
+  let worksheetPlanTokensOut = 0;
+  try {
+    const wpResult = await generateWorksheetPlan(context, plan);
+    if (wpResult.ok) {
+      worksheetPlan = wpResult.plan;
+      worksheetPlanTokensIn = wpResult.inputTokens ?? 0;
+      worksheetPlanTokensOut = wpResult.outputTokens ?? 0;
+    } else {
+      console.warn(
+        '[learning-doc] WorksheetPlan generation failed (falling back to legacy Doc):',
+        wpResult.reason,
+      );
+    }
+  } catch (wpErr) {
+    console.warn('[learning-doc] WorksheetPlan exception (non-fatal):', wpErr);
+  }
+  worksheetMs = Date.now() - worksheetStart;
+
+  // Step 3: Document from Plan (WorksheetPlan 있으면 활동형 스키마로 생성)
+  const docResult = await generateDocumentFromPlan(context, plan, worksheetPlan);
   if (!docResult.ok) {
     const msg = `Document 생성 실패: ${docResult.reason}`;
     await persistFailureRun({
@@ -508,11 +533,39 @@ export async function runLearningDocJob(
     }
 
     if (perItemVisuals.size > 0) {
+      // Stage 4: 활동 블록에 __will_be_replaced__ placeholder 가 있으면 인라인 치환.
+      // 남은 경우 (레거시 question/activity) 는 뒤에 kind:'image' section 삽입.
       const nextSections: typeof document.sections = [];
+      const inlinedForItem = new Set<string>();
       for (const sec of document.sections) {
-        nextSections.push(sec);
         const secItemId = (sec as { itemId?: string }).itemId;
+        let modified: typeof sec = sec;
+        if (secItemId && perItemVisuals.has(secItemId)) {
+          const visuals = perItemVisuals.get(secItemId)!;
+          modified = inlineReplaceVisuals(sec, visuals);
+          if (modified !== sec) {
+            inlinedForItem.add(secItemId);
+          }
+        }
+        nextSections.push(modified);
         if (!secItemId) continue;
+        if (inlinedForItem.has(secItemId)) {
+          // 인라인 치환 성공 → 별도 image 섹션 추가하지 않음.
+          const visuals = perItemVisuals.get(secItemId)!;
+          const reviews = perItemReviews.get(secItemId) ?? [];
+          visuals.forEach((v, i) => {
+            const rev = reviews[i] ?? { status: 'pass' as const, reason: '' };
+            clipartUsages.push({
+              itemId: secItemId,
+              slotIndex: v.slotIndex,
+              visual: v,
+              reviewStatus: rev.status,
+              reviewReason: rev.reason,
+              sectionPosition: nextSections.length - 1,
+            });
+          });
+          continue;
+        }
         const visuals = perItemVisuals.get(secItemId);
         const reviews = perItemReviews.get(secItemId);
         if (!visuals || visuals.length === 0) continue;
@@ -723,4 +776,149 @@ export async function runLearningDocJob(
     appliedProfileSummary: context.appliedProfileSummary,
     clipartInsertedCount: clipartUsages.length,
   };
+}
+
+// ============================================================
+// Stage 4 인라인 이미지 치환 헬퍼.
+//
+// 활동 블록 (picture-choice / observation / matching / classification / sequence /
+// guided-practice / independent-practice) 은 이미지 자체가 블록 안에 삽입된다.
+// Plan/Doc 은 자리표시자 "__will_be_replaced__" 를 두고, 이 함수가 실제 R2 URL 로 치환한다.
+// 치환한 경우 원본과 다른 객체를 반환; 치환할 곳이 없으면 원본 그대로 반환.
+// ============================================================
+function inlineReplaceVisuals<T extends { kind: string }>(
+  section: T,
+  visuals: Array<{ publicUrl: string }>,
+): T {
+  const urls = visuals.map((v) => v.publicUrl);
+  if (urls.length === 0) return section;
+  let cursor = 0;
+  // 유일한 URL 배분. 남는 placeholder 는 undefined 로 두어 label-only 로 렌더 (중복 이미지 방지).
+  const takeUrl = (): string | undefined =>
+    cursor < urls.length ? urls[cursor++]! : undefined;
+
+  const isPlaceholder = (v: unknown): boolean =>
+    typeof v === 'string' && v === '__will_be_replaced__';
+
+  switch (section.kind) {
+    case 'picture-choice': {
+      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
+        kind: 'picture-choice';
+      };
+      let mutated = false;
+      const choices = s.choices.map((c) => {
+        if (isPlaceholder(c.imageAssetRef)) {
+          mutated = true;
+          const url = takeUrl();
+          return { ...c, imageAssetRef: url };
+        }
+        return c;
+      });
+      return mutated ? ({ ...s, choices } as unknown as T) : section;
+    }
+    case 'observation': {
+      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
+        kind: 'observation';
+      };
+      if (isPlaceholder(s.imageAssetRef)) {
+        const url = takeUrl();
+        // observation 은 이미지 없이는 무의미하므로 URL 이 없으면 원본 유지 (렌더러가 오류 처리).
+        if (url) return { ...s, imageAssetRef: url } as unknown as T;
+      }
+      return section;
+    }
+    case 'matching': {
+      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
+        kind: 'matching';
+      };
+      let mutated = false;
+      const left = s.leftColumn.map((x) => {
+        if (isPlaceholder(x.imageAssetRef)) {
+          mutated = true;
+          const url = takeUrl();
+          return { ...x, imageAssetRef: url };
+        }
+        return x;
+      });
+      const right = s.rightColumn.map((x) => {
+        if (isPlaceholder(x.imageAssetRef)) {
+          mutated = true;
+          const url = takeUrl();
+          return { ...x, imageAssetRef: url };
+        }
+        return x;
+      });
+      return mutated ? ({ ...s, leftColumn: left, rightColumn: right } as unknown as T) : section;
+    }
+    case 'classification': {
+      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
+        kind: 'classification';
+      };
+      let mutated = false;
+      const items = s.items.map((x) => {
+        if (isPlaceholder(x.imageAssetRef)) {
+          mutated = true;
+          const url = takeUrl();
+          return { ...x, imageAssetRef: url };
+        }
+        return x;
+      });
+      return mutated ? ({ ...s, items } as unknown as T) : section;
+    }
+    case 'sequence': {
+      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
+        kind: 'sequence';
+      };
+      let mutated = false;
+      const items = s.items.map((x) => {
+        if (isPlaceholder(x.imageAssetRef)) {
+          mutated = true;
+          const url = takeUrl();
+          return { ...x, imageAssetRef: url };
+        }
+        return x;
+      });
+      return mutated ? ({ ...s, items } as unknown as T) : section;
+    }
+    case 'guided-practice': {
+      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
+        kind: 'guided-practice';
+      };
+      let mutated = false;
+      let workedExample = s.workedExample;
+      if (isPlaceholder(workedExample.imageAssetRef)) {
+        mutated = true;
+        const url = takeUrl();
+        workedExample = { ...workedExample, imageAssetRef: url };
+      }
+      const practiceProblems = s.practiceProblems.map((p) => {
+        if (isPlaceholder(p.imageAssetRef)) {
+          mutated = true;
+          const url = takeUrl();
+          return { ...p, imageAssetRef: url };
+        }
+        return p;
+      });
+      return mutated
+        ? ({ ...s, workedExample, practiceProblems } as unknown as T)
+        : section;
+    }
+    case 'independent-practice': {
+      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
+        kind: 'independent-practice';
+      };
+      let mutated = false;
+      const problems = s.problems.map((p) => {
+        if (isPlaceholder(p.imageAssetRef)) {
+          mutated = true;
+          const url = takeUrl();
+          return { ...p, imageAssetRef: url };
+        }
+        return p;
+      });
+      return mutated ? ({ ...s, problems } as unknown as T) : section;
+    }
+    default:
+      return section;
+  }
 }

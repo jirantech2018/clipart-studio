@@ -15,6 +15,7 @@
 
 import type { GenerationContext } from '@/services/learning-generation/context-builder';
 import type { ContentPlan, ItemBlueprint } from '@/services/learning-generation/types';
+import type { WorksheetPlan } from '@/services/learning-worksheet';
 
 // ============================================================
 // Common system prompt (subject-invariant)
@@ -141,9 +142,18 @@ export function v2UserPromptContentPlan(context: GenerationContext): string {
 export function v2UserPromptDocumentFromPlan(
   context: GenerationContext,
   plan: ContentPlan,
+  worksheetPlan?: WorksheetPlan,
 ): string {
+  const worksheetBlock = worksheetPlan
+    ? [
+        ``,
+        `<WorksheetPlan (조판·활동 유형 · 이미 승인됨)>`,
+        JSON.stringify(worksheetPlan, null, 2),
+        `</WorksheetPlan>`,
+      ].join('\n')
+    : '';
   return [
-    `아래 GenerationContext 와 ContentPlan 을 바탕으로 LearningDocument(JSON)만 응답하라.`,
+    `아래 GenerationContext, ContentPlan, WorksheetPlan(있으면) 을 바탕으로 LearningDocument(JSON)만 응답하라.`,
     ``,
     `<GenerationContext>`,
     JSON.stringify(context, null, 2),
@@ -152,8 +162,9 @@ export function v2UserPromptDocumentFromPlan(
     `<ContentPlan (이미 승인됨)>`,
     JSON.stringify(plan, null, 2),
     `</ContentPlan>`,
+    worksheetBlock,
     ``,
-    v2DocumentSchemaSpec(),
+    v2DocumentSchemaSpec(worksheetPlan !== undefined),
     ``,
     `구현 규칙:`,
     `- 각 itemBlueprint 의 itemId 를 실제 section 의 itemId 로 그대로 사용한다.`,
@@ -265,7 +276,68 @@ export function v2UserPromptSingleShot(context: GenerationContext): string {
 // ============================================================
 // LearningDocument JSON 스키마 안내 (공통)
 // ============================================================
-function v2DocumentSchemaSpec(): string {
+function v2DocumentSchemaSpec(worksheetMode = false): string {
+  const stage4Kinds = [
+    `- { "kind": "picture-choice", "itemId": "pc_01", "number": 1, "stem": "학생이 실제로 읽을 지시문",`,
+    `    "choices": [{"label":"실제로 학생이 볼 텍스트","imageAssetRef":"__will_be_replaced__"}, {"label":"...","imageAssetRef":"__will_be_replaced__"}],`,
+    `    "answer": "1" }  // 선택지 label 은 반드시 학생이 문항 맥락에서 이해할 수 있는 실제 문자열이어야 한다. "A", "B", "선택지1" 같은 자리표시자 금지.`,
+    `- { "kind": "matching", "itemId": "mt_01", "stem": "학생이 실제로 읽을 지시문",`,
+    `    "leftColumn": [{"id":"L1","text":"실제 왼쪽 항목"}, {"id":"L2","text":"..."}],`,
+    `    "rightColumn": [{"id":"R1","text":"실제 오른쪽 항목"}, {"id":"R2","text":"..."}],`,
+    `    "correctPairs": [["L1","R1"], ["L2","R2"]] }  // text 는 반드시 학습 맥락의 실제 낱말·수식·문장.`,
+    `- { "kind": "classification", "itemId": "cl_01", "stem": "학생 지시문",`,
+    `    "categories": ["실제 기준 이름1","실제 기준 이름2"],`,
+    `    "items": [{"id":"i1","text":"실제 분류 대상","correctCategory":"실제 기준 이름1"}] }`,
+    `- { "kind": "fill-blank", "itemId": "fb_01", "stem": "학생 지시문",`,
+    `    "sentences": [{"template":"학생이 볼 실제 문장 __ 이곳이 빈 칸","answers":["정답 낱말/수"]}] }`,
+    `  // template 의 __ 은 반드시 실제 문장 안의 빈 칸 위치. "__ 이 __ 을 ..." 같은 자리표시자 문장 금지.`,
+    `- { "kind": "writing-grid", "itemId": "wg_01", "stem": "학생 지시문",`,
+    `    "gridType": "square"|"lined"|"manuscript",`,
+    `    "cellsPerRow": 10, "rowCount": 3, "tracingText": "따라 쓸 실제 견본(선택)" }`,
+    `- { "kind": "guided-practice", "itemId": "gp_01", "stem": "학생 지시문",`,
+    `    "workedExample": {"problem":"실제 예시 문제 (수식·문장 그대로)","solutionSteps":["실제 1단계 설명","실제 2단계 설명"]},`,
+    `    "practiceProblems": [{"problem":"실제 연습 문제","answer":"실제 기대 정답"}] }`,
+    `  // problem/answer 는 학습자가 그대로 풀 수 있는 실제 내용. "예시 문제", "1단계" 같은 자리표시자 금지.`,
+    `- { "kind": "independent-practice", "itemId": "ip_01", "stem": "학생 지시문",`,
+    `    "problems": [{"problem":"실제 문제","answer":"실제 정답","answerSpaceLines":2}] }`,
+    `- { "kind": "sequence", "itemId": "sq_01", "stem": "학생 지시문",`,
+    `    "items": [{"id":"a","text":"실제 항목1"}, {"id":"b","text":"실제 항목2"}],`,
+    `    "correctOrder": ["a","b"] }`,
+    `- { "kind": "observation", "itemId": "ob_01", "stem": "학생 지시문",`,
+    `    "imageAssetRef": "__will_be_replaced__",`,
+    `    "observationPrompts": [{"prompt":"실제 유도 질문","answer":"실제 기대 답"}] }`,
+    `- { "kind": "open-response", "itemId": "or_01", "stem": "학생 지시문",`,
+    `    "responseMode": "lines"|"box"|"both", "lineCount": 5, "boxHeightRatio": 0.3 }`,
+    `- { "kind": "student-header", "fields": ["이름","날짜"] }  // 학생 정보란 (첫 페이지 상단).`,
+    `- { "kind": "page-break", "reason": "..." }  // 새 페이지 강제.`,
+    ``,
+    `!! 매우 중요 !!  스키마의 예시 필드 값 (예: "실제 왼쪽 항목", "실제 연습 문제") 을 그대로 복사하지 말고, 이 요청의 실제 학습 내용으로 완전히 채워라. 자리표시자 그대로 반환하면 자료가 무용지물이 된다.`,
+  ].join('\n');
+
+  const worksheetHint = worksheetMode
+    ? [
+        ``,
+        `Stage 4 활동형 학습지 모드 (WorksheetPlan 있음):`,
+        `- WorksheetPlan.pages 순서대로 section 을 생성한다. 각 page 사이에는 { "kind": "page-break" } 를 반드시 삽입.`,
+        `- 각 페이지 첫 부분에 필요하면 heading (예: 페이지 목적) 을 넣고, 첫 페이지 최상단에는 student-header 를 넣는다.`,
+        `- 각 WorksheetBlock 은 그 activityType 에 맞는 section 하나로 변환한다 (blockId 는 section.itemId 로 재사용).`,
+        `  · activityType='picture-choice' → kind='picture-choice'`,
+        `  · activityType='matching' → kind='matching'`,
+        `  · activityType='classification' → kind='classification'`,
+        `  · activityType='fill-blank' → kind='fill-blank'`,
+        `  · activityType='writing-grid' → kind='writing-grid'`,
+        `  · activityType='guided-practice' → kind='guided-practice'`,
+        `  · activityType='independent-practice' → kind='independent-practice'`,
+        `  · activityType='sequence' → kind='sequence'`,
+        `  · activityType='observation' → kind='observation'`,
+        `  · activityType='open-response' → kind='open-response'`,
+        `- WorksheetBlock.visualRequirement.needed=true 인 활동에서만 imageAssetRef 필드를 두고 값은 "__will_be_replaced__" 문자열 하나로 둔다. 이후 파이프라인이 R2 URL 로 치환한다.`,
+        `- WorksheetBlock.instruction 을 각 section 의 stem 앞에 그대로 반영해도 되고 stem 에 자연스럽게 녹여도 된다.`,
+        `- teacherOverlay 가 있으면 section 의 teacherNote 필드에 요약 문장으로 저장한다.`,
+        `- ContentPlan.itemBlueprints 의 모든 itemId 가 어딘가의 section 에 sourceItemIds 또는 itemId 형태로 반드시 등장해야 한다.`,
+      ].join('\n')
+    : '';
+
   return [
     `LearningDocument 스키마:`,
     `{`,
@@ -283,7 +355,7 @@ function v2DocumentSchemaSpec(): string {
     `  "sections": [ ...섹션 배열... ]`,
     `}`,
     ``,
-    `sections 항목 종류:`,
+    `sections 항목 종류 (Stage 3 이전):`,
     `- { "kind": "heading", "level": 1|2|3, "text": "..." }`,
     `- { "kind": "paragraph", "text": "..." }`,
     `- { "kind": "callout", "tone": "info"|"warn"|"tip", "text": "..." }`,
@@ -296,7 +368,11 @@ function v2DocumentSchemaSpec(): string {
     `- { "kind": "blank-space", "itemId": "bs_01", "prompt": "...", "heightRatio": 0.3 }`,
     `- { "kind": "answer-key", "entries": [{"ref":"1","answer":"...","rationale":"..."}] }`,
     ``,
+    `Stage 4 활동형 블록 (활동형 학습지 모드에서 사용):`,
+    stage4Kinds,
+    ``,
     `첫 section 은 반드시 heading level 1 (자료 제목, curriculum.unit·curriculum.topic 반영).`,
+    worksheetHint,
   ].join('\n');
 }
 

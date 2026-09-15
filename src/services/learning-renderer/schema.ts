@@ -132,6 +132,147 @@ export type Section =
       prompt?: string;
       /** 페이지 폭 기준 세로 높이 비율 (0.1~0.6, 기본 0.3). PDF 렌더러가 실제 mm 로 변환. */
       heightRatio?: number;
+    }
+  // Stage 4: 활동형 학습지 블록 (범용 · 과목 무관).
+  // ---
+  // 학습자 상단 정보란 (이름/날짜/반).
+  | {
+      kind: 'student-header';
+      /** 학생이 채워야 할 필드. 기본 ['이름', '날짜']. */
+      fields: string[];
+    }
+  // 그림/보기 중 선택. 각 선택지에 이미지 URL 가능 (선택지 이미지).
+  | {
+      kind: 'picture-choice';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      choices: Array<{ label: string; imageAssetRef?: string; imageCaption?: string }>;
+      /** 정답 index (1-based, 문자열). */
+      answer: string;
+      hint?: string;
+      teacherNote?: string;
+    }
+  // 좌우 두 컬럼 연결. 학생은 선을 그어 짝을 맞춘다.
+  | {
+      kind: 'matching';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      leftColumn: Array<{ id: string; text?: string; imageAssetRef?: string }>;
+      rightColumn: Array<{ id: string; text?: string; imageAssetRef?: string }>;
+      /** 정답 짝: [leftId, rightId] */
+      correctPairs: Array<[string, string]>;
+      teacherNote?: string;
+    }
+  // 기준별 분류 (버킷).
+  | {
+      kind: 'classification';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      categories: string[];
+      items: Array<{
+        id: string;
+        text?: string;
+        imageAssetRef?: string;
+        correctCategory: string;
+      }>;
+      teacherNote?: string;
+    }
+  // 빈칸 채우기 (낱말/문장/식). template 안의 __ 가 빈칸 위치.
+  | {
+      kind: 'fill-blank';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      sentences: Array<{ template: string; answers: string[] }>;
+      teacherNote?: string;
+    }
+  // 격자 쓰기 (따라 쓰기 · 네모칸 · 원고지 · 라인).
+  | {
+      kind: 'writing-grid';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      gridType: 'square' | 'lined' | 'manuscript';
+      cellsPerRow: number;
+      rowCount: number;
+      /** 흐린 안내글 (따라쓰기용, 선택). */
+      tracingText?: string;
+      teacherNote?: string;
+    }
+  // 워크드 예시 + 학생 연습.
+  | {
+      kind: 'guided-practice';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      workedExample: {
+        problem: string;
+        solutionSteps: string[];
+        imageAssetRef?: string;
+      };
+      practiceProblems: Array<{
+        problem: string;
+        answer?: string;
+        imageAssetRef?: string;
+      }>;
+      teacherNote?: string;
+    }
+  // 학생이 도움 없이 수행하는 문제 목록.
+  | {
+      kind: 'independent-practice';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      problems: Array<{
+        problem: string;
+        answer?: string;
+        imageAssetRef?: string;
+        answerSpaceLines?: number;
+      }>;
+      teacherNote?: string;
+    }
+  // 순서 배열: 무작위 항목을 올바른 순서로 정렬.
+  | {
+      kind: 'sequence';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      items: Array<{ id: string; text?: string; imageAssetRef?: string }>;
+      correctOrder: string[]; // items.id 순서
+      teacherNote?: string;
+    }
+  // 관찰 문항: 큰 이미지 + 관찰 유도 질문.
+  | {
+      kind: 'observation';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      imageAssetRef: string;
+      imageCaption?: string;
+      observationPrompts: Array<{ prompt: string; answer?: string }>;
+      teacherNote?: string;
+    }
+  // 개방형 응답 (자유 쓰기/그리기).
+  | {
+      kind: 'open-response';
+      itemId?: string;
+      number?: number;
+      stem: string;
+      /** 응답 공간 유형. */
+      responseMode: 'lines' | 'box' | 'both';
+      /** 줄 수 (lines/both 일 때). */
+      lineCount?: number;
+      /** 사각형 높이 비율 (box/both 일 때). */
+      boxHeightRatio?: number;
+      teacherNote?: string;
+    }
+  // 페이지 브레이크 힌트 (PDF 조판이 새 페이지 강제).
+  | {
+      kind: 'page-break';
+      reason?: string;
     };
 
 export interface LearningDocumentMeta {

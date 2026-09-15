@@ -277,6 +277,213 @@ export async function documentToHtml(
     margin-top: 4pt;
     font-style: italic;
   }
+  /* Stage 4 활동 블록 공통 카드 스타일. */
+  .act-block {
+    border: 1px solid #cbd5e1;
+    border-radius: 8pt;
+    padding: 8pt 10pt;
+    margin: 8pt 0;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+  }
+  .act-block .act-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px dashed #cbd5e1;
+    padding-bottom: 4pt; margin-bottom: 6pt;
+    color: #2d2f77; font-weight: 700; font-size: 11.5pt;
+  }
+  .act-block .act-number { color: #2d2f77; margin-right: 6pt; }
+  .act-block .act-instruction { color: #1a1a1a; }
+  .act-block .act-body { font-size: 11pt; }
+  .act-block .teacher-note {
+    margin-top: 6pt; padding: 5pt 8pt;
+    background: #fef7ed; border-left: 3px solid #f59e0b;
+    font-size: 10pt; color: #78350f;
+  }
+  /* picture-choice */
+  .pc-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 8pt; margin-top: 6pt;
+  }
+  .pc-choice {
+    border: 1.5px solid #cbd5e1; border-radius: 6pt; padding: 6pt;
+    text-align: center;
+  }
+  .pc-choice img { max-width: 100%; max-height: 90pt; }
+  .pc-choice .pc-num { font-weight: 700; color: #2d2f77; }
+  .pc-choice .pc-label { font-size: 10.5pt; margin-top: 3pt; }
+  /* matching */
+  .mt-container {
+    display: grid; grid-template-columns: 1fr 40pt 1fr;
+    gap: 10pt; margin-top: 6pt; align-items: center;
+  }
+  .mt-col { display: flex; flex-direction: column; gap: 6pt; }
+  .mt-item {
+    border: 1.5px solid #cbd5e1; border-radius: 4pt; padding: 5pt 8pt;
+    min-height: 26pt; text-align: center;
+  }
+  .mt-item img { max-height: 60pt; max-width: 100%; }
+  .mt-space { text-align: center; color: #94a3b8; font-size: 9pt; }
+  /* classification */
+  .cl-buckets {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140pt, 1fr));
+    gap: 8pt; margin-top: 6pt;
+  }
+  .cl-bucket {
+    border: 1.5px dashed #94a3b8; border-radius: 6pt; padding: 5pt 8pt;
+    min-height: 80pt;
+  }
+  .cl-bucket .cl-bucket-title {
+    font-weight: 700; color: #2d2f77; text-align: center;
+    padding-bottom: 4pt; border-bottom: 1px solid #cbd5e1; margin-bottom: 5pt;
+  }
+  .cl-item-pool {
+    display: flex; flex-wrap: wrap; gap: 6pt; margin-top: 6pt;
+    padding: 5pt; border: 1px solid #cbd5e1; border-radius: 4pt;
+    background: #f8fafc;
+  }
+  .cl-item-chip {
+    padding: 3pt 8pt; background: #ffffff; border: 1px solid #cbd5e1;
+    border-radius: 12pt; font-size: 10.5pt;
+  }
+  .cl-item-chip img { max-height: 40pt; vertical-align: middle; }
+  /* fill-blank */
+  .fb-sentence {
+    margin: 6pt 0; font-size: 12pt; line-height: 2.0;
+  }
+  .fb-blank {
+    display: inline-block; min-width: 40pt;
+    border-bottom: 1.5px solid #1a1a1a;
+    padding: 0 6pt; margin: 0 2pt;
+    text-align: center;
+  }
+  /* writing-grid */
+  .wg-grid {
+    display: grid; gap: 2pt; margin-top: 6pt;
+  }
+  .wg-cell {
+    border: 1px solid #94a3b8;
+    aspect-ratio: 1;
+    background: repeating-linear-gradient(
+      45deg, transparent, transparent 4pt,
+      rgba(148,163,184,0.05) 4pt, rgba(148,163,184,0.05) 8pt);
+    display: flex; align-items: center; justify-content: center;
+    color: #cbd5e1; font-size: 14pt;
+  }
+  .wg-lined {
+    display: grid; grid-template-columns: 1fr; gap: 0;
+    margin-top: 6pt;
+  }
+  .wg-line {
+    border-bottom: 1px solid #94a3b8;
+    height: 22pt;
+  }
+  .wg-manuscript-row {
+    display: grid; gap: 0; margin: 2pt 0;
+  }
+  .wg-manuscript-cell {
+    border: 1px solid #94a3b8;
+    aspect-ratio: 1;
+    background: #ffffff;
+  }
+  /* guided-practice */
+  .gp-example {
+    background: #eef2ff; border-left: 4px solid #6366f1;
+    padding: 6pt 8pt; margin-bottom: 8pt;
+    border-radius: 0 4pt 4pt 0;
+  }
+  .gp-example-label {
+    font-weight: 700; color: #4338ca; font-size: 10pt;
+    margin-bottom: 4pt;
+  }
+  .gp-example-steps { padding-left: 18pt; margin: 4pt 0; }
+  .gp-example-steps li { margin: 2pt 0; }
+  .gp-practice-label {
+    font-weight: 700; color: #2d2f77; margin: 6pt 0 4pt;
+  }
+  .gp-practice-list { padding-left: 18pt; margin: 0; }
+  .gp-practice-list li { margin: 6pt 0; }
+  .gp-practice-answer {
+    display: inline-block; min-width: 50pt;
+    border-bottom: 1.2px solid #1a1a1a; margin-left: 8pt;
+  }
+  /* independent-practice */
+  .ip-list { padding-left: 18pt; margin: 4pt 0; }
+  .ip-list li { margin: 8pt 0; }
+  .ip-answer-lines {
+    margin-top: 4pt;
+    display: grid; gap: 0;
+  }
+  .ip-answer-line {
+    border-bottom: 1px solid #94a3b8;
+    height: 20pt;
+  }
+  /* sequence */
+  .sq-container {
+    display: flex; gap: 8pt; flex-wrap: wrap;
+    margin-top: 6pt;
+  }
+  .sq-item {
+    flex: 1 1 100pt;
+    border: 1.5px solid #cbd5e1; border-radius: 6pt;
+    padding: 6pt; text-align: center; min-height: 60pt;
+    position: relative;
+  }
+  .sq-item img { max-width: 100%; max-height: 60pt; }
+  .sq-answer-slot {
+    margin-top: 4pt; padding: 4pt;
+    border: 1.5px dashed #94a3b8; border-radius: 4pt;
+    font-size: 10pt; color: #64748b;
+  }
+  /* observation */
+  .ob-container {
+    display: grid; grid-template-columns: 45% 1fr;
+    gap: 12pt; margin-top: 6pt;
+  }
+  .ob-image { text-align: center; }
+  .ob-image img { max-width: 100%; }
+  .ob-caption { font-size: 10pt; color: #64748b; font-style: italic; margin-top: 4pt; }
+  .ob-prompts { padding-left: 0; margin: 0; }
+  .ob-prompts li {
+    list-style: none;
+    margin: 6pt 0;
+  }
+  .ob-prompt-text { font-weight: 500; }
+  .ob-answer-lines {
+    margin-top: 3pt;
+    border-bottom: 1px solid #94a3b8;
+    height: 20pt;
+  }
+  /* open-response */
+  .or-lines {
+    margin-top: 6pt;
+    display: grid; gap: 0;
+  }
+  .or-line { border-bottom: 1px solid #94a3b8; height: 22pt; }
+  .or-box {
+    margin-top: 6pt;
+    border: 1.5px dashed #94a3b8; border-radius: 4pt;
+    background: repeating-linear-gradient(
+      45deg, transparent, transparent 8pt,
+      rgba(148,163,184,0.05) 8pt, rgba(148,163,184,0.05) 16pt);
+  }
+  /* student-header */
+  .student-header {
+    display: flex; gap: 20pt; align-items: baseline;
+    padding: 6pt 0 8pt;
+    border-bottom: 1.5px solid #2d2f77;
+    margin-bottom: 10pt;
+  }
+  .student-header .sh-field {
+    flex: 1; display: flex; align-items: baseline; gap: 6pt;
+  }
+  .student-header .sh-label {
+    font-weight: 700; color: #2d2f77; white-space: nowrap;
+  }
+  .student-header .sh-blank {
+    flex: 1; border-bottom: 1.2px solid #1a1a1a;
+    min-height: 18pt;
+  }
 </style>
 </head>
 <body>
@@ -321,9 +528,21 @@ function groupIntoSectionBlocks(sections: Section[]): SectionGroup[] {
       // PDF 에서는 무시.
       continue;
     }
+    // Stage 4: page-break 은 강제 페이지 분리.
+    if (s.kind === 'page-break') {
+      flush();
+      groups.push({ standalone: true, sections: [s] });
+      continue;
+    }
     if (s.kind === 'heading') {
       flush();
       current = { standalone: false, sections: [s] };
+      continue;
+    }
+    // student-header 는 다른 헤더와 함께 표시 (standalone).
+    if (s.kind === 'student-header') {
+      flush();
+      groups.push({ standalone: true, sections: [s] });
       continue;
     }
     if (!current) {
@@ -471,6 +690,297 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
         : '';
       return `<div class="blank-space" style="height:${heightMm}mm;">${prompt}</div>`;
     }
+    // Stage 4 활동 블록.
+    case 'student-header': {
+      const fields = section.fields
+        .map(
+          (f) =>
+            `<div class="sh-field"><span class="sh-label">${escapeHtml(f)}</span><span class="sh-blank"></span></div>`,
+        )
+        .join('');
+      return `<div class="student-header">${fields}</div>`;
+    }
+    case 'picture-choice': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const choices = await Promise.all(
+        section.choices.map(async (c, i) => {
+          let img = '';
+          if (c.imageAssetRef) {
+            try {
+              const loaded = await loadImage(c.imageAssetRef);
+              img = `<img src="${loaded.dataUrl}" alt="" />`;
+            } catch {
+              img = '';
+            }
+          }
+          const label = c.label ? `<div class="pc-label">${escapeHtml(c.label)}</div>` : '';
+          return `<div class="pc-choice"><div class="pc-num">${i + 1}</div>${img}${label}</div>`;
+        }),
+      );
+      const body = `<div class="pc-grid">${choices.join('')}</div>`;
+      const teacherNote =
+        variant === 'teacher' && section.teacherNote
+          ? `<div class="teacher-note"><strong>정답 ${escapeHtml(section.answer)}</strong> — ${escapeHtml(section.teacherNote)}</div>`
+          : variant === 'teacher'
+            ? `<div class="teacher-note"><strong>정답 ${escapeHtml(section.answer)}</strong></div>`
+            : '';
+      return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
+    }
+    case 'matching': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const renderCol = async (col: typeof section.leftColumn) =>
+        (
+          await Promise.all(
+            col.map(async (it) => {
+              let inner = '';
+              if (it.imageAssetRef) {
+                try {
+                  const loaded = await loadImage(it.imageAssetRef);
+                  inner = `<img src="${loaded.dataUrl}" alt="" />`;
+                } catch {
+                  /* ignore */
+                }
+              }
+              if (it.text) inner += `<div>${escapeHtml(it.text)}</div>`;
+              return `<div class="mt-item">${inner}</div>`;
+            }),
+          )
+        ).join('');
+      const left = await renderCol(section.leftColumn);
+      const right = await renderCol(section.rightColumn);
+      const spacer = `<div class="mt-space">→ 선으로 이어 보세요 →</div>`;
+      const body = `<div class="mt-container"><div class="mt-col">${left}</div>${spacer}<div class="mt-col">${right}</div></div>`;
+      const teacherPairs =
+        variant === 'teacher' && section.correctPairs.length > 0
+          ? `<div class="teacher-note"><strong>정답 짝</strong>: ${section.correctPairs.map((p) => `${escapeHtml(p[0])}↔${escapeHtml(p[1])}`).join(', ')}${section.teacherNote ? ' — ' + escapeHtml(section.teacherNote) : ''}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherPairs}</div>`;
+    }
+    case 'classification': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const buckets = section.categories
+        .map(
+          (cat) =>
+            `<div class="cl-bucket"><div class="cl-bucket-title">${escapeHtml(cat)}</div></div>`,
+        )
+        .join('');
+      const chips = await Promise.all(
+        section.items.map(async (it) => {
+          let img = '';
+          if (it.imageAssetRef) {
+            try {
+              const loaded = await loadImage(it.imageAssetRef);
+              img = `<img src="${loaded.dataUrl}" alt="" />`;
+            } catch {
+              /* ignore */
+            }
+          }
+          const t = it.text ? escapeHtml(it.text) : '';
+          return `<div class="cl-item-chip">${img}${t}</div>`;
+        }),
+      );
+      const pool = `<div class="cl-item-pool">${chips.join('')}</div>`;
+      const body = `<div class="cl-buckets">${buckets}</div>${pool}`;
+      const teacherKey =
+        variant === 'teacher'
+          ? `<div class="teacher-note"><strong>정답</strong>: ${section.items.map((it) => `${escapeHtml(it.text ?? it.id)}=${escapeHtml(it.correctCategory)}`).join(' · ')}${section.teacherNote ? ' — ' + escapeHtml(section.teacherNote) : ''}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherKey}</div>`;
+    }
+    case 'fill-blank': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const sentences = section.sentences
+        .map((s) => {
+          // template 의 __ 을 blank span 으로 치환.
+          const parts = s.template.split('__');
+          const html = parts
+            .map((p, i) => {
+              const text = escapeHtml(p);
+              if (i === parts.length - 1) return text;
+              return text + `<span class="fb-blank">&nbsp;</span>`;
+            })
+            .join('');
+          return `<div class="fb-sentence">${html}</div>`;
+        })
+        .join('');
+      const teacherKey =
+        variant === 'teacher'
+          ? `<div class="teacher-note"><strong>정답</strong>: ${section.sentences.map((s, i) => `${i + 1}) ${s.answers.map(escapeHtml).join(', ')}`).join(' · ')}${section.teacherNote ? ' — ' + escapeHtml(section.teacherNote) : ''}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body">${sentences}</div>${teacherKey}</div>`;
+    }
+    case 'writing-grid': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      let body = '';
+      if (section.gridType === 'square') {
+        const cells = Array.from({ length: section.cellsPerRow * section.rowCount })
+          .map((_, i) => {
+            const idx = i % section.cellsPerRow;
+            const rowIdx = Math.floor(i / section.cellsPerRow);
+            const tracing =
+              rowIdx === 0 && section.tracingText
+                ? escapeHtml(section.tracingText.charAt(idx) ?? '')
+                : '';
+            return `<div class="wg-cell">${tracing}</div>`;
+          })
+          .join('');
+        body = `<div class="wg-grid" style="grid-template-columns: repeat(${section.cellsPerRow}, 1fr);">${cells}</div>`;
+      } else if (section.gridType === 'lined') {
+        const lines = Array.from({ length: section.rowCount })
+          .map(() => `<div class="wg-line"></div>`)
+          .join('');
+        body = `<div class="wg-lined">${lines}</div>`;
+      } else if (section.gridType === 'manuscript') {
+        const rows = Array.from({ length: section.rowCount })
+          .map((_, rowIdx) => {
+            const cells = Array.from({ length: section.cellsPerRow })
+              .map((_, cellIdx) => {
+                const tracing =
+                  rowIdx === 0 && section.tracingText
+                    ? escapeHtml(section.tracingText.charAt(cellIdx) ?? '')
+                    : '';
+                return `<div class="wg-manuscript-cell">${tracing}</div>`;
+              })
+              .join('');
+            return `<div class="wg-manuscript-row" style="grid-template-columns: repeat(${section.cellsPerRow}, 1fr);">${cells}</div>`;
+          })
+          .join('');
+        body = rows;
+      }
+      const teacherNote =
+        variant === 'teacher' && section.teacherNote
+          ? `<div class="teacher-note">${escapeHtml(section.teacherNote)}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
+    }
+    case 'guided-practice': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const ex = section.workedExample;
+      const exSteps = ex.solutionSteps
+        .map((s) => `<li>${escapeHtml(s)}</li>`)
+        .join('');
+      const exBlock = `<div class="gp-example"><div class="gp-example-label">예시 풀이</div><div>${escapeHtml(ex.problem)}</div><ol class="gp-example-steps">${exSteps}</ol></div>`;
+      const practice = section.practiceProblems
+        .map((p) => {
+          const ans =
+            variant === 'teacher' && p.answer
+              ? `<span class="gp-practice-answer">${escapeHtml(p.answer)}</span>`
+              : `<span class="gp-practice-answer">&nbsp;</span>`;
+          return `<li>${escapeHtml(p.problem)}${ans}</li>`;
+        })
+        .join('');
+      const practiceBlock = `<div class="gp-practice-label">이제 풀어 봅시다</div><ol class="gp-practice-list">${practice}</ol>`;
+      const teacherNote =
+        variant === 'teacher' && section.teacherNote
+          ? `<div class="teacher-note">${escapeHtml(section.teacherNote)}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body">${exBlock}${practiceBlock}</div>${teacherNote}</div>`;
+    }
+    case 'independent-practice': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const items = section.problems
+        .map((p) => {
+          const lineCount = p.answerSpaceLines ?? 2;
+          const lines = Array.from({ length: lineCount })
+            .map(() => `<div class="ip-answer-line"></div>`)
+            .join('');
+          const ans =
+            variant === 'teacher' && p.answer
+              ? `<div class="teacher-note"><strong>정답</strong>: ${escapeHtml(p.answer)}</div>`
+              : `<div class="ip-answer-lines">${lines}</div>`;
+          return `<li><div>${escapeHtml(p.problem)}</div>${ans}</li>`;
+        })
+        .join('');
+      const teacherNote =
+        variant === 'teacher' && section.teacherNote
+          ? `<div class="teacher-note">${escapeHtml(section.teacherNote)}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body"><ol class="ip-list">${items}</ol></div>${teacherNote}</div>`;
+    }
+    case 'sequence': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const items = await Promise.all(
+        section.items.map(async (it) => {
+          let img = '';
+          if (it.imageAssetRef) {
+            try {
+              const loaded = await loadImage(it.imageAssetRef);
+              img = `<img src="${loaded.dataUrl}" alt="" />`;
+            } catch {
+              /* ignore */
+            }
+          }
+          const text = it.text ? `<div>${escapeHtml(it.text)}</div>` : '';
+          return `<div class="sq-item">${img}${text}<div class="sq-answer-slot">순서: __</div></div>`;
+        }),
+      );
+      const teacherKey =
+        variant === 'teacher' && section.correctOrder.length > 0
+          ? `<div class="teacher-note"><strong>정답 순서</strong>: ${section.correctOrder.map(escapeHtml).join(' → ')}${section.teacherNote ? ' — ' + escapeHtml(section.teacherNote) : ''}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body"><div class="sq-container">${items.join('')}</div></div>${teacherKey}</div>`;
+    }
+    case 'observation': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      let imgHtml = '';
+      try {
+        const loaded = await loadImage(section.imageAssetRef);
+        imgHtml = `<img src="${loaded.dataUrl}" alt="" />`;
+      } catch {
+        imgHtml = `<em>[이미지 로드 실패]</em>`;
+      }
+      const caption = section.imageCaption
+        ? `<div class="ob-caption">${escapeHtml(section.imageCaption)}</div>`
+        : '';
+      const prompts = section.observationPrompts
+        .map((p) => {
+          const ans =
+            variant === 'teacher' && p.answer
+              ? `<div class="teacher-note"><strong>정답</strong>: ${escapeHtml(p.answer)}</div>`
+              : `<div class="ob-answer-lines"></div>`;
+          return `<li><div class="ob-prompt-text">${escapeHtml(p.prompt)}</div>${ans}</li>`;
+        })
+        .join('');
+      const body = `<div class="ob-container"><div class="ob-image">${imgHtml}${caption}</div><ol class="ob-prompts">${prompts}</ol></div>`;
+      const teacherNote =
+        variant === 'teacher' && section.teacherNote
+          ? `<div class="teacher-note">${escapeHtml(section.teacherNote)}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
+    }
+    case 'open-response': {
+      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
+      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      let body = '';
+      if (section.responseMode === 'lines' || section.responseMode === 'both') {
+        const count = section.lineCount ?? 5;
+        const lines = Array.from({ length: count })
+          .map(() => `<div class="or-line"></div>`)
+          .join('');
+        body += `<div class="or-lines">${lines}</div>`;
+      }
+      if (section.responseMode === 'box' || section.responseMode === 'both') {
+        const ratio = section.boxHeightRatio ?? 0.3;
+        const heightMm = Math.round(257 * ratio);
+        body += `<div class="or-box" style="height:${heightMm}mm;"></div>`;
+      }
+      const teacherNote =
+        variant === 'teacher' && section.teacherNote
+          ? `<div class="teacher-note">${escapeHtml(section.teacherNote)}</div>`
+          : '';
+      return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
+    }
+    case 'page-break':
+      return '<div style="page-break-before: always; break-before: page;"></div>';
     default:
       return '';
   }

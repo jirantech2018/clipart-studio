@@ -1,0 +1,141 @@
+// WorksheetPlan 생성 프롬프트.
+//
+// 입력: GenerationContext + ContentPlan
+// 출력: WorksheetPlan JSON (v1)
+//
+// 원칙:
+//   - 과목·단원·주제·단어 하드코드 없음. Plan blueprint 를 활동으로 변환하는 일반 규칙만.
+//   - 활동 타입 후보는 고정 (10종). Plan blueprint 마다 어떤 타입이 가장 적합한지 결정.
+//   - A4 세로 페이지 1~2쪽 우선 (교육적 이유가 있을 때만 늘림).
+
+import type { GenerationContext } from '@/services/learning-generation/context-builder';
+import type { ContentPlan } from '@/services/learning-generation/types';
+
+export function worksheetPlannerSystemPrompt(): string {
+  return [
+    `너는 초등학교 활동형 학습지 조판 설계자다.`,
+    `주어진 ContentPlan 을 학생이 실제로 종이 위에서 수행할 수 있는 활동 블록 + 페이지 배치로 변환한다.`,
+    ``,
+    `핵심 원칙:`,
+    `- 5개 문항을 세로로 나열한 객관식 반복은 지루하고 활동형 학습지답지 않다. 활동 타입을 다양화한다.`,
+    `- 각 blueprint 는 최소 하나의 WorksheetBlock 으로 변환된다. 여러 blueprint 를 하나의 활동 블록에 묶어도 된다 (matching / classification / sequence 등).`,
+    `- 이미지는 관찰·비교·연결 등 학생 사고에 실제로 기여할 때만 필요. 계산·쓰기·낭독 문제에는 이미지 강제 금지.`,
+    `- 학생용 응답 공간은 활동 유형에 맞춰 충분히 확보한다 (writing-grid, open-response, fill-blank 여백 등).`,
+    `- 특정 과목·단원·주제·정답 단어를 하드코드하지 않는다. 오직 ContentPlan 데이터와 자료 형식만으로 판단한다.`,
+    `- 응답은 반드시 순수 JSON 스키마만. 마크다운·주석·설명 금지.`,
+  ].join('\n');
+}
+
+export function worksheetPlannerUserPrompt(
+  context: GenerationContext,
+  plan: ContentPlan,
+): string {
+  return [
+    `아래 GenerationContext 와 ContentPlan 을 바탕으로 WorksheetPlan(JSON)만 응답하라.`,
+    ``,
+    `<GenerationContext>`,
+    JSON.stringify(context, null, 2),
+    `</GenerationContext>`,
+    ``,
+    `<ContentPlan>`,
+    JSON.stringify(plan, null, 2),
+    `</ContentPlan>`,
+    ``,
+    worksheetPlanSchemaSpec(),
+    ``,
+    `조판 규칙:`,
+    `- 학습 흐름 (learningFlow) 을 warmup → guided → practice → assessment → reflection 중 필요한 단계만 골라 순서대로 배치한다.`,
+    `  모든 단계를 반드시 사용할 필요는 없다 (자료 성격에 맞게 2~4개 정도).`,
+    `- pages 는 A4 세로 기준 1~2쪽을 우선한다. 자료 분량이 이를 넘으면 3~5쪽까지 허용, 각 페이지에 정확한 이유(purpose) 를 명시.`,
+    `- 한 페이지가 헤딩만 있고 실제 활동이 다음 페이지로 넘어가는 상황을 만들지 마라.`,
+    `- 5문항 반복 객관식만 나열하는 구성은 금지. 활동 타입을 최소 3종 이상 조합해 사용한다.`,
+    ``,
+    `활동 타입 후보 (activityType, 반드시 이 중 하나):`,
+    `- picture-choice: 그림/보기 중 선택 (선택지에 이미지 가능)`,
+    `- matching: 좌우 두 컬럼 항목 연결`,
+    `- classification: 기준별 분류`,
+    `- fill-blank: 낱말/문장/식 빈칸 채우기`,
+    `- writing-grid: 격자 위 따라 쓰기·짧은 답 쓰기`,
+    `- guided-practice: 예시 풀이 + 학생 연습`,
+    `- independent-practice: 도움 없이 수행하는 연습`,
+    `- sequence: 순서 배열`,
+    `- observation: 큰 이미지 관찰 + 유도 질문`,
+    `- open-response: 자유 쓰기/그리기 응답`,
+    ``,
+    `visualRequirement 결정:`,
+    `- needed=true 로 두면 이후 파이프라인이 이미지를 생성한다.`,
+    `- 계산·쓰기·낭독 문제에는 needed=false. 관찰·연결·분류 등 시각 참여가 실질적일 때만 true.`,
+    `- 문자·자모·발음 자체를 인식하는 학습이면 이미지 안에 그 문자를 넣지 않도록 hint 로 명시.`,
+    ``,
+    `순수 JSON 만. 마크다운·설명 금지.`,
+  ].join('\n');
+}
+
+function worksheetPlanSchemaSpec(): string {
+  return [
+    `WorksheetPlan 스키마 (v1):`,
+    `{`,
+    `  "version": "v1",`,
+    `  "title": "간결한 학습지 제목",`,
+    `  "subtitle": "선택. 부제·단원 요약",`,
+    `  "estimatedMinutes": 10~40,`,
+    `  "learningFlow": [`,
+    `    {`,
+    `      "id": "stage_01",`,
+    `      "role": "warmup" | "guided" | "practice" | "assessment" | "reflection",`,
+    `      "goal": "이 단계에서 학생이 달성할 목표",`,
+    `      "blockIds": ["blk_01", "blk_02"]`,
+    `    }`,
+    `  ],`,
+    `  "designSystem": {`,
+    `    "bodyFontSize": 11,`,
+    `    "pageMarginMm": 18,`,
+    `    "blockGapMm": 6,`,
+    `    "answerBoxColor": "#f5f7ff",`,
+    `    "accentColor": "#2d2f77",`,
+    `    "cardRadiusPt": 6`,
+    `  },`,
+    `  "pages": [`,
+    `    {`,
+    `      "pageId": "p_01",`,
+    `      "pageNumber": 1,`,
+    `      "purpose": "이 페이지의 학습 목적",`,
+    `      "layout": "single-column" | "two-column" | "grid" | "mixed",`,
+    `      "blocks": [`,
+    `        {`,
+    `          "blockId": "blk_01",`,
+    `          "sourceItemIds": ["q_01"],`,
+    `          "activityType": "picture-choice",`,
+    `          "learningRole": "warmup",`,
+    `          "instruction": "학생에게 보일 지시문",`,
+    `          "responseArea": {`,
+    `            "type": "select" | "lines" | "grid" | "box" | "connect" | "buckets" | "none",`,
+    `            "count": 3,`,
+    `            "heightRatio": 0.3`,
+    `          },`,
+    `          "visualRequirement": {`,
+    `            "needed": true|false,`,
+    `            "count": 1,`,
+    `            "role": "choice" | "observation" | "illustration" | "reference",`,
+    `            "hint": "이미지가 표현할 시각 소재 (정답 단어 노출 금지)"`,
+    `          },`,
+    `          "layoutHint": { "widthFraction": 1.0, "minHeightMm": 60, "keepWithNext": false },`,
+    `          "teacherOverlay": {`,
+    `            "answerNote": "교사용에만 노출되는 짧은 정답·해설",`,
+    `            "guidanceNote": "지도 시 유의점"`,
+    `          }`,
+    `        }`,
+    `      ]`,
+    `    }`,
+    `  ],`,
+    `  "studentInstructions": ["학생이 시작 전에 읽어야 할 안내 1~2줄"],`,
+    `  "teacherNotes": ["교사용 총평·유의점 (선택)"]`,
+    `}`,
+    ``,
+    `제약:`,
+    `- 모든 blueprint.itemId 가 하나 이상의 WorksheetBlock.sourceItemIds 에 포함되어야 한다.`,
+    `- 첫 번째 페이지 첫 블록은 student-header (이름·날짜) 를 위한 자리로 남겨두거나 짧은 도입으로 시작한다 (렌더러가 자동 추가).`,
+    `- blockIds 는 pages 안의 blockId 와 정확히 일치해야 한다.`,
+    `- 5개 blueprint 를 5개의 동일한 picture-choice 블록으로 반환하지 마라 — 최소 3종 이상 활동 타입 조합.`,
+  ].join('\n');
+}

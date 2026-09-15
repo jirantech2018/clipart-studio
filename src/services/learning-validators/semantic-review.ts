@@ -190,11 +190,42 @@ export async function runSemanticReview(
 
   const normalized = normalizeReviewJson(parsed, targets);
 
+  // Stage 4 활동 블록에 대해서는 selfContained 를 강제로 제거 (블록 종류 자체가 시각·활동 중심).
+  const stage4Kinds = new Set([
+    'picture-choice',
+    'matching',
+    'classification',
+    'fill-blank',
+    'writing-grid',
+    'guided-practice',
+    'independent-practice',
+    'sequence',
+    'observation',
+    'open-response',
+  ]);
+  const stage4Adjusted: SemanticReviewResult = {
+    ...normalized,
+    items: normalized.items.map((it) => {
+      // it.itemIndex 는 targets 배열의 순번. target.index 가 실제 document.sections 인덱스.
+      const target = targets[it.itemIndex];
+      const sec = target ? input.document.sections[target.index] : undefined;
+      if (!sec) return it;
+      const kind = (sec as { kind: string }).kind;
+      if (!stage4Kinds.has(kind)) return it;
+      const criteria = it.criteria.filter(
+        (c) => c !== 'selfContained' && c !== 'selfContainedness',
+      );
+      // 이 아이템의 모든 criteria 가 제거됐다면 pass 처리.
+      if (criteria.length === 0) return { ...it, pass: true, criteria };
+      return { ...it, criteria };
+    }),
+  };
+
   // Advisory-only 실패는 파이프라인을 막지 않는다.
   //   - 하드 실패 기준 (정답·힌트·학년·자기완결성·목표 부합 등) 은 그대로 fail.
   //   - Advisory 는 리뷰어의 주관적 스타일 판단 (오답 유사성·역할 구별·다양성·자료 사용성 등)
   //     이며 fail 시 감사 로그에는 남기되 pipeline 은 계속 진행한다.
-  const filtered = filterAdvisoryOnly(normalized);
+  const filtered = filterAdvisoryOnly(stage4Adjusted);
 
   return {
     ...filtered,
@@ -260,11 +291,78 @@ interface TargetSummary {
   text: string;
 }
 
+function stage4Summary(s: Section): string {
+  // 검수자가 실제 내용을 판정할 수 있도록 활동 블록의 핵심 데이터를 상세히 노출.
+  switch (s.kind) {
+    case 'picture-choice': {
+      const cs = s.choices.map((c, i) => `${i + 1}) ${c.label ?? '(그림)'}`).join(' | ');
+      return `[picture-choice] stem="${s.stem}" · 선택지=[${cs}] · 정답=${s.answer}`;
+    }
+    case 'matching': {
+      const left = s.leftColumn.map((x) => `${x.id}:${x.text ?? '(그림)'}`).join(', ');
+      const right = s.rightColumn.map((x) => `${x.id}:${x.text ?? '(그림)'}`).join(', ');
+      return `[matching] stem="${s.stem}" · 왼쪽=[${left}] · 오른쪽=[${right}] · 짝=[${s.correctPairs.map((p) => p.join('↔')).join(', ')}]`;
+    }
+    case 'classification': {
+      const items = s.items.map((it) => `${it.text ?? it.id}→${it.correctCategory}`).join(', ');
+      return `[classification] stem="${s.stem}" · 기준=[${s.categories.join(', ')}] · 항목=[${items}]`;
+    }
+    case 'fill-blank': {
+      const sents = s.sentences.map((x) => `"${x.template}"→[${x.answers.join(', ')}]`).join(' / ');
+      return `[fill-blank] stem="${s.stem}" · 문장=${sents}`;
+    }
+    case 'writing-grid':
+      return `[writing-grid] stem="${s.stem}" · ${s.gridType} ${s.rowCount}×${s.cellsPerRow}${s.tracingText ? ` · 견본="${s.tracingText}"` : ''}`;
+    case 'guided-practice': {
+      const steps = s.workedExample.solutionSteps.join(' / ');
+      const prac = s.practiceProblems.map((p) => `"${p.problem}"→${p.answer ?? '?'}`).join(', ');
+      return `[guided-practice] stem="${s.stem}" · 예시="${s.workedExample.problem}" [풀이: ${steps}] · 연습=[${prac}]`;
+    }
+    case 'independent-practice': {
+      const probs = s.problems.map((p) => `"${p.problem}"→${p.answer ?? '?'}`).join(', ');
+      return `[independent-practice] stem="${s.stem}" · 문제=[${probs}]`;
+    }
+    case 'sequence': {
+      const items = s.items.map((it) => `${it.id}:${it.text ?? '(그림)'}`).join(', ');
+      return `[sequence] stem="${s.stem}" · 항목=[${items}] · 순서=[${s.correctOrder.join('→')}]`;
+    }
+    case 'observation': {
+      const prompts = s.observationPrompts.map((p) => `"${p.prompt}"→${p.answer ?? '?'}`).join(', ');
+      return `[observation] stem="${s.stem}" · 유도질문=[${prompts}]`;
+    }
+    case 'open-response':
+      return `[open-response] stem="${s.stem}" · ${s.responseMode}`;
+    default:
+      return '';
+  }
+}
+
 function extractTargets(sections: Section[]): TargetSummary[] {
   const out: TargetSummary[] = [];
+  const STAGE4_KINDS = new Set([
+    'picture-choice',
+    'matching',
+    'classification',
+    'fill-blank',
+    'writing-grid',
+    'guided-practice',
+    'independent-practice',
+    'sequence',
+    'observation',
+    'open-response',
+  ]);
   sections.forEach((s, idx) => {
     const id = (s as { itemId?: string }).itemId;
     if (!id) return;
+    if (STAGE4_KINDS.has(s.kind)) {
+      out.push({
+        itemId: id,
+        index: idx,
+        itemType: 'activity',
+        text: stage4Summary(s),
+      });
+      return;
+    }
     if (s.kind === 'question') {
       const choicesText = s.choices?.map((c, i) => `${i + 1}) ${c}`).join(' | ') ?? '';
       const answerText = s.answer ? ` [정답:${s.answer}]` : '';
@@ -288,10 +386,26 @@ function extractTargets(sections: Section[]): TargetSummary[] {
 }
 
 function buildUserPrompt(input: SemanticReviewInput, targets: TargetSummary[]): string {
+  // Stage 4 활동 블록은 blueprint 매핑이 없을 수 있고, 본질적으로 시각·활동 중심이라
+  // selfContained 판정 대상에서 제외.
+  const stage4Kinds = new Set([
+    'picture-choice',
+    'matching',
+    'classification',
+    'fill-blank',
+    'writing-grid',
+    'guided-practice',
+    'independent-practice',
+    'sequence',
+    'observation',
+    'open-response',
+  ]);
   const targetsBlock = targets
     .map((t, i) => {
       const bp = input.plan.itemBlueprints.find((b) => b.itemId === t.itemId) ?? null;
-      const visualPlanned = bp?.visualPlan ? true : false;
+      const sec = input.document.sections[t.index];
+      const isStage4Activity = !!sec && stage4Kinds.has((sec as { kind: string }).kind);
+      const visualPlanned = isStage4Activity || (bp?.visualPlan ? true : false);
       return `[${i}] itemId=${t.itemId} · ${t.itemType} · visualPlanned=${visualPlanned}\n    ${t.text}\n    <blueprint>${JSON.stringify(bp)}</blueprint>`;
     })
     .join('\n');

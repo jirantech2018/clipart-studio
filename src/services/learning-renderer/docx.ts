@@ -498,6 +498,488 @@ async function sectionToDocxChildren(
     case 'slide-break':
       return [];
 
+    // ==============================================================
+    // Stage 4 활동 블록 — DOCX 는 텍스트 기반 fallback 렌더.
+    // Word/한컴에서 정상 열림 + 기본 편집 가능하도록 문단·표만 사용.
+    // ==============================================================
+    case 'student-header': {
+      const line = section.fields.map((f) => `${f}: __________________`).join('     ');
+      return [
+        new Paragraph({
+          children: [new TextRun({ text: line, bold: true, font: FONT_STACK })],
+          spacing: { after: 200 },
+          border: { bottom: { color: '2D2F77', size: 12, style: 'single', space: 4 } },
+        }),
+      ];
+    }
+    case 'picture-choice': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const choiceParas = await Promise.all(
+        section.choices.map(async (c, i) => {
+          const label = c.label ? ` ${c.label}` : '';
+          const runs: TextRun[] = [
+            new TextRun({ text: `  ${i + 1})${label}`, font: FONT_STACK }),
+          ];
+          const para = new Paragraph({ children: runs, spacing: { after: 40 } });
+          return para;
+        }),
+      );
+      const teacherPara =
+        variant === 'teacher'
+          ? [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `[정답 ${section.answer}] ${section.teacherNote ?? ''}`,
+                    italics: true,
+                    color: '78350F',
+                    font: FONT_STACK,
+                  }),
+                ],
+                spacing: { before: 60, after: 200 },
+              }),
+            ]
+          : [];
+      return [stem, ...choiceParas, ...teacherPara];
+    }
+    case 'matching': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const rowCount = Math.max(section.leftColumn.length, section.rightColumn.length);
+      const rows = Array.from({ length: rowCount }).map((_, i) => {
+        const left = section.leftColumn[i];
+        const right = section.rightColumn[i];
+        return new TableRow({
+          children: [
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: left?.text ?? (left?.id ?? ''), font: FONT_STACK }),
+                  ],
+                }),
+              ],
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: '⟷', font: FONT_STACK })],
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: right?.text ?? (right?.id ?? ''), font: FONT_STACK }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        });
+      });
+      const table = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows });
+      const teacherPara =
+        variant === 'teacher'
+          ? [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `[정답 짝] ${section.correctPairs.map((p) => `${p[0]}↔${p[1]}`).join(', ')}${section.teacherNote ? ' — ' + section.teacherNote : ''}`,
+                    italics: true,
+                    color: '78350F',
+                    font: FONT_STACK,
+                  }),
+                ],
+                spacing: { before: 60, after: 200 },
+              }),
+            ]
+          : [new Paragraph({ text: '', spacing: { after: 160 } })];
+      return [stem, table, ...teacherPara];
+    }
+    case 'classification': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const catsRow = new TableRow({
+        children: section.categories.map(
+          (c) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: c, bold: true, font: FONT_STACK })],
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+            }),
+        ),
+      });
+      const emptyRow = new TableRow({
+        children: section.categories.map(
+          () =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: '\n\n\n', font: FONT_STACK })],
+                }),
+              ],
+            }),
+        ),
+      });
+      const table = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [catsRow, emptyRow] });
+      const itemPool = new Paragraph({
+        children: [
+          new TextRun({
+            text: `[분류할 항목] ${section.items.map((it) => it.text ?? it.id).join(' · ')}`,
+            font: FONT_STACK,
+          }),
+        ],
+        spacing: { before: 80, after: 60 },
+      });
+      const teacherPara =
+        variant === 'teacher'
+          ? [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `[정답] ${section.items.map((it) => `${it.text ?? it.id}=${it.correctCategory}`).join(', ')}${section.teacherNote ? ' — ' + section.teacherNote : ''}`,
+                    italics: true,
+                    color: '78350F',
+                    font: FONT_STACK,
+                  }),
+                ],
+                spacing: { before: 60, after: 200 },
+              }),
+            ]
+          : [new Paragraph({ text: '', spacing: { after: 160 } })];
+      return [stem, table, itemPool, ...teacherPara];
+    }
+    case 'fill-blank': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const sentences = section.sentences.map(
+        (s) =>
+          new Paragraph({
+            children: [
+              new TextRun({ text: s.template.replace(/__/g, '__________'), font: FONT_STACK }),
+            ],
+            spacing: { after: 60 },
+          }),
+      );
+      const teacherPara =
+        variant === 'teacher'
+          ? [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `[정답] ${section.sentences.map((s, i) => `${i + 1}) ${s.answers.join(', ')}`).join(' · ')}${section.teacherNote ? ' — ' + section.teacherNote : ''}`,
+                    italics: true,
+                    color: '78350F',
+                    font: FONT_STACK,
+                  }),
+                ],
+                spacing: { before: 60, after: 200 },
+              }),
+            ]
+          : [new Paragraph({ text: '', spacing: { after: 160 } })];
+      return [stem, ...sentences, ...teacherPara];
+    }
+    case 'writing-grid': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      // 행마다 cellsPerRow 만큼의 빈 셀 표.
+      const rows = Array.from({ length: section.rowCount }).map((_, rowIdx) => {
+        const cells = Array.from({ length: section.cellsPerRow }).map((_, cellIdx) => {
+          const tracing =
+            rowIdx === 0 && section.tracingText
+              ? (section.tracingText.charAt(cellIdx) ?? '')
+              : '';
+          return new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: tracing || ' ',
+                    font: FONT_STACK,
+                    color: tracing ? 'CBD5E1' : '1A1A1A',
+                    size: 24,
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          });
+        });
+        return new TableRow({ children: cells, height: { value: 500, rule: 'atLeast' } });
+      });
+      const table = new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows });
+      return [stem, table, new Paragraph({ text: '', spacing: { after: 160 } })];
+    }
+    case 'guided-practice': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const exLabel = new Paragraph({
+        children: [
+          new TextRun({ text: '[예시 풀이]', bold: true, color: '4338CA', font: FONT_STACK }),
+        ],
+        spacing: { after: 40 },
+      });
+      const exProblem = new Paragraph({
+        children: [new TextRun({ text: section.workedExample.problem, font: FONT_STACK })],
+      });
+      const exSteps = section.workedExample.solutionSteps.map(
+        (s, i) =>
+          new Paragraph({
+            children: [new TextRun({ text: `${i + 1}단계. ${s}`, font: FONT_STACK })],
+            indent: { left: 240 },
+          }),
+      );
+      const practiceLabel = new Paragraph({
+        children: [
+          new TextRun({ text: '[이제 풀어 봅시다]', bold: true, color: '2D2F77', font: FONT_STACK }),
+        ],
+        spacing: { before: 120, after: 40 },
+      });
+      const practiceItems = section.practiceProblems.map((p, i) => {
+        const ans =
+          variant === 'teacher' && p.answer
+            ? ` [정답: ${p.answer}]`
+            : ' _______________';
+        return new Paragraph({
+          children: [
+            new TextRun({ text: `${i + 1}) ${p.problem}${ans}`, font: FONT_STACK }),
+          ],
+          indent: { left: 240 },
+          spacing: { after: 60 },
+        });
+      });
+      const teacherPara =
+        variant === 'teacher' && section.teacherNote
+          ? [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `[지도] ${section.teacherNote}`,
+                    italics: true,
+                    color: '78350F',
+                    font: FONT_STACK,
+                  }),
+                ],
+                spacing: { before: 60, after: 200 },
+              }),
+            ]
+          : [new Paragraph({ text: '', spacing: { after: 160 } })];
+      return [stem, exLabel, exProblem, ...exSteps, practiceLabel, ...practiceItems, ...teacherPara];
+    }
+    case 'independent-practice': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const items = section.problems.flatMap((p, i) => {
+        const ans =
+          variant === 'teacher' && p.answer
+            ? ` [정답: ${p.answer}]`
+            : '';
+        const problemPara = new Paragraph({
+          children: [
+            new TextRun({ text: `${i + 1}) ${p.problem}${ans}`, font: FONT_STACK }),
+          ],
+          spacing: { after: 40 },
+        });
+        const lineCount = p.answerSpaceLines ?? 2;
+        const lines = variant === 'teacher' && p.answer
+          ? []
+          : Array.from({ length: lineCount }).map(
+              () =>
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: '________________________________________________________',
+                      font: FONT_STACK,
+                    }),
+                  ],
+                  spacing: { after: 20 },
+                }),
+            );
+        return [problemPara, ...lines];
+      });
+      return [stem, ...items, new Paragraph({ text: '', spacing: { after: 160 } })];
+    }
+    case 'sequence': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const items = section.items.map(
+        (it, i) =>
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `[${i + 1}] ${it.text ?? it.id}  →  순서: ____`,
+                font: FONT_STACK,
+              }),
+            ],
+            spacing: { after: 40 },
+          }),
+      );
+      const teacherPara =
+        variant === 'teacher'
+          ? [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `[정답 순서] ${section.correctOrder.join(' → ')}${section.teacherNote ? ' — ' + section.teacherNote : ''}`,
+                    italics: true,
+                    color: '78350F',
+                    font: FONT_STACK,
+                  }),
+                ],
+                spacing: { before: 60, after: 200 },
+              }),
+            ]
+          : [new Paragraph({ text: '', spacing: { after: 160 } })];
+      return [stem, ...items, ...teacherPara];
+    }
+    case 'observation': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      let imgPara: Paragraph;
+      try {
+        const img = await loadImage(section.imageAssetRef);
+        const target = fitDimensions({ width: img.width, height: img.height }, 300, 240);
+        imgPara = new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new ImageRun({
+              data: img.buffer,
+              type: img.mime === 'image/jpeg' ? 'jpg' : img.mime === 'image/webp' ? 'png' : 'png',
+              transformation: { width: target.width, height: target.height },
+            } as unknown as ConstructorParameters<typeof ImageRun>[0]),
+          ],
+        });
+      } catch {
+        imgPara = new Paragraph({
+          children: [
+            new TextRun({ text: '[이미지 로드 실패]', italics: true, font: FONT_STACK }),
+          ],
+        });
+      }
+      const prompts = section.observationPrompts.flatMap((p, i) => {
+        const ans =
+          variant === 'teacher' && p.answer
+            ? ` [정답: ${p.answer}]`
+            : '';
+        return [
+          new Paragraph({
+            children: [
+              new TextRun({ text: `${i + 1}) ${p.prompt}${ans}`, font: FONT_STACK }),
+            ],
+            spacing: { after: 40 },
+          }),
+          ...(variant === 'teacher' && p.answer
+            ? []
+            : [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: '________________________________________________________',
+                      font: FONT_STACK,
+                    }),
+                  ],
+                  spacing: { after: 40 },
+                }),
+              ]),
+        ];
+      });
+      return [stem, imgPara, ...prompts, new Paragraph({ text: '', spacing: { after: 160 } })];
+    }
+    case 'open-response': {
+      const num = section.number ? `${section.number}. ` : '';
+      const stem = new Paragraph({
+        children: [
+          new TextRun({ text: `${num}${section.stem}`, bold: true, font: FONT_STACK }),
+        ],
+        spacing: { after: 80 },
+      });
+      const rows: Paragraph[] = [];
+      if (section.responseMode === 'lines' || section.responseMode === 'both') {
+        const count = section.lineCount ?? 5;
+        for (let i = 0; i < count; i++) {
+          rows.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: '________________________________________________________',
+                  font: FONT_STACK,
+                }),
+              ],
+              spacing: { after: 20 },
+            }),
+          );
+        }
+      }
+      if (section.responseMode === 'box' || section.responseMode === 'both') {
+        rows.push(
+          new Paragraph({
+            children: [new TextRun({ text: '[여기에 그리거나 씁니다]', italics: true, font: FONT_STACK })],
+            spacing: { before: 120, after: 400 },
+          }),
+        );
+      }
+      return [stem, ...rows, new Paragraph({ text: '', spacing: { after: 160 } })];
+    }
+    case 'page-break':
+      return [
+        new Paragraph({
+          text: '',
+          pageBreakBefore: true,
+        }),
+      ];
+
     default:
       return [];
   }
