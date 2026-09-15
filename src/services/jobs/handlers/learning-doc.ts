@@ -439,11 +439,36 @@ export async function runLearningDocJob(
       Array<{ status: 'pass' | 'retry_pass'; reason: string }>
     >();
 
+    // WorksheetPlan 이 있으면 blockId → blueprint.itemId 매핑을 만들고,
+    // Doc AI 가 section.itemId 를 blockId 로 사용한 경우에도 visuals 를 찾을 수 있도록 한다.
+    const blockIdToItemIds = new Map<string, string[]>();
+    if (worksheetPlan) {
+      for (const page of worksheetPlan.pages) {
+        for (const block of page.blocks) {
+          if (block.sourceItemIds.length > 0) {
+            blockIdToItemIds.set(block.blockId, block.sourceItemIds);
+          }
+        }
+      }
+    }
+    const resolveSectionItemIdToBlueprint = (secItemId: string): string => {
+      // 직접 매칭 우선.
+      if (plan.itemBlueprints.some((b) => b.itemId === secItemId)) return secItemId;
+      // blockId 매핑 시도.
+      const mapped = blockIdToItemIds.get(secItemId);
+      if (mapped && mapped[0]) return mapped[0];
+      return secItemId;
+    };
+
     for (const blueprint of plan.itemBlueprints) {
       if (!blueprint.visualPlan) continue;
       const vp = blueprint.visualPlan;
       const sectionForItem = document.sections.find(
-        (s) => (s as { itemId?: string }).itemId === blueprint.itemId,
+        (s) => {
+          const sid = (s as { itemId?: string }).itemId;
+          if (!sid) return false;
+          return resolveSectionItemIdToBlueprint(sid) === blueprint.itemId;
+        },
       );
       const itemContext = {
         stem:
@@ -534,29 +559,30 @@ export async function runLearningDocJob(
 
     if (perItemVisuals.size > 0) {
       // Stage 4: 활동 블록에 __will_be_replaced__ placeholder 가 있으면 인라인 치환.
-      // 남은 경우 (레거시 question/activity) 는 뒤에 kind:'image' section 삽입.
+      // section.itemId 가 blockId (blk_XX) 인 경우 blueprint.itemId 로 매핑 후 조회.
       const nextSections: typeof document.sections = [];
       const inlinedForItem = new Set<string>();
       for (const sec of document.sections) {
         const secItemId = (sec as { itemId?: string }).itemId;
+        const blueprintId = secItemId ? resolveSectionItemIdToBlueprint(secItemId) : undefined;
         let modified: typeof sec = sec;
-        if (secItemId && perItemVisuals.has(secItemId)) {
-          const visuals = perItemVisuals.get(secItemId)!;
+        if (blueprintId && perItemVisuals.has(blueprintId)) {
+          const visuals = perItemVisuals.get(blueprintId)!;
           modified = inlineReplaceVisuals(sec, visuals);
           if (modified !== sec) {
-            inlinedForItem.add(secItemId);
+            inlinedForItem.add(blueprintId);
           }
         }
         nextSections.push(modified);
-        if (!secItemId) continue;
-        if (inlinedForItem.has(secItemId)) {
+        if (!secItemId || !blueprintId) continue;
+        if (inlinedForItem.has(blueprintId)) {
           // 인라인 치환 성공 → 별도 image 섹션 추가하지 않음.
-          const visuals = perItemVisuals.get(secItemId)!;
-          const reviews = perItemReviews.get(secItemId) ?? [];
+          const visuals = perItemVisuals.get(blueprintId)!;
+          const reviews = perItemReviews.get(blueprintId) ?? [];
           visuals.forEach((v, i) => {
             const rev = reviews[i] ?? { status: 'pass' as const, reason: '' };
             clipartUsages.push({
-              itemId: secItemId,
+              itemId: blueprintId,
               slotIndex: v.slotIndex,
               visual: v,
               reviewStatus: rev.status,
@@ -566,8 +592,8 @@ export async function runLearningDocJob(
           });
           continue;
         }
-        const visuals = perItemVisuals.get(secItemId);
-        const reviews = perItemReviews.get(secItemId);
+        const visuals = perItemVisuals.get(blueprintId);
+        const reviews = perItemReviews.get(blueprintId);
         if (!visuals || visuals.length === 0) continue;
         visuals.forEach((v, i) => {
           const sectionPosition = nextSections.length;
@@ -579,7 +605,7 @@ export async function runLearningDocJob(
           });
           const rev = reviews?.[i] ?? { status: 'pass' as const, reason: '' };
           clipartUsages.push({
-            itemId: secItemId,
+            itemId: blueprintId,
             slotIndex: v.slotIndex,
             visual: v,
             reviewStatus: rev.status,

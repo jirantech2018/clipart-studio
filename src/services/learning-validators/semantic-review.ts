@@ -212,10 +212,17 @@ export async function runSemanticReview(
       if (!sec) return it;
       const kind = (sec as { kind: string }).kind;
       if (!stage4Kinds.has(kind)) return it;
+      // Stage 4 활동 블록은 텍스트-only 리뷰어가 활동 실행을 정확히 판정하기 어렵다.
+      // (1) selfContained: 활동 자체가 시각·행위 중심이므로 텍스트만으로 판정 무의미.
+      // (2) goalCoverage: 활동 구성이 학습 목표를 다루는지는 활동 실행을 봐야 알 수 있음.
+      //     텍스트 리뷰어는 활동 stem·데이터 요약만 보고 goal 부합을 오판정하는 사례 다수.
+      // 이 두 criteria 는 Stage 4 activity 에서는 제외하고, 나머지는 그대로 유지.
       const criteria = it.criteria.filter(
-        (c) => c !== 'selfContained' && c !== 'selfContainedness',
+        (c) =>
+          c !== 'selfContained' &&
+          c !== 'selfContainedness' &&
+          c !== 'goalCoverage',
       );
-      // 이 아이템의 모든 criteria 가 제거됐다면 pass 처리.
       if (criteria.length === 0) return { ...it, pass: true, criteria };
       return { ...it, criteria };
     }),

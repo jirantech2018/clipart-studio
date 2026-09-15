@@ -98,9 +98,25 @@ export async function documentToHtml(
   // answer-key 는 자체적으로 break 처리하므로 그룹에서 제외.
   const groups = groupIntoSectionBlocks(sections);
 
+  // 활동 인덱스 카운터 (색상 순환 배정용).
+  let actIndex = 0;
   const groupHtmlList = await Promise.all(
     groups.map(async (group) => {
-      const inner = await Promise.all(group.sections.map((s) => sectionToHtml(s, variant)));
+      const inner = await Promise.all(
+        group.sections.map(async (s) => {
+          const html = await sectionToHtml(s, variant);
+          // 활동 블록에 색상 클래스 자동 부여.
+          if (isActivityKind(s.kind)) {
+            const colorClass = `act-c${(actIndex % 6) + 1}`;
+            actIndex += 1;
+            return html.replace(
+              /<div class="act-block(?:\s+page-break-before)?"/,
+              (m) => m.replace('act-block', `act-block ${colorClass}`),
+            );
+          }
+          return html;
+        }),
+      );
       const pageBreakClass = group.pageBreakBefore ? ' page-break-before' : '';
       if (group.standalone) {
         if (group.pageBreakBefore) {
@@ -115,10 +131,10 @@ export async function documentToHtml(
 
   const variantBadge =
     variant === 'student'
-      ? '학생용 (정답 제외)'
+      ? '학생용'
       : variant === 'teacher'
-        ? '교사용 정답·해설'
-        : '학생용 + 정답·해설';
+        ? '교사용'
+        : '학생 + 정답';
 
   return `<!doctype html>
 <html lang="ko">
@@ -148,16 +164,24 @@ export async function documentToHtml(
     font-display: swap;
   }
   * { box-sizing: border-box; }
-  /* Phase 0.7 밀도 조정: line-height 1.6 → 1.45, font-size 12pt → 11pt
-     로 lessonPlan 1페이지 목표 (평가계획 · 준비물이 한 페이지에 들어가도록). */
+  /* Stage 4 아동친화적 활동형 학습지 밀도. */
   body {
     font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', 'HCR Dotum', sans-serif;
     color: #1a1a1a;
-    line-height: 1.45;
+    line-height: 1.5;
     font-size: 11pt;
     orphans: 3;
     widows: 3;
+    margin: 0;
+    padding: 0;
   }
+  /* 활동 순서별 색상 팔레트 (WorksheetPlan 무관 · 렌더 순서로 자동 순환). */
+  .act-c1 { --act-color: #f472b6; --act-soft: #fdf2f8; }
+  .act-c2 { --act-color: #3b82f6; --act-soft: #eff6ff; }
+  .act-c3 { --act-color: #10b981; --act-soft: #ecfdf5; }
+  .act-c4 { --act-color: #f59e0b; --act-soft: #fffbeb; }
+  .act-c5 { --act-color: #8b5cf6; --act-soft: #f5f3ff; }
+  .act-c6 { --act-color: #06b6d4; --act-soft: #ecfeff; }
   /* 섹션 그룹 — heading + 뒤따르는 non-heading 섹션을 한 페이지에 유지 시도.
      그룹이 너무 커서 한 페이지에 안 들어가면 자연 분할되지만, 짧은
      '준비물' 같은 블록이 혼자 다음 페이지로 밀리는 고아 페이지는 방지. */
@@ -190,22 +214,111 @@ export async function documentToHtml(
   }
   th, td { border: 1px solid #cbd5e1; padding: 3pt 5pt; text-align: left; vertical-align: top; }
   th { background: #eef1ff; font-weight: 700; }
-  .meta-bar {
-    border-top: 2px solid #2d2f77;
-    border-bottom: 1px solid #cbd5e1;
-    padding: 8pt 0;
-    margin-bottom: 12pt;
+  /* Stage 4 골든-샘플 스타일 페이지 헤더 */
+  .worksheet-header {
+    position: relative;
+    background: linear-gradient(135deg, #eff6ff 0%, #fdf2f8 100%);
+    border-radius: 12pt;
+    padding: 14pt 18pt 12pt;
+    margin: 0 0 14pt;
+    overflow: hidden;
+  }
+  .worksheet-header::before,
+  .worksheet-header::after {
+    content: '';
+    position: absolute;
+    border-radius: 999pt;
+    opacity: 0.5;
+  }
+  .worksheet-header::before {
+    width: 90pt; height: 90pt;
+    top: -30pt; right: -25pt;
+    background: #fbcfe8;
+  }
+  .worksheet-header::after {
+    width: 40pt; height: 40pt;
+    bottom: -12pt; left: 40pt;
+    background: #a7f3d0;
+  }
+  .wh-brand {
+    font-size: 9pt;
+    color: #38bdf8;
+    font-weight: 500;
+    letter-spacing: 0.5pt;
+    position: relative; z-index: 1;
+  }
+  .wh-title {
+    font-size: 22pt;
+    color: #1e293b;
+    font-weight: 700;
+    margin: 3pt 0 4pt;
+    position: relative; z-index: 1;
+  }
+  .wh-subtitle {
     font-size: 10pt;
     color: #64748b;
-    page-break-after: avoid;
-    break-after: avoid-page;
+    position: relative; z-index: 1;
   }
+  .wh-page {
+    position: absolute;
+    top: 14pt; right: 20pt;
+    font-size: 10pt;
+    color: #64748b;
+    z-index: 2;
+  }
+  .wh-variant-badge {
+    display: inline-block;
+    background: #ffffff;
+    color: #2d2f77;
+    border: 1px solid #cbd5e1;
+    padding: 2pt 8pt;
+    border-radius: 999pt;
+    font-size: 9pt;
+    font-weight: 700;
+    margin-left: 8pt;
+    vertical-align: middle;
+  }
+  /* 이름 + 안내 pill (헤더 바로 아래 두 컬럼) */
+  .name-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16pt;
+    margin: 0 0 14pt;
+    padding: 0 4pt;
+  }
+  .name-strip .ns-fields {
+    display: flex; gap: 20pt; align-items: baseline; flex: 1;
+    font-size: 10pt; color: #64748b;
+  }
+  .name-strip .ns-field {
+    display: flex; gap: 6pt; align-items: baseline; flex: 1;
+  }
+  .name-strip .ns-field .ns-label {
+    color: #475569; font-weight: 500; white-space: nowrap;
+  }
+  .name-strip .ns-field .ns-blank {
+    flex: 1; border-bottom: 1.2px solid #94a3b8; min-width: 60pt; height: 16pt;
+  }
+  .name-strip .ns-instruction {
+    background: #fef3c7;
+    border: 1.2px solid #fbbf24;
+    color: #78350f;
+    padding: 5pt 14pt;
+    border-radius: 999pt;
+    font-size: 10pt;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  /* leg-compat 클래스 (기존 문서와의 호환용) — 아직 남아있는 참조를 안전하게 처리. */
+  .meta-bar { display: none; }
   .variant-badge {
     display: inline-block;
-    background: #eef1ff;
+    background: #ffffff;
     color: #2d2f77;
     padding: 2pt 8pt;
-    border-radius: 4pt;
+    border-radius: 999pt;
+    border: 1px solid #cbd5e1;
     font-weight: 700;
     margin-left: 6pt;
   }
@@ -285,53 +398,123 @@ export async function documentToHtml(
     margin-top: 4pt;
     font-style: italic;
   }
-  /* Stage 4 활동 블록 공통 카드 스타일. */
+  /* Stage 4 활동 블록 공통 카드 스타일 — 골든 샘플 디자인. */
   .act-block {
-    border: 1px solid #cbd5e1;
-    border-radius: 8pt;
-    padding: 8pt 10pt;
-    margin: 8pt 0;
+    background: #ffffff;
+    border: 0;
+    border-radius: 14pt;
+    padding: 14pt 16pt 14pt;
+    margin: 10pt 0;
     page-break-inside: avoid;
     break-inside: avoid-page;
+    position: relative;
   }
   .act-block .act-header {
-    display: flex; justify-content: space-between; align-items: baseline;
-    border-bottom: 1px dashed #cbd5e1;
-    padding-bottom: 4pt; margin-bottom: 6pt;
-    color: #2d2f77; font-weight: 700; font-size: 11.5pt;
+    display: block;
+    padding-bottom: 8pt;
+    margin-bottom: 8pt;
   }
-  .act-block .act-number { color: #2d2f77; margin-right: 6pt; }
-  .act-block .act-instruction { color: #1a1a1a; }
-  .act-block .act-body { font-size: 11pt; }
+  .act-block .act-title-row {
+    display: flex; align-items: center; gap: 10pt;
+    margin-bottom: 2pt;
+  }
+  .act-block .act-badge {
+    width: 22pt; height: 22pt; border-radius: 999pt;
+    background: var(--act-color, #2d2f77);
+    color: #ffffff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 11pt; flex-shrink: 0;
+  }
+  .act-block .act-title {
+    color: #1e293b; font-weight: 700; font-size: 13pt;
+  }
+  .act-block .act-instruction {
+    color: #64748b; font-size: 10pt; margin-left: 32pt;
+  }
+  .act-block .act-body {
+    background: var(--act-soft, #f8fafc);
+    border-radius: 12pt;
+    padding: 12pt 14pt;
+    font-size: 11pt;
+  }
   .act-block .teacher-note {
-    margin-top: 6pt; padding: 5pt 8pt;
+    margin-top: 8pt; padding: 6pt 10pt;
     background: #fef7ed; border-left: 3px solid #f59e0b;
-    font-size: 10pt; color: #78350f;
+    font-size: 9.5pt; color: #78350f;
+    border-radius: 0 4pt 4pt 0;
   }
-  /* picture-choice */
+  /* picture-choice — 큰 그림 카드 + 자음 원형 버튼 */
   .pc-grid {
-    display: grid; grid-template-columns: repeat(2, 1fr);
-    gap: 8pt; margin-top: 6pt;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120pt, 1fr));
+    gap: 10pt;
   }
   .pc-choice {
-    border: 1.5px solid #cbd5e1; border-radius: 6pt; padding: 6pt;
+    background: #ffffff;
+    border: 1.5px solid #dbeafe;
+    border-radius: 10pt;
+    padding: 10pt;
     text-align: center;
+    box-shadow: 0 1px 2px rgba(30,41,59,0.04);
   }
-  .pc-choice img { max-width: 100%; max-height: 90pt; }
-  .pc-choice .pc-num { font-weight: 700; color: #2d2f77; }
-  .pc-choice .pc-label { font-size: 10.5pt; margin-top: 3pt; }
-  /* matching */
+  .pc-choice img {
+    max-width: 100%; max-height: 90pt;
+    display: block; margin: 0 auto 6pt;
+  }
+  .pc-choice .pc-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18pt; height: 18pt; border-radius: 999pt;
+    background: #eff6ff; color: #1d4ed8;
+    font-weight: 700; font-size: 10pt; margin-bottom: 4pt;
+  }
+  .pc-choice .pc-label { font-size: 11pt; margin-top: 4pt; color: #1e293b; }
+  /* matching — 좌우 컬럼 + 점 앵커 (연결선 유도) */
   .mt-container {
-    display: grid; grid-template-columns: 1fr 40pt 1fr;
-    gap: 10pt; margin-top: 6pt; align-items: center;
+    display: grid; grid-template-columns: minmax(80pt, auto) 1fr minmax(150pt, auto);
+    gap: 20pt; align-items: center;
+    padding: 8pt 6pt;
   }
-  .mt-col { display: flex; flex-direction: column; gap: 6pt; }
+  .mt-col {
+    display: flex; flex-direction: column; gap: 12pt;
+    justify-content: space-around; align-self: stretch;
+  }
+  .mt-left-col { align-items: flex-start; }
+  .mt-right-col { align-items: stretch; }
   .mt-item {
-    border: 1.5px solid #cbd5e1; border-radius: 4pt; padding: 5pt 8pt;
-    min-height: 26pt; text-align: center;
+    display: flex; align-items: center; gap: 6pt;
+    min-height: 32pt;
   }
-  .mt-item img { max-height: 60pt; max-width: 100%; }
-  .mt-space { text-align: center; color: #94a3b8; font-size: 9pt; }
+  .mt-item.mt-left {
+    background: #fce7f3; border: 1.5px solid #f9a8d4;
+    border-radius: 999pt;
+    width: 32pt; height: 32pt;
+    justify-content: center;
+    font-weight: 700; color: #be185d; font-size: 13pt;
+  }
+  .mt-item.mt-right {
+    background: #ffffff; border: 1.5px solid #dbeafe;
+    border-radius: 999pt;
+    padding: 4pt 10pt 4pt 4pt;
+    justify-content: flex-start;
+  }
+  .mt-item.mt-right img { max-height: 28pt; max-width: 40pt; margin-right: 4pt; border-radius: 4pt; }
+  .mt-item.mt-right .mt-word {
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 999pt; padding: 3pt 10pt;
+    font-size: 10pt; color: #1e40af;
+    margin-left: auto;
+  }
+  .mt-anchor {
+    width: 6pt; height: 6pt; border-radius: 999pt;
+    background: var(--act-color, #f472b6);
+    margin: 0 4pt;
+  }
+  .mt-anchor-right { background: #3b82f6; }
+  .mt-item-row {
+    display: flex; align-items: center; gap: 6pt;
+    width: 100%;
+  }
+  .mt-item-row.right { justify-content: flex-start; }
+  .mt-space { display: none; }
   /* classification */
   .cl-buckets {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(140pt, 1fr));
@@ -365,35 +548,69 @@ export async function documentToHtml(
     padding: 0 6pt; margin: 0 2pt;
     text-align: center;
   }
-  /* writing-grid */
+  /* writing-grid — 골든 샘플: 그림+격자+라벨을 카드로 묶은 그리드 */
   .wg-grid {
-    display: grid; gap: 2pt; margin-top: 6pt;
+    display: grid; gap: 3pt; margin-top: 6pt;
+    background: #ffffff; padding: 8pt; border-radius: 8pt;
   }
   .wg-cell {
-    border: 1px solid #94a3b8;
+    border: 1.2px dashed #94a3b8;
     aspect-ratio: 1;
     background: repeating-linear-gradient(
-      45deg, transparent, transparent 4pt,
-      rgba(148,163,184,0.05) 4pt, rgba(148,163,184,0.05) 8pt);
+      45deg, transparent, transparent 6pt,
+      rgba(148,163,184,0.03) 6pt, rgba(148,163,184,0.03) 12pt);
     display: flex; align-items: center; justify-content: center;
-    color: #cbd5e1; font-size: 14pt;
+    color: #cbd5e1; font-size: 16pt;
   }
   .wg-lined {
     display: grid; grid-template-columns: 1fr; gap: 0;
     margin-top: 6pt;
+    background: #ffffff; padding: 10pt; border-radius: 8pt;
   }
   .wg-line {
-    border-bottom: 1px solid #94a3b8;
-    height: 22pt;
+    border-bottom: 1.2px solid #94a3b8;
+    height: 24pt;
   }
   .wg-manuscript-row {
     display: grid; gap: 0; margin: 2pt 0;
   }
   .wg-manuscript-cell {
-    border: 1px solid #94a3b8;
+    border: 1.2px dashed #94a3b8;
     aspect-ratio: 1;
     background: #ffffff;
+    display: flex; align-items: center; justify-content: center;
+    color: #cbd5e1; font-size: 14pt;
   }
+  /* writing-grid with image (골든 샘플 3-활동 스타일) */
+  .wg-with-image {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200pt, 1fr));
+    gap: 8pt; margin-top: 6pt;
+  }
+  .wg-card {
+    display: grid; grid-template-columns: 50pt 60pt 1fr;
+    gap: 10pt; align-items: center;
+    background: #ffffff; border-radius: 10pt;
+    padding: 8pt 10pt;
+    box-shadow: 0 1px 2px rgba(30,41,59,0.04);
+  }
+  .wg-card .wg-thumb {
+    width: 50pt; height: 50pt;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wg-card .wg-thumb img {
+    max-width: 100%; max-height: 100%;
+    border-radius: 6pt;
+  }
+  .wg-card .wg-cell-single {
+    width: 44pt; height: 44pt;
+    border: 1.2px dashed #94a3b8;
+    background: repeating-linear-gradient(
+      45deg, transparent, transparent 6pt,
+      rgba(148,163,184,0.05) 6pt, rgba(148,163,184,0.05) 12pt);
+    border-radius: 6pt;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wg-card .wg-label { font-size: 10pt; color: #64748b; }
   /* guided-practice */
   .gp-example {
     background: #eef2ff; border-left: 4px solid #6366f1;
@@ -475,37 +692,127 @@ export async function documentToHtml(
       45deg, transparent, transparent 8pt,
       rgba(148,163,184,0.05) 8pt, rgba(148,163,184,0.05) 16pt);
   }
-  /* student-header */
+  /* student-header — 골든 스타일: name-strip 이 이 역할을 대신, 하위 호환 */
   .student-header {
-    display: flex; gap: 20pt; align-items: baseline;
-    padding: 6pt 0 8pt;
-    border-bottom: 1.5px solid #2d2f77;
-    margin-bottom: 10pt;
+    display: none;
   }
-  .student-header .sh-field {
-    flex: 1; display: flex; align-items: baseline; gap: 6pt;
+  /* 오늘의 확인 (자기평가) 섹션 */
+  .self-check {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12pt;
+    margin: 12pt 0 6pt;
+    padding: 10pt 16pt;
+    background: #fdf2f8;
+    border: 1.2px solid #fce7f3;
+    border-radius: 999pt;
   }
-  .student-header .sh-label {
-    font-weight: 700; color: #2d2f77; white-space: nowrap;
+  .self-check .sc-label {
+    color: #be185d; font-weight: 700; font-size: 10pt; letter-spacing: 0.4pt;
   }
-  .student-header .sh-blank {
-    flex: 1; border-bottom: 1.2px solid #1a1a1a;
-    min-height: 18pt;
+  .self-check .sc-question {
+    color: #475569; font-size: 10pt; flex: 1; margin-left: 8pt;
+  }
+  .self-check .sc-options {
+    display: flex; gap: 14pt;
+  }
+  .self-check .sc-option {
+    display: flex; align-items: center; gap: 5pt;
+    font-size: 10pt; color: #475569;
+  }
+  .self-check .sc-option::before {
+    content: '';
+    display: inline-block; width: 12pt; height: 12pt;
+    border-radius: 999pt; border: 1.5px solid #f9a8d4;
+    background: #ffffff;
+  }
+  /* 페이지 푸터 */
+  .page-footer {
+    margin-top: 14pt;
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6pt 4pt;
+    font-size: 9pt;
+    color: #94a3b8;
+    border-top: 1px dashed #e2e8f0;
+  }
+  .page-footer .pf-brand {
+    color: #38bdf8; font-weight: 500;
   }
 </style>
 </head>
-<body>
-<div class="meta-bar">
-  <strong>${escapeHtml(doc.meta.title)}</strong>
-  <span class="variant-badge">${escapeHtml(variantBadge)}</span>
-  <br />
-  ${doc.meta.grade}학년 · ${SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject}
-  ${doc.meta.estimatedMinutes ? `· 예상 ${doc.meta.estimatedMinutes}분` : ''}
-  · AI 초안이며 교사 검토가 필요합니다.
-</div>
+${goldenHeaderTemplate(doc, variantBadge)}
+${goldenNameStripTemplate()}
 ${body}
+${goldenFooterTemplate(doc)}
 </body>
 </html>`;
+}
+
+function goldenHeaderTemplate(doc: LearningDocument, variantBadge: string): string {
+  const subject = SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject;
+  const brand = `우리학교 ${subject}`;
+  const subtitle = doc.meta.topic || '';
+  return `<div class="worksheet-header">
+  <div class="wh-brand">${escapeHtml(brand)}</div>
+  <div class="wh-title">${escapeHtml(doc.meta.title)}<span class="wh-variant-badge">${escapeHtml(variantBadge)}</span></div>
+  ${subtitle ? `<div class="wh-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+  <div class="wh-page">${doc.meta.grade}학년${doc.meta.estimatedMinutes ? ` · 예상 ${doc.meta.estimatedMinutes}분` : ''}</div>
+</div>`;
+}
+
+function goldenNameStripTemplate(): string {
+  return `<div class="name-strip">
+  <div class="ns-fields">
+    <div class="ns-field"><span class="ns-label">이름</span><span class="ns-blank"></span></div>
+    <div class="ns-field"><span class="ns-label">날짜</span><span class="ns-blank"></span></div>
+  </div>
+  <div class="ns-instruction">활동을 순서대로 완성해 봅시다</div>
+</div>`;
+}
+
+function goldenFooterTemplate(doc: LearningDocument): string {
+  const subject = SUBJECT_LABEL[doc.meta.subject] ?? doc.meta.subject;
+  return `<div class="self-check">
+  <span class="sc-label">오늘의 확인</span>
+  <span class="sc-question">활동을 스스로 완성했나요?</span>
+  <span class="sc-options">
+    <span class="sc-option">잘했어요</span>
+    <span class="sc-option">더 연습이 필요해요</span>
+  </span>
+</div>
+<div class="page-footer">
+  <span>차분히 활동을 마무리해 봅시다.</span>
+  <span class="pf-brand">우리학교 ${escapeHtml(subject)}</span>
+</div>`;
+}
+
+function isActivityKind(kind: string): boolean {
+  return (
+    kind === 'picture-choice' ||
+    kind === 'matching' ||
+    kind === 'classification' ||
+    kind === 'fill-blank' ||
+    kind === 'writing-grid' ||
+    kind === 'guided-practice' ||
+    kind === 'independent-practice' ||
+    kind === 'sequence' ||
+    kind === 'observation' ||
+    kind === 'open-response'
+  );
+}
+
+// 활동 헤더: 원형 색상 배지 + 큰 타이틀 (stem) + 작은 보조문구.
+function actHeader(number: number, subtitle: string, stem: string): string {
+  const badgeNum = number > 0 ? String(number) : '·';
+  const sub = subtitle
+    ? `<div class="act-instruction">${escapeHtml(subtitle)}</div>`
+    : '';
+  return `<div class="act-header">
+  <div class="act-title-row">
+    <span class="act-badge">${escapeHtml(badgeNum)}</span>
+    <span class="act-title">${escapeHtml(stem)}</span>
+  </div>
+  ${sub}
+</div>`;
 }
 
 // heading + 뒤따르는 non-heading 섹션을 하나의 section-block 으로 묶는다.
@@ -558,10 +865,16 @@ function groupIntoSectionBlocks(sections: Section[]): SectionGroup[] {
     }
     if (s.kind === 'heading') {
       flush();
-      current = { standalone: false, sections: [s] };
+      // 헤딩은 다음 활동과 분리되어도 상관없이 자유 배치 (그룹 wrap 없이 standalone).
+      pushStandalone(s);
       continue;
     }
     if (s.kind === 'student-header') {
+      pushStandalone(s);
+      continue;
+    }
+    // Stage 4 활동 블록은 자체적으로 page-break-inside: avoid 를 가지므로 standalone.
+    if (isActivityKind(s.kind)) {
       pushStandalone(s);
       continue;
     }
@@ -721,8 +1034,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="student-header">${fields}</div>`;
     }
     case 'picture-choice': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '그림을 잘 보고 알맞은 것을 골라 봅시다', section.stem);
       const choices = await Promise.all(
         section.choices.map(async (c, i) => {
           let img = '';
@@ -748,30 +1061,45 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
     }
     case 'matching': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
-      const renderCol = async (col: typeof section.leftColumn) =>
-        (
-          await Promise.all(
-            col.map(async (it) => {
-              let inner = '';
-              if (it.imageAssetRef) {
-                try {
-                  const loaded = await loadImage(it.imageAssetRef);
-                  inner = `<img src="${loaded.dataUrl}" alt="" />`;
-                } catch {
-                  /* ignore */
-                }
-              }
-              if (it.text) inner += `<div>${escapeHtml(it.text)}</div>`;
-              return `<div class="mt-item">${inner}</div>`;
-            }),
-          )
-        ).join('');
-      const left = await renderCol(section.leftColumn);
-      const right = await renderCol(section.rightColumn);
-      const spacer = `<div class="mt-space">→ 선으로 이어 보세요 →</div>`;
-      const body = `<div class="mt-container"><div class="mt-col">${left}</div>${spacer}<div class="mt-col">${right}</div></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '서로 선을 그어 알맞게 연결하세요', section.stem);
+      const leftIsShort = section.leftColumn.every((it) => (it.text ?? '').length <= 3);
+      const rightIsShort = section.rightColumn.every((it) => (it.text ?? '').length <= 3);
+      const renderShortItem = (it: { text?: string; imageAssetRef?: string }) =>
+        `<div class="mt-item mt-left">${it.text ? escapeHtml(it.text) : ''}</div>`;
+      const renderRichItem = async (
+        it: { text?: string; imageAssetRef?: string },
+      ) => {
+        let img = '';
+        if (it.imageAssetRef) {
+          try {
+            const loaded = await loadImage(it.imageAssetRef);
+            img = `<img src="${loaded.dataUrl}" alt="" />`;
+          } catch {
+            /* ignore */
+          }
+        }
+        const word = it.text ? `<span class="mt-word">${escapeHtml(it.text)}</span>` : '';
+        return `<div class="mt-item mt-right">${img}${word}</div>`;
+      };
+      const leftHtml = leftIsShort
+        ? section.leftColumn
+            .map((it) => `<div class="mt-item-row"><span>${renderShortItem(it)}</span><span class="mt-anchor"></span></div>`)
+            .join('')
+        : (await Promise.all(section.leftColumn.map((it) => renderRichItem(it)))).join('');
+      const rightHtml = rightIsShort
+        ? section.rightColumn
+            .map((it) => `<div class="mt-item-row right"><span class="mt-anchor mt-anchor-right"></span><span>${renderShortItem(it)}</span></div>`)
+            .join('')
+        : (
+            await Promise.all(
+              section.rightColumn.map(async (it) => {
+                const rich = await renderRichItem(it);
+                return `<div class="mt-item-row right"><span class="mt-anchor mt-anchor-right"></span>${rich}</div>`;
+              }),
+            )
+          ).join('');
+      const body = `<div class="mt-container"><div class="mt-col mt-left-col">${leftHtml}</div><div></div><div class="mt-col mt-right-col">${rightHtml}</div></div>`;
       const teacherPairs =
         variant === 'teacher' && section.correctPairs.length > 0
           ? `<div class="teacher-note"><strong>정답 짝</strong>: ${section.correctPairs.map((p) => `${escapeHtml(p[0])}↔${escapeHtml(p[1])}`).join(', ')}${section.teacherNote ? ' — ' + escapeHtml(section.teacherNote) : ''}</div>`
@@ -779,8 +1107,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherPairs}</div>`;
     }
     case 'classification': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       const buckets = section.categories
         .map(
           (cat) =>
@@ -811,8 +1139,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherKey}</div>`;
     }
     case 'fill-blank': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       const sentences = section.sentences
         .map((s) => {
           // template 의 __ 을 blank span 으로 치환.
@@ -834,8 +1162,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${sentences}</div>${teacherKey}</div>`;
     }
     case 'writing-grid': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       let body = '';
       if (section.gridType === 'square') {
         const cells = Array.from({ length: section.cellsPerRow * section.rowCount })
@@ -879,8 +1207,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
     }
     case 'guided-practice': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       const ex = section.workedExample;
       const exSteps = ex.solutionSteps
         .map((s) => `<li>${escapeHtml(s)}</li>`)
@@ -903,8 +1231,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${exBlock}${practiceBlock}</div>${teacherNote}</div>`;
     }
     case 'independent-practice': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       const items = section.problems
         .map((p) => {
           const lineCount = p.answerSpaceLines ?? 2;
@@ -925,8 +1253,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body"><ol class="ip-list">${items}</ol></div>${teacherNote}</div>`;
     }
     case 'sequence': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       const items = await Promise.all(
         section.items.map(async (it) => {
           let img = '';
@@ -949,8 +1277,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body"><div class="sq-container">${items.join('')}</div></div>${teacherKey}</div>`;
     }
     case 'observation': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       let imgHtml = '';
       try {
         const loaded = await loadImage(section.imageAssetRef);
@@ -978,8 +1306,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
     }
     case 'open-response': {
-      const num = section.number ? `<span class="act-number">${section.number}.</span>` : '';
-      const header = `<div class="act-header">${num}<span class="act-instruction">${escapeHtml(section.stem)}</span></div>`;
+      const num = section.number ?? 0;
+      const header = actHeader(num, '', section.stem);
       let body = '';
       if (section.responseMode === 'lines' || section.responseMode === 'both') {
         const count = section.lineCount ?? 5;
