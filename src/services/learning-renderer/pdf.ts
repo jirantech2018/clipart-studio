@@ -101,10 +101,14 @@ export async function documentToHtml(
   const groupHtmlList = await Promise.all(
     groups.map(async (group) => {
       const inner = await Promise.all(group.sections.map((s) => sectionToHtml(s, variant)));
+      const pageBreakClass = group.pageBreakBefore ? ' page-break-before' : '';
       if (group.standalone) {
+        if (group.pageBreakBefore) {
+          return `<div class="page-break-before">\n${inner.join('\n')}\n</div>`;
+        }
         return inner.join('\n');
       }
-      return `<div class="section-block">\n${inner.join('\n')}\n</div>`;
+      return `<div class="section-block${pageBreakClass}">\n${inner.join('\n')}\n</div>`;
     }),
   );
   const body = groupHtmlList.join('\n');
@@ -160,6 +164,10 @@ export async function documentToHtml(
   .section-block {
     page-break-inside: avoid;
     break-inside: avoid-page;
+  }
+  .page-break-before {
+    page-break-before: always;
+    break-before: page;
   }
   /* 제목 계열은 뒤 콘텐츠와 분리되지 않도록 강제. */
   h1, h2, h3 {
@@ -503,35 +511,49 @@ ${body}
 // heading + 뒤따르는 non-heading 섹션을 하나의 section-block 으로 묶는다.
 // answer-key / image / table 처럼 자체적으로 break-inside: avoid-page 를 갖는
 // 큰 블록은 standalone: true 로 두어 이중 wrap 을 피한다.
+// pageBreakBefore 는 페이지 강제 분리 신호 (page-break 섹션이 다음 그룹에 부여).
 interface SectionGroup {
   standalone: boolean;
   sections: Section[];
+  pageBreakBefore?: boolean;
 }
 
 function groupIntoSectionBlocks(sections: Section[]): SectionGroup[] {
   const groups: SectionGroup[] = [];
   let current: SectionGroup | null = null;
+  let nextGroupPageBreak = false;
 
   const flush = () => {
-    if (current && current.sections.length > 0) groups.push(current);
+    if (current && current.sections.length > 0) {
+      if (nextGroupPageBreak) {
+        current.pageBreakBefore = true;
+        nextGroupPageBreak = false;
+      }
+      groups.push(current);
+    }
     current = null;
   };
 
+  const pushStandalone = (s: Section) => {
+    flush();
+    const g: SectionGroup = { standalone: true, sections: [s] };
+    if (nextGroupPageBreak) {
+      g.pageBreakBefore = true;
+      nextGroupPageBreak = false;
+    }
+    groups.push(g);
+  };
+
   for (const s of sections) {
-    // answer-key 는 자체 처리 (내부에 페이지 브레이크 힌트 존재).
     if (s.kind === 'answer-key') {
-      flush();
-      groups.push({ standalone: true, sections: [s] });
+      pushStandalone(s);
       continue;
     }
-    if (s.kind === 'slide-break') {
-      // PDF 에서는 무시.
-      continue;
-    }
-    // Stage 4: page-break 은 강제 페이지 분리.
+    if (s.kind === 'slide-break') continue;
     if (s.kind === 'page-break') {
+      // 다음 그룹에 페이지 강제 분리 신호 부여. 자체 그룹 생성하지 않음 (빈 페이지 방지).
       flush();
-      groups.push({ standalone: true, sections: [s] });
+      nextGroupPageBreak = true;
       continue;
     }
     if (s.kind === 'heading') {
@@ -539,10 +561,8 @@ function groupIntoSectionBlocks(sections: Section[]): SectionGroup[] {
       current = { standalone: false, sections: [s] };
       continue;
     }
-    // student-header 는 다른 헤더와 함께 표시 (standalone).
     if (s.kind === 'student-header') {
-      flush();
-      groups.push({ standalone: true, sections: [s] });
+      pushStandalone(s);
       continue;
     }
     if (!current) {
@@ -980,7 +1000,8 @@ async function sectionToHtml(section: Section, variant: AnswerVariant): Promise<
       return `<div class="act-block">${header}<div class="act-body">${body}</div>${teacherNote}</div>`;
     }
     case 'page-break':
-      return '<div style="page-break-before: always; break-before: page;"></div>';
+      // Zero-height 페이지 강제 분리자. 다음 콘텐츠가 새 페이지 시작이 되게 한다.
+      return '<div style="page-break-before: always; break-before: page; height: 0; margin: 0; padding: 0;"></div>';
     default:
       return '';
   }
