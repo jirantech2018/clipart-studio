@@ -131,9 +131,20 @@ export async function generateCompositionPlan(
     };
   }
 
+  // 결정론적 사전 조판 검증. 페이지별 예측 사용률이 임계값을 초과하면
+  // 블록을 자동으로 다음 페이지로 이동. 답안 공간·본문은 축소하지 않는다.
+  const rebalanced = rebalanceComposition(plan);
+  if (!rebalanced.ok) {
+    return {
+      ok: false,
+      reason: `CompositionPlan 사전 조판 실패: ${rebalanced.reason}`,
+      errorCode: 'SCHEMA_ERROR',
+    };
+  }
+
   return {
     ok: true,
-    plan,
+    plan: rebalanced.plan,
     durationMs: Date.now() - started,
     inputTokens: json.usage?.prompt_tokens,
     outputTokens: json.usage?.completion_tokens,
@@ -167,7 +178,7 @@ function num(v: unknown, fb: number): number {
 
 function normalizeCompositionPlan(
   raw: unknown,
-  contentPlan: ContentPlan,
+  _contentPlan: ContentPlan,
 ): PageCompositionPlan | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
@@ -175,35 +186,195 @@ function normalizeCompositionPlan(
   const pages = normalizePages(o.pages);
   if (pages.length === 0) return null;
 
-  // sourceItemIds 커버리지 검증. 부족하면 마지막 페이지에 fallback 블록 추가.
-  const covered = new Set<string>();
-  for (const p of pages) for (const b of p.blocks) for (const id of b.sourceItemIds) covered.add(id);
-  const missing = contentPlan.itemBlueprints
-    .map((b) => b.itemId)
-    .filter((id) => !covered.has(id));
-  if (missing.length > 0) {
-    const last = pages[pages.length - 1]!;
-    let order = last.blocks.length;
-    for (const id of missing) {
-      order += 1;
-      last.blocks.push({
-        blockId: `blk_missing_${id}`,
-        sourceItemIds: [id],
-        primitive: 'open-response',
-        instruction: '',
-        placement: { column: 1, widthFraction: 1.0, order, columnSpan: 1 },
-        estimatedHeightMm: 80,
-        visualSlot: { needed: false },
-        responseSpace: { type: 'line', size: 'medium', lines: 3 },
-      });
-    }
-  }
+  // 이전 버전은 sourceItemIds 미커버 시 fallback 'open-response' 블록을 자동
+  // 삽입했다. 이 자동 보정은 계약 위반을 은폐하는 부작용이 있어 제거됐다.
+  // 커버리지 검증은 별도 ID 계약 검증기 (verifyCompositionLinkingContract) 가
+  // 담당하며, 실패 시 파이프라인이 fail hard 한다.
 
   return {
     version: 'v1',
     documentStrategy: strategy,
     pages,
   };
+}
+
+// ============================================================
+// 사전 조판 검증 (deterministic pre-composition rebalance).
+//
+// AI 가 예측한 estimatedHeightMm 를 페이지별 컬럼 사용률로 집계하여
+// 임계값 (MAX_FILL_RATIO=0.92) 을 초과하면 블록을 다음 페이지로 자동 이동.
+// 답안 공간과 본문 글자 크기는 축소하지 않는다. 2쪽에 안전하게 들어가지
+// 않으면 3, 4쪽으로 확장. 단, 총 페이지 상한 MAX_PAGES=4 는 지킨다.
+// ============================================================
+
+const MAX_FILL_RATIO = 0.92;
+const MIN_LEADING_FILL = 0.35; // 마지막 페이지가 아닌 경우 최소 사용률.
+const AVAILABLE_MM = 250; // A4 세로 297mm - 상하 여백 20mm 씩.
+const MAX_PAGES = 4;
+
+interface RebalanceResult {
+  ok: boolean;
+  plan: PageCompositionPlan;
+  reason?: string;
+}
+
+export function rebalanceComposition(plan: PageCompositionPlan): RebalanceResult {
+  const pages: CompositionPage[] = plan.pages.map((p) => ({
+    ...p,
+    blocks: [...p.blocks].sort((a, b) => a.placement.order - b.placement.order),
+  }));
+
+  // 안전 반복. 각 loop 는 한 페이지에서 초과분을 다음 페이지 앞으로 이동.
+  for (let iter = 0; iter < 40; iter += 1) {
+    let mutated = false;
+    for (let i = 0; i < pages.length; i += 1) {
+      const page = pages[i]!;
+      const fill = computePageFillRatio(page);
+      if (fill <= MAX_FILL_RATIO) continue;
+
+      // 초과: 마지막 블록을 다음 페이지 (없으면 새 페이지) 앞으로 이동.
+      if (page.blocks.length <= 1) {
+        // 단일 블록 페이지가 초과 → 이 블록 자체가 페이지 하나를 넘긴다.
+        // 답안 공간·본문을 줄이지 않는 원칙 하에서는 조판 실패.
+        return {
+          ok: false,
+          plan,
+          reason: `page=${page.pageId} 단일 블록 (${page.blocks[0]?.blockId}) 이 페이지 상한을 넘음 (estimatedHeightMm=${page.blocks[0]?.estimatedHeightMm}). 블록을 분해하거나 primitive 를 재선택해야 함.`,
+        };
+      }
+
+      const moved = page.blocks.pop()!;
+      // 다음 페이지가 없으면 새로 만든다.
+      if (i + 1 >= pages.length) {
+        if (pages.length >= MAX_PAGES) {
+          // 페이지 상한 도달 — 이동할 곳 없음.
+          return {
+            ok: false,
+            plan,
+            reason: `MAX_PAGES=${MAX_PAGES} 도달. 마지막 페이지 사용률 ${Math.round(fill * 100)}% 초과 유지.`,
+          };
+        }
+        pages.push({
+          pageId: `page_${String(pages.length + 1).padStart(2, '0')}`,
+          pageNumber: pages.length + 1,
+          purpose: page.purpose, // 페이지 흐름 유지.
+          layout: 'single',
+          columns: 1,
+          blocks: [],
+        });
+      }
+      const next = pages[i + 1]!;
+      // 이동한 블록은 다음 페이지 첫 컬럼 첫 자리에 놓고, 기존 블록 order 를 뒤로 밀기.
+      const relocated: CompositionBlock = {
+        ...moved,
+        placement: {
+          column: 1,
+          widthFraction: 1.0,
+          order: 1,
+          columnSpan: 1,
+        },
+      };
+      const shifted = next.blocks.map((b) => ({
+        ...b,
+        placement: { ...b.placement, order: b.placement.order + 1 },
+      }));
+      next.blocks = [relocated, ...shifted];
+      mutated = true;
+      // 한 번의 재배치 후 처음부터 다시 검사 (연쇄 이동 가능).
+      break;
+    }
+    if (!mutated) {
+      // 모든 페이지가 임계값 이하 → 성공.
+      // 마지막이 아닌 페이지가 너무 비면 (< MIN_LEADING_FILL) 다음 페이지 첫 블록을 당겨온다.
+      const pulled = pullUpUnderfilledPages(pages);
+      if (pulled.mutated) continue; // 당겼으니 다시 검증.
+      break;
+    }
+  }
+
+  // 페이지 상한을 넘지 않으면서 안정화됐는지 최종 확인.
+  const finalFills = pages.map(computePageFillRatio);
+  const bad = finalFills.findIndex((r) => r > MAX_FILL_RATIO);
+  if (bad >= 0) {
+    return {
+      ok: false,
+      plan,
+      reason: `rebalance 안정화 실패: page=${pages[bad]?.pageId} 사용률 ${Math.round(finalFills[bad]! * 100)}%.`,
+    };
+  }
+
+  // pageNumber 재할당 + pageTarget 을 실제 페이지 수로 갱신.
+  pages.forEach((p, i) => {
+    p.pageNumber = i + 1;
+    p.pageId = `page_${String(i + 1).padStart(2, '0')}`;
+  });
+
+  const updatedStrategy = {
+    ...plan.documentStrategy,
+    pageTarget: pages.length,
+  };
+
+  return {
+    ok: true,
+    plan: {
+      version: plan.version,
+      documentStrategy: updatedStrategy,
+      pages,
+    },
+  };
+}
+
+function computePageFillRatio(page: CompositionPage): number {
+  const columnUsed = new Array(Math.max(1, page.columns)).fill(0);
+  for (const b of page.blocks) {
+    const col = Math.max(0, Math.min(page.columns - 1, b.placement.column - 1));
+    columnUsed[col] += b.estimatedHeightMm;
+  }
+  const maxUse = Math.max(...columnUsed, 0);
+  return maxUse / AVAILABLE_MM;
+}
+
+function pullUpUnderfilledPages(pages: CompositionPage[]): { mutated: boolean } {
+  let mutated = false;
+  for (let i = 0; i < pages.length - 1; i += 1) {
+    const page = pages[i]!;
+    const next = pages[i + 1]!;
+    if (next.blocks.length === 0) continue;
+    const currentFill = computePageFillRatio(page);
+    if (currentFill >= MIN_LEADING_FILL) continue;
+    const candidate = next.blocks[0]!;
+    // 시도: 이 블록을 현재 페이지 마지막에 붙였을 때 임계값 이하인가?
+    const trialPage: CompositionPage = {
+      ...page,
+      blocks: [
+        ...page.blocks,
+        {
+          ...candidate,
+          placement: {
+            column: 1,
+            widthFraction: 1.0,
+            order: page.blocks.length + 1,
+            columnSpan: 1,
+          },
+        },
+      ],
+    };
+    const trialFill = computePageFillRatio(trialPage);
+    if (trialFill > MAX_FILL_RATIO) continue;
+    // 채택.
+    page.blocks = trialPage.blocks;
+    next.blocks = next.blocks.slice(1).map((b, idx) => ({
+      ...b,
+      placement: { ...b.placement, order: idx + 1 },
+    }));
+    mutated = true;
+    // 다음 페이지가 비었으면 제거.
+    if (next.blocks.length === 0) {
+      pages.splice(i + 1, 1);
+    }
+    break;
+  }
+  return { mutated };
 }
 
 function normalizeStrategy(raw: unknown): DocumentStrategy {

@@ -34,10 +34,13 @@ import { deleteObject } from '@/services/r2/upload';
 import { generateWorksheetPlan, type WorksheetPlan } from '@/services/learning-worksheet';
 import {
   generateCompositionPlan,
+  verifyCompositionLinkingContract,
   type AppliedComposition,
+  type LinkingContractReport,
   type PageCompositionPlan,
 } from '@/services/learning-composition';
 import { buildAppliedComposition, buildBlockToSection } from '@/services/learning-renderer/composition-render';
+import { renderCompositionPdf } from '@/services/learning-renderer/pdf-composition';
 import { reviewLayout, type LayoutReviewResult } from '@/services/learning-validators/layout-review';
 import type {
   ContentPlan,
@@ -73,6 +76,8 @@ export type LearningPipelineStage =
   | 'document'
   | 'review'
   | 'repair'
+  | 'composition-linking'
+  | 'layout-review'
   | 'save';
 
 export class LearningPipelineError extends Error {
@@ -352,6 +357,91 @@ export async function runLearningDocJob(
     }),
   };
 
+  // Step 3.5: Composition Linking Contract 검증.
+  //   ContentPlan (blueprint.itemId) ↔ WorksheetPlan.sourceItemIds ↔
+  //   CompositionPlan.sourceItemIds ↔ Document.section.itemId 네 단계가 동일한
+  //   ID 계보를 사용해야 한다. 불일치 시 해당 블록/섹션만 1회 재생성. 그래도
+  //   실패하면 저장·렌더하지 않고 failedStage='composition-linking' 으로 종료.
+  let linkingReport: LinkingContractReport = verifyCompositionLinkingContract({
+    contentPlan: plan,
+    worksheetPlan,
+    compositionPlan,
+    document,
+  });
+  if (!linkingReport.pass) {
+    // 불일치한 section 만 타겟팅 재생성 (최대 1회).
+    const targets = new Set<string>();
+    for (const raw of linkingReport.unlinkedSectionIds) {
+      // 'section[i] kind=X' 형태는 itemId 부재 케이스 → 스킵 (재생성으로 해결 불가).
+      if (raw.startsWith('section[')) continue;
+      targets.add(raw);
+    }
+    for (const id of linkingReport.duplicateItemPlacements.flatMap((d) => d.blockIds)) {
+      targets.add(id);
+    }
+    if (targets.size > 0) {
+      for (const targetId of targets) {
+        const blueprint = plan.itemBlueprints.find((b) => b.itemId === targetId);
+        const idx = document.sections.findIndex(
+          (s) => (s as { itemId?: string }).itemId === targetId,
+        );
+        if (!blueprint || idx < 0) continue;
+        const originalSection = document.sections[idx]!;
+        const rep = await repairItem(
+          context,
+          plan,
+          blueprint,
+          originalSection,
+          'composition-linking mismatch',
+          `이 문항의 section.itemId 를 반드시 "${blueprint.itemId}" 로 유지하고 CompositionPlan 이 참조하는 blueprint 와 정확히 일치하도록 재생성해 주세요.`,
+        );
+        if (!rep.ok) continue;
+        document = {
+          ...document,
+          sections: document.sections.map((s, i) => (i === idx ? rep.section : s)),
+        };
+      }
+      // 재검증.
+      linkingReport = verifyCompositionLinkingContract({
+        contentPlan: plan,
+        worksheetPlan,
+        compositionPlan,
+        document,
+      });
+    }
+  }
+  if (!linkingReport.pass) {
+    const summary = [
+      linkingReport.missingBlueprintIds.length
+        ? `missing=${linkingReport.missingBlueprintIds.join(',')}`
+        : null,
+      linkingReport.unknownSourceItemIds.length
+        ? `unknown=${linkingReport.unknownSourceItemIds.join(',')}`
+        : null,
+      linkingReport.duplicateItemPlacements.length
+        ? `duplicate=${linkingReport.duplicateItemPlacements
+            .map((d) => `${d.itemId}[${d.blockIds.join('|')}]`)
+            .join(',')}`
+        : null,
+      linkingReport.unlinkedSectionIds.length
+        ? `unlinked=${linkingReport.unlinkedSectionIds.join(',')}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const msg = `Composition ID 계약 검증 실패: ${summary}`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: 'quality_check_failed',
+      stage: 'composition-linking',
+      message: msg,
+      context,
+      plan,
+      document,
+    });
+    throw new LearningPipelineError('quality_check_failed', 'composition-linking', msg);
+  }
+
   interface UsedClipart {
     itemId: string;
     slotIndex: number;
@@ -588,26 +678,56 @@ export async function runLearningDocJob(
     blockToImages,
   );
 
-  // Step 6.7: Layout Review — 정적 검사 (렌더 전 · 조판 정합성 판정).
-  // 실제 PDF 렌더는 별도 endpoint 에서 이루어지므로 여기서는 감사 로그용 정적 검사만.
-  // PDF 렌더 후 재검사는 renderer route 에서 추가 예정 (M4 이후).
-  let layoutReview: LayoutReviewResult | undefined;
+  // Step 6.7: 검증용 PDF 렌더 + Layout Review — 배포 차단 게이트.
+  //   최종 저장 전에 실제 PDF 를 렌더하고 Layout Review 를 통과해야만 저장.
+  //   실패 시 저장·노출·크레딧 차감 확정하지 않는다 (route 계층이 refund 처리).
+  //   생성된 검증 PDF 는 파일로 남기지 않는다 (버퍼만 사용).
+  let layoutReview: LayoutReviewResult;
   try {
-    const dummyPdf = Buffer.alloc(0); // 렌더 이전이라 PDF 없음 — page count 등 PDF 지표는 검사 제외.
+    const blockToSection = buildBlockToSection(compositionPlan, document);
+    const verificationPdf = await renderCompositionPdf(
+      { document, compositionPlan, blockToSection, blockToImages },
+      {
+        useLocalChrome: Boolean(pickLocalChromePathForVerification()),
+        localChromePath: pickLocalChromePathForVerification() ?? undefined,
+        answerVariant: 'student',
+      },
+    );
     layoutReview = reviewLayout({
       applied: appliedComposition,
       document,
-      pdfBytes: dummyPdf,
+      pdfBytes: verificationPdf,
       variant: 'student',
     });
-    if (!layoutReview.pass) {
-      console.warn(
-        '[learning-doc] Layout Review issues (non-fatal, saved to audit):',
-        layoutReview.issues.map((x) => `${x.code}@${x.where}`).join(' · '),
-      );
-    }
   } catch (lrErr) {
-    console.warn('[learning-doc] Layout Review exception (non-fatal):', lrErr);
+    const msg = `Layout Review 렌더/검사 실패: ${(lrErr as Error).message}`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: 'quality_check_failed',
+      stage: 'layout-review',
+      message: msg,
+      context,
+      plan,
+      document,
+    });
+    throw new LearningPipelineError('quality_check_failed', 'layout-review', msg);
+  }
+  if (!layoutReview.pass) {
+    const detail = layoutReview.issues
+      .slice(0, 8)
+      .map((x) => `${x.code}@${x.where}`)
+      .join(' · ');
+    const msg = `Layout Review 실패 (${layoutReview.issues.length}건): ${detail}`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: 'quality_check_failed',
+      stage: 'layout-review',
+      message: msg,
+      context,
+      plan,
+      document,
+    });
+    throw new LearningPipelineError('quality_check_failed', 'layout-review', msg);
   }
 
   // Step 6.6: 최종 미사용 (Vision 검수 실패) 이미지 정리.
@@ -829,6 +949,29 @@ function buildFallbackVisualPlanFromSlot(
     answerLeakPolicy: '정답 단어·기호를 이미지 안에 넣지 않기',
     styleGuide: '우리학교 클립아트 스타일: 단순하고 밝은 색, 웃는 표정, 배경 최소화',
   };
+}
+
+// Layout Review 검증 렌더 시 로컬 Chrome 감지 (Windows/macOS 개발 편의).
+// Railway/Linux 는 null 반환 → @sparticuz/chromium 이 사용됨.
+function pickLocalChromePathForVerification(): string | null {
+  const env = process.env.PPTR_LOCAL_CHROME_PATH;
+  if (env) return env;
+  if (process.platform === 'win32') {
+    const candidates = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ];
+    for (const p of candidates) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const fs = require('fs') as typeof import('fs');
+        if (fs.existsSync(p)) return p;
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return null;
 }
 
 // composition 파이프라인은 blockToImages 로 이미지를 소유한다. section 안의
