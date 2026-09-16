@@ -32,6 +32,13 @@ import { generateVisual, type GeneratedVisual } from '@/services/learning-clipar
 import { reviewClipart } from '@/services/learning-clipart-review';
 import { deleteObject } from '@/services/r2/upload';
 import { generateWorksheetPlan, type WorksheetPlan } from '@/services/learning-worksheet';
+import {
+  generateCompositionPlan,
+  type AppliedComposition,
+  type PageCompositionPlan,
+} from '@/services/learning-composition';
+import { buildAppliedComposition, buildBlockToSection } from '@/services/learning-renderer/composition-render';
+import { reviewLayout, type LayoutReviewResult } from '@/services/learning-validators/layout-review';
 import type {
   ContentPlan,
   PipelineTelemetry,
@@ -111,6 +118,9 @@ export interface LearningDocJobResult {
   appliedProfileSummary: string;
   /** 자동 삽입된 클립아트 개수 (라이브러리 매칭 수). */
   clipartInsertedCount?: number;
+  worksheetPlan?: WorksheetPlan;
+  compositionPlan?: PageCompositionPlan;
+  appliedComposition?: AppliedComposition;
 }
 
 interface FailurePersistInput {
@@ -252,29 +262,57 @@ export async function runLearningDocJob(
   }
   const plan = planResult.plan;
 
-  // Step 2.5: WorksheetPlan — Stage 4 활동형 학습지 조판 계획.
-  // 실패해도 Doc 생성이 이전 스타일 (기본 question/activity 나열) 로 진행 가능하도록 non-fatal.
-  let worksheetPlan: WorksheetPlan | undefined;
+  // Step 2.5: WorksheetPlan — Stage 4 활동형 학습지 조판 계획. **필수** — 실패 시 파이프라인 종료.
   const worksheetStart = Date.now();
-  let worksheetMs = 0;
   let worksheetPlanTokensIn = 0;
   let worksheetPlanTokensOut = 0;
-  try {
-    const wpResult = await generateWorksheetPlan(context, plan);
-    if (wpResult.ok) {
-      worksheetPlan = wpResult.plan;
-      worksheetPlanTokensIn = wpResult.inputTokens ?? 0;
-      worksheetPlanTokensOut = wpResult.outputTokens ?? 0;
-    } else {
-      console.warn(
-        '[learning-doc] WorksheetPlan generation failed (falling back to legacy Doc):',
-        wpResult.reason,
-      );
-    }
-  } catch (wpErr) {
-    console.warn('[learning-doc] WorksheetPlan exception (non-fatal):', wpErr);
+  const wpResult = await generateWorksheetPlan(context, plan);
+  if (!wpResult.ok) {
+    const msg = `WorksheetPlan 실패: ${wpResult.reason}`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: orchestratorCodeToPipeline(wpResult.errorCode),
+      stage: 'plan',
+      message: msg,
+      context,
+      plan,
+    });
+    throw new LearningPipelineError(
+      orchestratorCodeToPipeline(wpResult.errorCode),
+      'plan',
+      msg,
+    );
   }
-  worksheetMs = Date.now() - worksheetStart;
+  const worksheetPlan: WorksheetPlan = wpResult.plan;
+  worksheetPlanTokensIn = wpResult.inputTokens ?? 0;
+  worksheetPlanTokensOut = wpResult.outputTokens ?? 0;
+  const worksheetMs = Date.now() - worksheetStart;
+
+  // Step 2.6: PageCompositionPlan — layout primitive 배치 계획. **필수**.
+  const compositionStart = Date.now();
+  let compositionTokensIn = 0;
+  let compositionTokensOut = 0;
+  const cpResult = await generateCompositionPlan(context, plan, worksheetPlan);
+  if (!cpResult.ok) {
+    const msg = `CompositionPlan 실패: ${cpResult.reason}`;
+    await persistFailureRun({
+      jobId: input.jobId,
+      code: orchestratorCodeToPipeline(cpResult.errorCode),
+      stage: 'plan',
+      message: msg,
+      context,
+      plan,
+    });
+    throw new LearningPipelineError(
+      orchestratorCodeToPipeline(cpResult.errorCode),
+      'plan',
+      msg,
+    );
+  }
+  const compositionPlan: PageCompositionPlan = cpResult.plan;
+  compositionTokensIn = cpResult.inputTokens ?? 0;
+  compositionTokensOut = cpResult.outputTokens ?? 0;
+  const compositionMs = Date.now() - compositionStart;
 
   // Step 3: Document from Plan (WorksheetPlan 있으면 활동형 스키마로 생성)
   const docResult = await generateDocumentFromPlan(context, plan, worksheetPlan);
@@ -432,192 +470,144 @@ export async function runLearningDocJob(
   //   - Vision 검수 실패 시 최대 1회 재생성. 통과 이미지만 문항 뒤에 삽입.
   //   - 검수 실패로 최종에 쓰이지 않은 이미지는 R2 + images 테이블에서 삭제 (라이브러리에 남기지 않음).
   const generatedButUnused: GeneratedVisual[] = [];
+  // Step 6.5: CompositionPlan.pages.blocks 순회하여 visualSlot.needed=true 인 블록에만
+  // 이미지 생성. 이미지는 활동 블록 안에 소유 (standalone section 자동 삽입 없음).
+  const blockToImages = new Map<string, string[]>();
   try {
-    const perItemVisuals = new Map<string, GeneratedVisual[]>();
-    const perItemReviews = new Map<
-      string,
-      Array<{ status: 'pass' | 'retry_pass'; reason: string }>
-    >();
+    for (const page of compositionPlan.pages) {
+      for (const block of page.blocks) {
+        if (!block.visualSlot.needed) continue;
+        const count = block.visualSlot.count ?? 1;
+        // 이 블록이 참조하는 blueprint (첫 번째) 의 visualPlan 을 사용해 이미지 생성.
+        // blueprint 자체의 visualPlan 이 null 이면 CompositionBlock.visualSlot.hint 로 fallback.
+        const blueprintId = block.sourceItemIds[0];
+        const blueprint = blueprintId
+          ? plan.itemBlueprints.find((b) => b.itemId === blueprintId)
+          : undefined;
+        const vp =
+          blueprint?.visualPlan ??
+          buildFallbackVisualPlanFromSlot(block.visualSlot, count);
+        const itemContext = {
+          stem:
+            (blueprintId &&
+              document.sections
+                .map((s) => s as { itemId?: string; stem?: string })
+                .find((s) => s.itemId === blueprintId)?.stem) ??
+            block.instruction,
+          answer: undefined,
+          hint: undefined,
+        };
 
-    // WorksheetPlan 이 있으면 blockId → blueprint.itemId 매핑을 만들고,
-    // Doc AI 가 section.itemId 를 blockId 로 사용한 경우에도 visuals 를 찾을 수 있도록 한다.
-    const blockIdToItemIds = new Map<string, string[]>();
-    if (worksheetPlan) {
-      for (const page of worksheetPlan.pages) {
-        for (const block of page.blocks) {
-          if (block.sourceItemIds.length > 0) {
-            blockIdToItemIds.set(block.blockId, block.sourceItemIds);
-          }
-        }
-      }
-    }
-    const resolveSectionItemIdToBlueprint = (secItemId: string): string => {
-      // 직접 매칭 우선.
-      if (plan.itemBlueprints.some((b) => b.itemId === secItemId)) return secItemId;
-      // blockId 매핑 시도.
-      const mapped = blockIdToItemIds.get(secItemId);
-      if (mapped && mapped[0]) return mapped[0];
-      return secItemId;
-    };
-
-    for (const blueprint of plan.itemBlueprints) {
-      if (!blueprint.visualPlan) continue;
-      const vp = blueprint.visualPlan;
-      const sectionForItem = document.sections.find(
-        (s) => {
-          const sid = (s as { itemId?: string }).itemId;
-          if (!sid) return false;
-          return resolveSectionItemIdToBlueprint(sid) === blueprint.itemId;
-        },
-      );
-      const itemContext = {
-        stem:
-          sectionForItem && (sectionForItem as { stem?: string }).stem
-            ? String((sectionForItem as { stem?: string }).stem)
-            : blueprint.studentTask,
-        answer:
-          sectionForItem && (sectionForItem as { answer?: string }).answer
-            ? String((sectionForItem as { answer?: string }).answer)
-            : undefined,
-        hint:
-          sectionForItem && (sectionForItem as { hint?: string }).hint
-            ? String((sectionForItem as { hint?: string }).hint)
-            : undefined,
-      };
-
-      const acceptedVisuals: GeneratedVisual[] = [];
-      const reviewLog: Array<{ status: 'pass' | 'retry_pass'; reason: string }> = [];
-      for (let slot = 0; slot < vp.imageCount; slot++) {
-        let visual: GeneratedVisual;
-        try {
-          visual = await generateVisual({
-            itemId: blueprint.itemId,
-            visualPlan: vp,
-            userId: input.userId,
-            organizationId: input.organizationId,
-            slotIndex: slot,
-          });
-        } catch (genErr) {
-          console.warn('[learning-doc] visual gen failed:', blueprint.itemId, slot, genErr);
-          continue;
-        }
-
-        const rv1 = await reviewClipart({
-          itemId: blueprint.itemId,
-          visualPlan: vp,
-          imageUrl: visual.publicUrl,
-          itemContext,
-        });
-
-        if (rv1.pass) {
-          acceptedVisuals.push(visual);
-          reviewLog.push({ status: 'pass', reason: rv1.reason });
-          continue;
-        }
-        // review1 실패 이미지는 최종 미사용으로 마킹.
-        generatedButUnused.push(visual);
-
-        let retryVisual: GeneratedVisual | null = null;
-        try {
-          retryVisual = await generateVisual({
-            itemId: blueprint.itemId,
-            visualPlan: vp,
-            userId: input.userId,
-            organizationId: input.organizationId,
-            slotIndex: slot,
-          });
-        } catch (genErr) {
-          console.warn(
-            '[learning-doc] visual retry gen failed:',
-            blueprint.itemId,
-            slot,
-            genErr,
-          );
-        }
-        if (!retryVisual) continue;
-
-        const rv2 = await reviewClipart({
-          itemId: blueprint.itemId,
-          visualPlan: vp,
-          imageUrl: retryVisual.publicUrl,
-          itemContext,
-        });
-        if (rv2.pass) {
-          acceptedVisuals.push(retryVisual);
-          reviewLog.push({ status: 'retry_pass', reason: rv2.reason });
-        } else {
-          // retry 도 실패 → 최종 미사용.
-          generatedButUnused.push(retryVisual);
-        }
-      }
-
-      if (acceptedVisuals.length > 0) {
-        perItemVisuals.set(blueprint.itemId, acceptedVisuals);
-        perItemReviews.set(blueprint.itemId, reviewLog);
-      }
-    }
-
-    if (perItemVisuals.size > 0) {
-      // Stage 4: 활동 블록에 __will_be_replaced__ placeholder 가 있으면 인라인 치환.
-      // section.itemId 가 blockId (blk_XX) 인 경우 blueprint.itemId 로 매핑 후 조회.
-      const nextSections: typeof document.sections = [];
-      const inlinedForItem = new Set<string>();
-      for (const sec of document.sections) {
-        const secItemId = (sec as { itemId?: string }).itemId;
-        const blueprintId = secItemId ? resolveSectionItemIdToBlueprint(secItemId) : undefined;
-        let modified: typeof sec = sec;
-        if (blueprintId && perItemVisuals.has(blueprintId)) {
-          const visuals = perItemVisuals.get(blueprintId)!;
-          modified = inlineReplaceVisuals(sec, visuals);
-          if (modified !== sec) {
-            inlinedForItem.add(blueprintId);
-          }
-        }
-        nextSections.push(modified);
-        if (!secItemId || !blueprintId) continue;
-        if (inlinedForItem.has(blueprintId)) {
-          // 인라인 치환 성공 → 별도 image 섹션 추가하지 않음.
-          const visuals = perItemVisuals.get(blueprintId)!;
-          const reviews = perItemReviews.get(blueprintId) ?? [];
-          visuals.forEach((v, i) => {
-            const rev = reviews[i] ?? { status: 'pass' as const, reason: '' };
-            clipartUsages.push({
-              itemId: blueprintId,
-              slotIndex: v.slotIndex,
-              visual: v,
-              reviewStatus: rev.status,
-              reviewReason: rev.reason,
-              sectionPosition: nextSections.length - 1,
+        const accepted: string[] = [];
+        for (let slot = 0; slot < count; slot++) {
+          let visual: GeneratedVisual | null = null;
+          try {
+            visual = await generateVisual({
+              itemId: block.blockId,
+              visualPlan: vp,
+              userId: input.userId,
+              organizationId: input.organizationId,
+              slotIndex: slot,
             });
+          } catch (genErr) {
+            console.warn('[learning-doc] visual gen failed:', block.blockId, slot, genErr);
+          }
+          if (!visual) continue;
+          const rv1 = await reviewClipart({
+            itemId: block.blockId,
+            visualPlan: vp,
+            imageUrl: visual.publicUrl,
+            itemContext,
           });
-          continue;
+          if (rv1.pass) {
+            accepted.push(visual.publicUrl);
+            clipartUsages.push({
+              itemId: blueprintId ?? block.blockId,
+              slotIndex: slot,
+              visual,
+              reviewStatus: 'pass',
+              reviewReason: rv1.reason,
+              sectionPosition: -1,
+            });
+            continue;
+          }
+          generatedButUnused.push(visual);
+          // 1회 재생성.
+          let retry: GeneratedVisual | null = null;
+          try {
+            retry = await generateVisual({
+              itemId: block.blockId,
+              visualPlan: vp,
+              userId: input.userId,
+              organizationId: input.organizationId,
+              slotIndex: slot,
+            });
+          } catch (genErr) {
+            console.warn('[learning-doc] visual retry failed:', block.blockId, slot, genErr);
+          }
+          if (!retry) continue;
+          const rv2 = await reviewClipart({
+            itemId: block.blockId,
+            visualPlan: vp,
+            imageUrl: retry.publicUrl,
+            itemContext,
+          });
+          if (rv2.pass) {
+            accepted.push(retry.publicUrl);
+            clipartUsages.push({
+              itemId: blueprintId ?? block.blockId,
+              slotIndex: slot,
+              visual: retry,
+              reviewStatus: 'retry_pass',
+              reviewReason: rv2.reason,
+              sectionPosition: -1,
+            });
+          } else {
+            generatedButUnused.push(retry);
+          }
         }
-        const visuals = perItemVisuals.get(blueprintId);
-        const reviews = perItemReviews.get(blueprintId);
-        if (!visuals || visuals.length === 0) continue;
-        visuals.forEach((v, i) => {
-          const sectionPosition = nextSections.length;
-          nextSections.push({
-            kind: 'image',
-            source: 'external',
-            assetRef: v.publicUrl,
-            widthPct: 45,
-          });
-          const rev = reviews?.[i] ?? { status: 'pass' as const, reason: '' };
-          clipartUsages.push({
-            itemId: blueprintId,
-            slotIndex: v.slotIndex,
-            visual: v,
-            reviewStatus: rev.status,
-            reviewReason: rev.reason,
-            sectionPosition,
-          });
-        });
+        if (accepted.length > 0) {
+          blockToImages.set(block.blockId, accepted);
+        }
       }
-      document = { ...document, sections: nextSections };
     }
   } catch (clipartErr) {
     console.warn('[learning-doc] visual pipeline error (non-fatal):', clipartErr);
+  }
+
+  // Step 6.5b: composition 파이프라인에서 이미지는 blockToImages 로 소유되므로,
+  // Doc AI 가 남긴 "__will_be_replaced__" placeholder 는 renderer 가 사용하지 않는다.
+  // Layout Review 가 잔존 placeholder 를 이슈로 잡지 않도록, section-level
+  // imageAssetRef 필드에서 placeholder 문자열을 제거한다 (구조 유지, 값만 정리).
+  document = scrubPlaceholderImageRefs(document);
+
+  // Step 6.6: AppliedComposition 스냅샷 조립 (감사·Layout Review 입력).
+  const appliedComposition: AppliedComposition = buildAppliedComposition(
+    compositionPlan,
+    document,
+    blockToImages,
+  );
+
+  // Step 6.7: Layout Review — 정적 검사 (렌더 전 · 조판 정합성 판정).
+  // 실제 PDF 렌더는 별도 endpoint 에서 이루어지므로 여기서는 감사 로그용 정적 검사만.
+  // PDF 렌더 후 재검사는 renderer route 에서 추가 예정 (M4 이후).
+  let layoutReview: LayoutReviewResult | undefined;
+  try {
+    const dummyPdf = Buffer.alloc(0); // 렌더 이전이라 PDF 없음 — page count 등 PDF 지표는 검사 제외.
+    layoutReview = reviewLayout({
+      applied: appliedComposition,
+      document,
+      pdfBytes: dummyPdf,
+      variant: 'student',
+    });
+    if (!layoutReview.pass) {
+      console.warn(
+        '[learning-doc] Layout Review issues (non-fatal, saved to audit):',
+        layoutReview.issues.map((x) => `${x.code}@${x.where}`).join(' · '),
+      );
+    }
+  } catch (lrErr) {
+    console.warn('[learning-doc] Layout Review exception (non-fatal):', lrErr);
   }
 
   // Step 6.6: 최종 미사용 (Vision 검수 실패) 이미지 정리.
@@ -727,6 +717,10 @@ export async function runLearningDocJob(
         appliedProfileSummary: context.appliedProfileSummary,
         hasActiveProfile: context.hasActiveProfile,
       },
+      worksheet_plan_snapshot: worksheetPlan,
+      composition_plan_snapshot: compositionPlan,
+      applied_composition_snapshot: appliedComposition,
+      layout_review_result: layoutReview ?? null,
       result: {
         context,
         plan: {
@@ -801,6 +795,9 @@ export async function runLearningDocJob(
     generationMode: 'v2plan',
     appliedProfileSummary: context.appliedProfileSummary,
     clipartInsertedCount: clipartUsages.length,
+    worksheetPlan,
+    compositionPlan,
+    appliedComposition,
   };
 }
 
@@ -812,139 +809,79 @@ export async function runLearningDocJob(
 // Plan/Doc 은 자리표시자 "__will_be_replaced__" 를 두고, 이 함수가 실제 R2 URL 로 치환한다.
 // 치환한 경우 원본과 다른 객체를 반환; 치환할 곳이 없으면 원본 그대로 반환.
 // ============================================================
-function inlineReplaceVisuals<T extends { kind: string }>(
-  section: T,
-  visuals: Array<{ publicUrl: string }>,
-): T {
-  const urls = visuals.map((v) => v.publicUrl);
-  if (urls.length === 0) return section;
-  let cursor = 0;
-  // 유일한 URL 배분. 남는 placeholder 는 undefined 로 두어 label-only 로 렌더 (중복 이미지 방지).
-  const takeUrl = (): string | undefined =>
-    cursor < urls.length ? urls[cursor++]! : undefined;
+// composition 기반 이미지 파이프라인 fallback: blueprint.visualPlan 이 없는 경우
+// CompositionBlock.visualSlot 만으로 image-gen 프롬프트를 만들 수 있도록 최소 VisualPlan 생성.
+function buildFallbackVisualPlanFromSlot(
+  slot: { hint?: string; role?: string; count?: number },
+  count: number,
+): import('@/services/learning-generation/types').VisualPlan {
+  const roleLabel = slot.role ?? 'illustration';
+  const subject = slot.hint || `${roleLabel} 이미지`;
+  return {
+    purpose: `학생 활동을 시각적으로 지원 (${roleLabel})`,
+    studentObservation: '이미지를 관찰하여 활동에 반영',
+    subjectMatter: subject,
+    imageCount: count,
+    educationalRoles: Array.from({ length: count }, () => roleLabel),
+    composition: '중앙 정렬, 배경 최소화',
+    ageAppropriateStyle: '학년 수준에 맞는 단순한 표현',
+    textPolicy: '이미지 안에 문자 넣지 않기',
+    answerLeakPolicy: '정답 단어·기호를 이미지 안에 넣지 않기',
+    styleGuide: '우리학교 클립아트 스타일: 단순하고 밝은 색, 웃는 표정, 배경 최소화',
+  };
+}
 
-  const isPlaceholder = (v: unknown): boolean =>
-    typeof v === 'string' && v === '__will_be_replaced__';
-
-  switch (section.kind) {
-    case 'picture-choice': {
-      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
-        kind: 'picture-choice';
-      };
-      let mutated = false;
-      const choices = s.choices.map((c) => {
-        if (isPlaceholder(c.imageAssetRef)) {
-          mutated = true;
-          const url = takeUrl();
-          return { ...c, imageAssetRef: url };
-        }
-        return c;
-      });
-      return mutated ? ({ ...s, choices } as unknown as T) : section;
-    }
-    case 'observation': {
-      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
-        kind: 'observation';
-      };
-      if (isPlaceholder(s.imageAssetRef)) {
-        const url = takeUrl();
-        // observation 은 이미지 없이는 무의미하므로 URL 이 없으면 원본 유지 (렌더러가 오류 처리).
-        if (url) return { ...s, imageAssetRef: url } as unknown as T;
-      }
-      return section;
-    }
-    case 'matching': {
-      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
-        kind: 'matching';
-      };
-      let mutated = false;
-      const left = s.leftColumn.map((x) => {
-        if (isPlaceholder(x.imageAssetRef)) {
-          mutated = true;
-          const url = takeUrl();
-          return { ...x, imageAssetRef: url };
-        }
-        return x;
-      });
-      const right = s.rightColumn.map((x) => {
-        if (isPlaceholder(x.imageAssetRef)) {
-          mutated = true;
-          const url = takeUrl();
-          return { ...x, imageAssetRef: url };
-        }
-        return x;
-      });
-      return mutated ? ({ ...s, leftColumn: left, rightColumn: right } as unknown as T) : section;
-    }
-    case 'classification': {
-      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
-        kind: 'classification';
-      };
-      let mutated = false;
-      const items = s.items.map((x) => {
-        if (isPlaceholder(x.imageAssetRef)) {
-          mutated = true;
-          const url = takeUrl();
-          return { ...x, imageAssetRef: url };
-        }
-        return x;
-      });
-      return mutated ? ({ ...s, items } as unknown as T) : section;
-    }
-    case 'sequence': {
-      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
-        kind: 'sequence';
-      };
-      let mutated = false;
-      const items = s.items.map((x) => {
-        if (isPlaceholder(x.imageAssetRef)) {
-          mutated = true;
-          const url = takeUrl();
-          return { ...x, imageAssetRef: url };
-        }
-        return x;
-      });
-      return mutated ? ({ ...s, items } as unknown as T) : section;
-    }
-    case 'guided-practice': {
-      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
-        kind: 'guided-practice';
-      };
-      let mutated = false;
-      let workedExample = s.workedExample;
-      if (isPlaceholder(workedExample.imageAssetRef)) {
-        mutated = true;
-        const url = takeUrl();
-        workedExample = { ...workedExample, imageAssetRef: url };
-      }
-      const practiceProblems = s.practiceProblems.map((p) => {
-        if (isPlaceholder(p.imageAssetRef)) {
-          mutated = true;
-          const url = takeUrl();
-          return { ...p, imageAssetRef: url };
-        }
-        return p;
-      });
-      return mutated
-        ? ({ ...s, workedExample, practiceProblems } as unknown as T)
-        : section;
-    }
-    case 'independent-practice': {
-      const s = section as unknown as import('@/services/learning-renderer/schema').Section & {
-        kind: 'independent-practice';
-      };
-      let mutated = false;
-      const problems = s.problems.map((p) => {
-        if (isPlaceholder(p.imageAssetRef)) {
-          mutated = true;
-          const url = takeUrl();
-          return { ...p, imageAssetRef: url };
-        }
-        return p;
-      });
-      return mutated ? ({ ...s, problems } as unknown as T) : section;
-    }
-    default:
-      return section;
+// composition 파이프라인은 blockToImages 로 이미지를 소유한다. section 안의
+// imageAssetRef 필드는 이제 placeholder 문자열을 담을 이유가 없으므로 제거한다.
+// 파일 URL (https://..., data:..., blob:...) 은 그대로 유지 — legacy Doc AI 가
+// 정상 URL 을 넣어놨다면 renderer 가 fallback 으로 활용할 수 있다.
+const PLACEHOLDER_REF = '__will_be_replaced__';
+function isRealUrl(v: unknown): boolean {
+  return typeof v === 'string' && (v.startsWith('http') || v.startsWith('data:') || v.startsWith('blob:'));
+}
+function stripRef<T extends { imageAssetRef?: string }>(x: T): T {
+  if (x.imageAssetRef === PLACEHOLDER_REF || (x.imageAssetRef && !isRealUrl(x.imageAssetRef))) {
+    const { imageAssetRef: _r, ...rest } = x;
+    void _r;
+    return rest as T;
   }
+  return x;
+}
+function scrubPlaceholderImageRefs(doc: LearningDocument): LearningDocument {
+  const sections = doc.sections.map((sec) => {
+    switch (sec.kind) {
+      case 'picture-choice':
+        return { ...sec, choices: sec.choices.map((c) => stripRef(c)) };
+      case 'matching':
+        return {
+          ...sec,
+          leftColumn: sec.leftColumn.map((c) => stripRef(c)),
+          rightColumn: sec.rightColumn.map((c) => stripRef(c)),
+        };
+      case 'classification':
+        return { ...sec, items: sec.items.map((c) => stripRef(c)) };
+      case 'guided-practice':
+        return {
+          ...sec,
+          workedExample: stripRef(sec.workedExample),
+          practiceProblems: sec.practiceProblems.map((c) => stripRef(c)),
+        };
+      case 'independent-practice':
+        return { ...sec, problems: sec.problems.map((c) => stripRef(c)) };
+      case 'sequence':
+        return { ...sec, items: sec.items.map((c) => stripRef(c)) };
+      case 'observation': {
+        // observation.imageAssetRef 은 필수 필드이므로 placeholder 여도 값은 유지
+        // 하되, real URL 이 아니면 빈 문자열로 눌러 renderer 가 blockToImages 에
+        // 완전히 의존하도록 만든다.
+        if (sec.imageAssetRef === PLACEHOLDER_REF || (sec.imageAssetRef && !isRealUrl(sec.imageAssetRef))) {
+          return { ...sec, imageAssetRef: '' };
+        }
+        return sec;
+      }
+      default:
+        return sec;
+    }
+  });
+  return { ...doc, sections };
 }

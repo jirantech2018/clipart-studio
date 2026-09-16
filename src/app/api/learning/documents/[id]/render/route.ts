@@ -12,8 +12,11 @@ export const maxDuration = 60;
 
 import { apiError } from '@/lib/api-error';
 import { renderPdf, type AnswerVariant } from '@/services/learning-renderer/pdf';
+import { renderCompositionPdf } from '@/services/learning-renderer/pdf-composition';
+import { buildBlockToSection } from '@/services/learning-renderer/composition-render';
 import type { LearningDocument } from '@/services/learning-renderer/schema';
-import { createSupabaseServerClient } from '@/services/supabase/server';
+import type { PageCompositionPlan, AppliedComposition } from '@/services/learning-composition';
+import { createSupabaseServerClient, createSupabaseServiceClient } from '@/services/supabase/server';
 
 export async function GET(
   request: Request,
@@ -54,13 +57,48 @@ export async function GET(
   // 로컬 개발 시 Chrome 자동 감지. Railway 배포 시엔 @sparticuz/chromium 로드.
   const localChromePath = pickLocalChromePath();
 
+  // Stage 4.1: composition_plan_snapshot 이 있으면 composition-driven renderer 사용.
+  // 없으면 legacy renderPdf (구형 문서 하위 호환).
+  const service = createSupabaseServiceClient();
+  const { data: evalRow } = await service
+    .from('learning_evaluations')
+    .select('composition_plan_snapshot, applied_composition_snapshot')
+    .eq('document_id', params.id)
+    .eq('evaluation_stage', 'final')
+    .eq('passed', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const compositionPlan = (evalRow as { composition_plan_snapshot?: PageCompositionPlan } | null)
+    ?.composition_plan_snapshot;
+  const applied = (evalRow as { applied_composition_snapshot?: AppliedComposition } | null)
+    ?.applied_composition_snapshot;
+
   let buffer: Buffer;
   try {
-    buffer = await renderPdf(document, {
-      useLocalChrome: Boolean(localChromePath),
-      localChromePath: localChromePath ?? undefined,
-      answerVariant: variant,
-    });
+    if (compositionPlan) {
+      const blockToSection = buildBlockToSection(compositionPlan, document);
+      const blockToImages = new Map<string, string[]>();
+      if (applied?.blockToImageUrls) {
+        for (const [k, v] of Object.entries(applied.blockToImageUrls)) {
+          blockToImages.set(k, v as string[]);
+        }
+      }
+      buffer = await renderCompositionPdf(
+        { document, compositionPlan, blockToSection, blockToImages },
+        {
+          useLocalChrome: Boolean(localChromePath),
+          localChromePath: localChromePath ?? undefined,
+          answerVariant: variant,
+        },
+      );
+    } else {
+      buffer = await renderPdf(document, {
+        useLocalChrome: Boolean(localChromePath),
+        localChromePath: localChromePath ?? undefined,
+        answerVariant: variant,
+      });
+    }
   } catch (err) {
     console.error('[learning/documents/render] pdf render failed', err);
     // Phase 1 M1 진단 임시: 원인 파악을 위해 err.message 를 응답에 포함.
