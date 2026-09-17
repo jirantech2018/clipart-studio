@@ -260,7 +260,7 @@ function baseStyles(density: 'low' | 'medium' | 'high', grade: number): string {
   `;
 }
 
-function primitiveStyles(): string {
+export function primitiveStyles(): string {
   // 각 primitive 는 실제로 다른 배치·색·시선 흐름을 갖도록 스타일 부여.
   return `
   .prim { padding: 8pt 10pt; border-radius: 8pt; break-inside: avoid-page; page-break-inside: avoid; }
