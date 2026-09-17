@@ -191,6 +191,24 @@ function normalizeCompositionPlan(
   // 커버리지 검증은 별도 ID 계약 검증기 (verifyCompositionLinkingContract) 가
   // 담당하며, 실패 시 파이프라인이 fail hard 한다.
 
+  // 중복 sourceItemId 자동 dedup: AI 가 같은 blueprint 를 여러 블록에 넣은 경우
+  // 첫 등장만 유지. 이 결정론적 정리는 duplicateItemPlacements 오탐을 방지하되
+  // AI 가 의도적으로 확장 참조한 흔적을 남기지는 않는다 (계약 검증 후 실패 시
+  // 재생성 경로로 복구됨).
+  const seenIds = new Set<string>();
+  for (const page of pages) {
+    for (const block of page.blocks) {
+      const kept: string[] = [];
+      for (const id of block.sourceItemIds) {
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          kept.push(id);
+        }
+      }
+      block.sourceItemIds = kept;
+    }
+  }
+
   return {
     version: 'v1',
     documentStrategy: strategy,
@@ -436,6 +454,12 @@ function normalizeBlocks(raw: unknown, pageColumns: number): CompositionBlock[] 
       const rs = normalizeResponseSpace(b.responseSpace);
       // Interactive primitive 에는 responseSpace.type=none 을 허용하지 않는다.
       const finalResponse = ensureResponseSpaceForPrimitive(primitive, rs);
+      const rawVisual = normalizeVisualSlot(b.visualSlot);
+      // 결정론적 안전망: writing/calculation/open-response/reflection/instruction 은
+      // 이미지가 학생 행동에 기능적으로 필요하지 않은 primitive.
+      // AI 가 실수로 needed=true 라 표시해도 강제로 false 로 눌러 IMAGE_NOT_LINKED
+      // 리젝트를 예방한다 (composition prompt 로도 안내되나 이중 안전).
+      const visualSlot = shouldSuppressVisualSlot(primitive) ? { needed: false } : rawVisual;
       return {
         blockId: str(b.blockId) || `blk_${String(i + 1).padStart(2, '0')}`,
         sourceItemIds,
@@ -443,11 +467,23 @@ function normalizeBlocks(raw: unknown, pageColumns: number): CompositionBlock[] 
         instruction: str(b.instruction).trim(),
         placement: normalizePlacement(b.placement, pageColumns, i + 1),
         estimatedHeightMm: Math.max(15, Math.min(240, Math.round(num(b.estimatedHeightMm, 80)))),
-        visualSlot: normalizeVisualSlot(b.visualSlot),
+        visualSlot,
         responseSpace: finalResponse,
         teacherOverlay: normalizeTeacherOverlay(b.teacherOverlay),
       };
     });
+}
+
+const NON_VISUAL_PRIMITIVES = new Set<LayoutPrimitive>([
+  'writing-practice',
+  'calculation-practice',
+  'open-response',
+  'reflection-strip',
+  'instruction-strip',
+]);
+
+function shouldSuppressVisualSlot(primitive: LayoutPrimitive): boolean {
+  return NON_VISUAL_PRIMITIVES.has(primitive);
 }
 
 // Interactive primitive 는 학생이 응답할 공간이 필수. 기본값 부여.

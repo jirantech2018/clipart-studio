@@ -602,27 +602,33 @@ export async function runLearningDocJob(
           } catch (genErr) {
             console.warn('[learning-doc] visual gen failed:', block.blockId, slot, genErr);
           }
-          if (!visual) continue;
-          const rv1 = await reviewClipart({
-            itemId: block.blockId,
-            visualPlan: vp,
-            imageUrl: visual.publicUrl,
-            itemContext,
-          });
-          if (rv1.pass) {
-            accepted.push(visual.publicUrl);
-            clipartUsages.push({
-              itemId: blueprintId ?? block.blockId,
-              slotIndex: slot,
-              visual,
-              reviewStatus: 'pass',
-              reviewReason: rv1.reason,
-              sectionPosition: -1,
+          // 초기 시도가 예외로 실패해도 재생성 경로로 이어져야 한다.
+          // 이전에는 visual === null 일 때 continue 로 슬롯을 조용히 스킵했다.
+          let rv1Pass = false;
+          if (visual) {
+            const rv1 = await reviewClipart({
+              itemId: block.blockId,
+              visualPlan: vp,
+              imageUrl: visual.publicUrl,
+              itemContext,
             });
-            continue;
+            if (rv1.pass) {
+              accepted.push(visual.publicUrl);
+              clipartUsages.push({
+                itemId: blueprintId ?? block.blockId,
+                slotIndex: slot,
+                visual,
+                reviewStatus: 'pass',
+                reviewReason: rv1.reason,
+                sectionPosition: -1,
+              });
+              rv1Pass = true;
+            } else {
+              generatedButUnused.push(visual);
+            }
           }
-          generatedButUnused.push(visual);
-          // 1회 재생성.
+          if (rv1Pass) continue;
+          // 1회 재생성 (초기 실패 또는 리뷰 실패 시).
           let retry: GeneratedVisual | null = null;
           try {
             retry = await generateVisual({
@@ -663,6 +669,83 @@ export async function runLearningDocJob(
     }
   } catch (clipartErr) {
     console.warn('[learning-doc] visual pipeline error (non-fatal):', clipartErr);
+  }
+
+  // Step 6.5a: 이미지 미부착 블록 rescue sweep — 이미지 API 간헐 실패로
+  // visualSlot.needed=true 인 블록이 URL 을 얻지 못한 경우 최대 2회 추가 시도.
+  // Layout Review 의 IMAGE_NOT_LINKED / OBSERVATION_IMAGE_MISSING 게이트가
+  // 문서 전체를 리젝트하기 전에 복구 기회를 주는 목적.
+  for (let rescue = 0; rescue < 2; rescue += 1) {
+    const missing: Array<{ block: typeof compositionPlan.pages[number]['blocks'][number]; page: typeof compositionPlan.pages[number] }> = [];
+    for (const page of compositionPlan.pages) {
+      for (const block of page.blocks) {
+        if (!block.visualSlot.needed) continue;
+        if ((blockToImages.get(block.blockId)?.length ?? 0) > 0) continue;
+        missing.push({ block, page });
+      }
+    }
+    if (missing.length === 0) break;
+    console.warn(
+      `[learning-doc] rescue sweep #${rescue + 1}: ${missing.length}개 블록 이미지 재시도`,
+    );
+    for (const { block } of missing) {
+      const count = block.visualSlot.count ?? 1;
+      const blueprintId = block.sourceItemIds[0];
+      const blueprint = blueprintId
+        ? plan.itemBlueprints.find((b) => b.itemId === blueprintId)
+        : undefined;
+      const vp =
+        blueprint?.visualPlan ??
+        buildFallbackVisualPlanFromSlot(block.visualSlot, count);
+      const itemContext = {
+        stem:
+          (blueprintId &&
+            document.sections
+              .map((s) => s as { itemId?: string; stem?: string })
+              .find((s) => s.itemId === blueprintId)?.stem) ??
+          block.instruction,
+        answer: undefined,
+        hint: undefined,
+      };
+      const accepted: string[] = [];
+      for (let slot = 0; slot < count; slot += 1) {
+        let visual: GeneratedVisual | null = null;
+        try {
+          visual = await generateVisual({
+            itemId: block.blockId,
+            visualPlan: vp,
+            userId: input.userId,
+            organizationId: input.organizationId,
+            slotIndex: slot,
+          });
+        } catch (genErr) {
+          console.warn('[learning-doc] rescue gen failed:', block.blockId, slot, genErr);
+        }
+        if (!visual) continue;
+        const rv = await reviewClipart({
+          itemId: block.blockId,
+          visualPlan: vp,
+          imageUrl: visual.publicUrl,
+          itemContext,
+        });
+        if (rv.pass) {
+          accepted.push(visual.publicUrl);
+          clipartUsages.push({
+            itemId: blueprintId ?? block.blockId,
+            slotIndex: slot,
+            visual,
+            reviewStatus: 'retry_pass',
+            reviewReason: rv.reason,
+            sectionPosition: -1,
+          });
+        } else {
+          generatedButUnused.push(visual);
+        }
+      }
+      if (accepted.length > 0) {
+        blockToImages.set(block.blockId, accepted);
+      }
+    }
   }
 
   // Step 6.5b: composition 파이프라인에서 이미지는 blockToImages 로 소유되므로,
