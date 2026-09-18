@@ -30,6 +30,13 @@ export const createLearningDocumentSchema = z.object({
    * 기본값 'auto' (UI 에 자동 삽입이 기본 선택됨).
    */
   clipartMode: z.enum(['auto', 'none']).default('auto'),
+  /**
+   * Stage 4.4: 렌더 방식 선택.
+   *   - 'standard' (기본): 기존 Stage 4.1 composition renderer. 빠르고 크레딧 소모 낮음.
+   *   - 'ai_designed': GPT-Image-2.5 가 페이지 전체를 직접 디자인. 오래 걸리고 크레딧 소모 큼.
+   * 파일럿 조직·관리자에게만 UI 노출 (feature flag 로 제어).
+   */
+  renderMode: z.enum(['standard', 'ai_designed']).default('standard'),
 });
 
 export type CreateLearningDocumentInput = z.infer<typeof createLearningDocumentSchema>;

@@ -11,7 +11,10 @@
 // M1 은 SSE 없이 동기 응답. 30~60초 소요 → maxDuration 90.
 
 export const runtime = 'nodejs';
-export const maxDuration = 90;
+// Stage 4.4: ai_designed 는 페이지당 30~60s 이미지 생성 + edit + vision OCR 로
+// 케이스당 3~8분 소요. Vercel serverless 최대 300s 를 넘길 수 있으므로 프로덕션은
+// Railway (Node persistent) 에서 실행. Vercel 재활용 시 async worker 로 이관 필요.
+export const maxDuration = 800;
 
 import { ZodError } from 'zod';
 
@@ -36,7 +39,19 @@ import { createLearningDocumentSchema } from '@/features/learning-helper/lib/sch
 import { isAdmin } from '@/lib/admin';
 
 // M1 크레딧 정책: 임시로 3 (Phase 1 관측 후 §7.3 매트릭스 반영).
-const LEARNING_DOC_CREDITS = 3;
+const STANDARD_CREDITS = 3;
+// Stage 4.4: ai_designed 는 페이지당 이미지·비전 호출이 5~10회 발생 → 실비 훨씬 큼.
+// 기본 base 15 크레딧 + 페이지 target 반영은 estimate API 로 확장 예정. 우선 30 고정.
+const AI_DESIGNED_CREDITS = 30;
+
+function aiDesignedFeatureEnabled(orgSlug: string, userEmail: string | undefined): boolean {
+  if (process.env.LEARNING_AI_DESIGNED_KILL_SWITCH === '1') return false;
+  if (process.env.LEARNING_AI_DESIGNED_ENABLED === '1') return true;
+  if (isAdmin(userEmail)) return true;
+  const pilot = (process.env.LEARNING_AI_DESIGNED_PILOT_ORG_SLUGS ?? '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  return pilot.includes(orgSlug);
+}
 
 export async function POST(request: Request) {
   const supabase = createSupabaseServerClient();
@@ -101,6 +116,13 @@ export async function POST(request: Request) {
     });
   }
 
+  // Stage 4.4: renderMode 검증 + feature flag 체크.
+  const requestedRenderMode = body.renderMode ?? 'standard';
+  if (requestedRenderMode === 'ai_designed' && !aiDesignedFeatureEnabled(body.orgSlug, user.email)) {
+    return apiError('FORBIDDEN', 'AI 디자인 학습지는 파일럿 조직에만 활성화되어 있어요');
+  }
+  const creditsRequired = requestedRenderMode === 'ai_designed' ? AI_DESIGNED_CREDITS : STANDARD_CREDITS;
+
   // Job insert — placeholder prompt / batch_size=1 로 기존 CHECK 만족.
   const promptSummary = `${body.grade}학년 ${SUBJECT_LABEL[body.subject as 'KOR' | 'MATH']} · ${materialTypeLabel(body.materialType as 'multiple_choice' | 'individual_activity' | 'ox_quiz' | 'concept_summary' | 'reading_material')} · ${body.unit} · ${body.topic}`;
   const service = createSupabaseServiceClient();
@@ -113,10 +135,11 @@ export async function POST(request: Request) {
       diversity_level: 0,
       reference_image_id: null,
       school_profile_applied: false,
-      reserved_credits: LEARNING_DOC_CREDITS,
+      reserved_credits: creditsRequired,
       status: 'queued',
       org_id: organizationId,
       kind: 'learning_doc',
+      render_mode: requestedRenderMode,
     })
     .select('id')
     .single();
@@ -142,7 +165,7 @@ export async function POST(request: Request) {
     if (!bypassCredits) {
       await useOrgTokens({
         organizationId,
-        amount: LEARNING_DOC_CREDITS,
+        amount: creditsRequired,
         jobId,
         actorUserId: user.id,
       });
@@ -157,7 +180,7 @@ export async function POST(request: Request) {
         .maybeSingle();
       return apiError('INSUFFICIENT_CREDITS', '이 워크스페이스의 크레딧이 부족합니다', {
         remainingCredits: (poolRow as { balance: number } | null)?.balance ?? 0,
-        requiredCredits: LEARNING_DOC_CREDITS,
+        requiredCredits: creditsRequired,
       });
     }
     if (err instanceof PoolNotFoundError) {
@@ -193,6 +216,7 @@ export async function POST(request: Request) {
       difficulty: body.difficulty,
       additionalRequest: body.additionalRequest,
       clipartMode: body.clipartMode,
+      renderMode: requestedRenderMode,
     });
 
     return apiOk(
@@ -200,8 +224,10 @@ export async function POST(request: Request) {
         jobId,
         documentId: result.documentId,
         document: result.document,
-        creditsUsed: bypassCredits ? 0 : LEARNING_DOC_CREDITS,
+        creditsUsed: bypassCredits ? 0 : creditsRequired,
         generationMode: result.generationMode,
+        renderMode: result.renderMode ?? 'standard',
+        aiDesigned: result.aiDesigned ?? null,
         appliedProfile: result.appliedProfileSummary,
         clipartInsertedCount: result.clipartInsertedCount ?? 0,
       },
@@ -222,7 +248,7 @@ export async function POST(request: Request) {
       try {
         await refundOrgTokens({
           organizationId,
-          amount: LEARNING_DOC_CREDITS,
+          amount: creditsRequired,
           jobId,
           reason: 'learning-doc generation failed',
         });
@@ -275,7 +301,7 @@ export async function POST(request: Request) {
       const mapped = map[err.code];
       return apiError(mapped.apiCode, mapped.message, {
         creditsRefunded: refunded,
-        refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
+        refundedAmount: refunded ? creditsRequired : 0,
         failedStage: err.stage,
         errorCode: err.code,
         canRetry: mapped.canRetry,
@@ -286,7 +312,7 @@ export async function POST(request: Request) {
     if (err instanceof LearningOrchestratorError) {
       return apiError('UPSTREAM_UNAVAILABLE', 'AI 서비스에 일시적인 문제가 있어요.', {
         creditsRefunded: refunded,
-        refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
+        refundedAmount: refunded ? creditsRequired : 0,
         failedStage: 'ai-upstream',
         errorCode: 'ai_upstream',
         canRetry: true,
@@ -294,7 +320,7 @@ export async function POST(request: Request) {
     }
     return apiError('INTERNAL_ERROR', '학습자료 생성 중 오류가 발생했어요.', {
       creditsRefunded: refunded,
-      refundedAmount: refunded ? LEARNING_DOC_CREDITS : 0,
+      refundedAmount: refunded ? creditsRequired : 0,
       failedStage: 'unknown',
       errorCode: 'internal_error',
       canRetry: true,

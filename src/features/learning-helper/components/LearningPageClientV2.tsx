@@ -120,6 +120,8 @@ interface FormState {
   format: Format;
   /** 클립아트 자동 삽입 여부. 'auto' → Plan 이 문항별로 판단해 신규 클립아트 생성. */
   clipartMode: 'auto' | 'none';
+  /** Stage 4.4: 렌더 방식. 'ai_designed' 는 파일럿 조직/관리자만 노출. */
+  renderMode: 'standard' | 'ai_designed';
 }
 const DEFAULT_FORM: FormState = {
   grade: 1,
@@ -133,9 +135,16 @@ const DEFAULT_FORM: FormState = {
   variant: 'student',
   format: 'pdf',
   clipartMode: 'auto',
+  renderMode: 'standard',
 };
 
-const LEARNING_DOC_CREDITS = 3;
+const LEARNING_DOC_CREDITS_STANDARD = 3;
+const LEARNING_DOC_CREDITS_AI = 30;
+function learningDocCredits(renderMode: 'standard' | 'ai_designed'): number {
+  return renderMode === 'ai_designed' ? LEARNING_DOC_CREDITS_AI : LEARNING_DOC_CREDITS_STANDARD;
+}
+// 하위 호환 (기존 참조).
+const LEARNING_DOC_CREDITS = LEARNING_DOC_CREDITS_STANDARD;
 const ALL_GRADES = [1, 2, 3, 4, 5, 6];
 
 const VARIANT_OPTIONS: Array<{ value: Variant; label: string; hint: string }> = [
@@ -339,6 +348,7 @@ export function LearningPageClientV2({
           difficulty: form.difficulty,
           additionalRequest: form.additionalRequest.trim() || undefined,
           clipartMode: form.clipartMode,
+          renderMode: form.renderMode,
         }),
       });
       if (!res.ok) {
@@ -433,8 +443,9 @@ export function LearningPageClientV2({
   const canSubmit =
     combinationSupported && !!form.unit && form.topic.trim().length >= 2 && !submitting;
 
-  const projectedCredits = Math.max(0, credits - LEARNING_DOC_CREDITS);
-  const insufficientCredits = credits < LEARNING_DOC_CREDITS;
+  const requiredCredits = learningDocCredits(form.renderMode);
+  const projectedCredits = Math.max(0, credits - requiredCredits);
+  const insufficientCredits = credits < requiredCredits;
 
   const generatePath = `/organization/my/generate`;
   const libraryPath = `/organization/my/library`;
@@ -510,7 +521,7 @@ export function LearningPageClientV2({
                 onSubmit={handleSubmit}
                 genError={genError}
                 failure={failure}
-                expectedCredits={LEARNING_DOC_CREDITS}
+                expectedCredits={requiredCredits}
               />
             </div>
           </div>
@@ -551,7 +562,7 @@ export function LearningPageClientV2({
                 </span>
               </Row>
               <Row label="이번 사용">
-                <span className="tabular-nums text-muted-foreground">-{LEARNING_DOC_CREDITS}</span>
+                <span className="tabular-nums text-muted-foreground">-{requiredCredits}</span>
               </Row>
               <div className="my-1 border-t border-border/60" />
               <Row label="생성 후 예상">
@@ -1009,6 +1020,22 @@ function InputCard({
             ]}
             value={form.clipartMode}
             onChange={(v) => patch({ clipartMode: v as 'auto' | 'none' })}
+          />
+        </div>
+
+        {/* Stage 4.4: 렌더 방식 선택 (파일럿) */}
+        <div>
+          <Label className="mb-2 block text-sm font-semibold">
+            디자인 방식
+            <span className="ml-2 text-xs font-normal text-slate-500">(AI 디자인은 파일럿 조직 전용)</span>
+          </Label>
+          <RadioRow
+            options={[
+              { value: 'standard', label: '일반 생성', hint: '빠르게 학습지 생성 (약 1~2분)' },
+              { value: 'ai_designed', label: 'AI 디자인 학습지', hint: '학습 내용에 맞춰 그림·문제·답안 공간을 한 장에 완성된 학습지로 디자인 (약 5~10분, 크레딧 소모 큼)' },
+            ]}
+            value={form.renderMode}
+            onChange={(v) => patch({ renderMode: v as 'standard' | 'ai_designed' })}
           />
         </div>
 

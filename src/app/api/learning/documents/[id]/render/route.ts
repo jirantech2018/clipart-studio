@@ -44,7 +44,7 @@ export async function GET(
   // 문서 조회 — RLS 로 조직 멤버 여부 자동 검증.
   const { data: docRow } = await supabase
     .from('learning_documents')
-    .select('id, title, document_json')
+    .select('id, title, document_json, render_mode, ai_designed_metadata')
     .eq('id', params.id)
     .maybeSingle();
   if (!docRow) {
@@ -53,6 +53,31 @@ export async function GET(
 
   const document = (docRow as { document_json: LearningDocument }).document_json;
   const title = (docRow as { title: string }).title || 'learning-document';
+  const renderMode = (docRow as { render_mode?: string | null }).render_mode ?? 'standard';
+  const aiMeta = (docRow as { ai_designed_metadata?: { studentPdfKey?: string; teacherPdfKey?: string | null } | null }).ai_designed_metadata;
+
+  // Stage 4.4: ai_designed 문서는 R2 에 저장된 PDF 를 프록시로 서빙.
+  //   - 이미 권한 있는 요청자로 검증됐으므로 R2 에서 GET → response body 로 전달.
+  //   - 재렌더링 없음 (Stage 4.3 결과가 이미 최종 시각 원본).
+  if (renderMode === 'ai_designed' && aiMeta?.studentPdfKey) {
+    const key = variant === 'teacher' && aiMeta.teacherPdfKey ? aiMeta.teacherPdfKey : aiMeta.studentPdfKey;
+    const { publicUrl } = await import('@/services/r2/upload');
+    const r = await fetch(publicUrl(key));
+    if (!r.ok) {
+      return apiError('INTERNAL_ERROR', 'AI 디자인 PDF 를 불러오지 못했어요');
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    const asciiFallback = `${sanitizeFilename(title)}-${variant}.pdf`.replace(/[^\x20-\x7E]/g, '_');
+    return new Response(buf as unknown as BodyInit, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(`${sanitizeFilename(title)}-${variant}.pdf`)}`,
+        'Content-Length': String(buf.length),
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
 
   // 로컬 개발 시 Chrome 자동 감지. Railway 배포 시엔 @sparticuz/chromium 로드.
   const localChromePath = pickLocalChromePath();

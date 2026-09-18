@@ -107,12 +107,16 @@ function orchestratorCodeToPipeline(
   }
 }
 
+export type LearningRenderMode = 'standard' | 'ai_designed';
+
 export interface LearningDocJobInput extends OrchestratorInput {
   jobId: string;
   userId: string;
   organizationId: string;
   orgSlug?: string;
   enableV2Override?: boolean;
+  /** Stage 4.4: 'ai_designed' 지정 시 base pipeline 후 Stage 4.3 Full-Page Composer 실행. */
+  renderMode?: LearningRenderMode;
 }
 
 export interface LearningDocJobResult {
@@ -126,6 +130,22 @@ export interface LearningDocJobResult {
   worksheetPlan?: WorksheetPlan;
   compositionPlan?: PageCompositionPlan;
   appliedComposition?: AppliedComposition;
+  renderMode?: LearningRenderMode;
+  /** ai_designed 모드에서만 채워짐. R2 asset key + verification 요약. */
+  aiDesigned?: {
+    pipelineVersion: string;
+    model: string;
+    pageCount: number;
+    failedPages: number;
+    studentPdfKey: string;
+    studentPageKeys: string[];
+    teacherPdfKey?: string;
+    teacherPageKeys?: string[];
+    verificationReportKey: string;
+    totalImageCalls: number;
+    totalVisionCalls: number;
+    totalMs: number;
+  };
 }
 
 interface FailurePersistInput {
@@ -978,6 +998,67 @@ export async function runLearningDocJob(
     })
     .eq('id', input.jobId);
 
+  // Stage 4.4: renderMode === 'ai_designed' 일 경우 base pipeline 후 Stage 4.3
+  // Full-Page Composer 실행. 실패 시 throw (silent fallback 금지, 사용자 노출 차단).
+  let aiDesignedResult: LearningDocJobResult['aiDesigned'];
+  if (input.renderMode === 'ai_designed') {
+    const { runFullPageJob } = await import('@/services/learning-fullpage-composer');
+    try {
+      await service.from('generation_jobs')
+        .update({ ai_designed_stage: 'designing_pages' })
+        .eq('id', input.jobId);
+      const fp = await runFullPageJob({
+        documentId,
+        organizationId: input.organizationId,
+        document,
+        compositionPlan,
+        blockToImages,
+      });
+      await service.from('learning_documents')
+        .update({ render_mode: 'ai_designed' })
+        .eq('id', documentId);
+      if (!fp.ok) {
+        const msg = `AI 디자인 학습지 생성 실패: ${fp.fallbackReason ?? `${fp.failedPages} page 검증 실패`}`;
+        await persistFailureRun({
+          jobId: input.jobId,
+          code: 'quality_check_failed',
+          stage: 'layout-review',
+          message: msg,
+          context, plan, document,
+        });
+        throw new LearningPipelineError('quality_check_failed', 'layout-review', msg);
+      }
+      aiDesignedResult = {
+        pipelineVersion: fp.assetKeys.studentPdfKey ? 'v1.0-stage4.3' : 'unknown',
+        model: process.env.AB_IMAGE_MODEL || 'gpt-image-2.5-sunburst',
+        pageCount: fp.pageCount,
+        failedPages: fp.failedPages,
+        studentPdfKey: fp.assetKeys.studentPdfKey,
+        studentPageKeys: fp.assetKeys.studentPageKeys,
+        teacherPdfKey: fp.assetKeys.teacherPdfKey,
+        teacherPageKeys: fp.assetKeys.teacherPageKeys,
+        verificationReportKey: fp.assetKeys.verificationReportKey,
+        totalImageCalls: fp.totalImageCalls,
+        totalVisionCalls: fp.totalVisionCalls,
+        totalMs: fp.totalMs,
+      };
+      await service.from('generation_jobs')
+        .update({ ai_designed_stage: 'completed' })
+        .eq('id', input.jobId);
+    } catch (err) {
+      if (err instanceof LearningPipelineError) throw err;
+      const msg = `AI 디자인 학습지 생성 중 예외: ${(err as Error).message}`;
+      await persistFailureRun({
+        jobId: input.jobId,
+        code: 'internal_error',
+        stage: 'layout-review',
+        message: msg,
+        context, plan, document,
+      });
+      throw new LearningPipelineError('internal_error', 'layout-review', msg);
+    }
+  }
+
   return {
     documentId,
     document,
@@ -1001,6 +1082,8 @@ export async function runLearningDocJob(
     worksheetPlan,
     compositionPlan,
     appliedComposition,
+    renderMode: input.renderMode ?? 'standard',
+    aiDesigned: aiDesignedResult,
   };
 }
 
