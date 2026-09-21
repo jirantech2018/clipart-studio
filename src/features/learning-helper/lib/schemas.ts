@@ -31,12 +31,11 @@ export const createLearningDocumentSchema = z.object({
    */
   clipartMode: z.enum(['auto', 'none']).default('auto'),
   /**
-   * Stage 4.4: 렌더 방식 선택.
-   *   - 'standard' (기본): 기존 Stage 4.1 composition renderer. 빠르고 크레딧 소모 낮음.
-   *   - 'ai_designed': GPT-Image-2.5 가 페이지 전체를 직접 디자인. 오래 걸리고 크레딧 소모 큼.
-   * 파일럿 조직·관리자에게만 UI 노출 (feature flag 로 제어).
+   * Stage 4.4: 렌더 방식.
+   * 사용자 요청으로 UI 선택 옵션은 제거됐고, 기본값을 'ai_designed' 로 고정.
+   * 'standard' 는 legacy 호환용으로 스키마에 남겨두되 클라이언트는 전송하지 않는다.
    */
-  renderMode: z.enum(['standard', 'ai_designed']).default('standard'),
+  renderMode: z.enum(['standard', 'ai_designed']).default('ai_designed'),
 });
 
 export type CreateLearningDocumentInput = z.infer<typeof createLearningDocumentSchema>;

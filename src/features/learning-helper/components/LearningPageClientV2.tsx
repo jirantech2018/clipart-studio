@@ -120,7 +120,7 @@ interface FormState {
   format: Format;
   /** 클립아트 자동 삽입 여부. 'auto' → Plan 이 문항별로 판단해 신규 클립아트 생성. */
   clipartMode: 'auto' | 'none';
-  /** Stage 4.4: 렌더 방식. 'ai_designed' 는 파일럿 조직/관리자만 노출. */
+  /** Stage 4.4: 렌더 방식. 이제 항상 'ai_designed' 고정 (UI 선택 옵션 제거). */
   renderMode: 'standard' | 'ai_designed';
 }
 const DEFAULT_FORM: FormState = {
@@ -135,7 +135,7 @@ const DEFAULT_FORM: FormState = {
   variant: 'student',
   format: 'pdf',
   clipartMode: 'auto',
-  renderMode: 'standard',
+  renderMode: 'ai_designed',
 };
 
 const LEARNING_DOC_CREDITS_STANDARD = 3;
@@ -1023,21 +1023,7 @@ function InputCard({
           />
         </div>
 
-        {/* Stage 4.4: 렌더 방식 선택 (파일럿) */}
-        <div>
-          <Label className="mb-2 block text-sm font-semibold">
-            디자인 방식
-            <span className="ml-2 text-xs font-normal text-slate-500">(AI 디자인은 파일럿 조직 전용)</span>
-          </Label>
-          <RadioRow
-            options={[
-              { value: 'standard', label: '일반 생성', hint: '빠르게 학습지 생성 (약 1~2분)' },
-              { value: 'ai_designed', label: 'AI 디자인 학습지', hint: '학습 내용에 맞춰 그림·문제·답안 공간을 한 장에 완성된 학습지로 디자인 (약 5~10분, 크레딧 소모 큼)' },
-            ]}
-            value={form.renderMode}
-            onChange={(v) => patch({ renderMode: v as 'standard' | 'ai_designed' })}
-          />
-        </div>
+        {/* Stage 4.4: 디자인 방식 선택 UI 제거 — 항상 ai_designed 로 고정. */}
 
         {/* 배포 대상 / 출력 형식 radio */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
