@@ -1010,18 +1010,7 @@ function InputCard({
           />
         </div>
 
-        {/* 클립아트 자동 삽입 */}
-        <div>
-          <Label className="mb-2 block text-sm font-semibold">클립아트 자동 삽입</Label>
-          <RadioRow
-            options={[
-              { value: 'auto', label: '자동 삽입', hint: '문항에 맞는 그림을 생성해 함께 배치' },
-              { value: 'none', label: '이미지 없이', hint: '텍스트만' },
-            ]}
-            value={form.clipartMode}
-            onChange={(v) => patch({ clipartMode: v as 'auto' | 'none' })}
-          />
-        </div>
+        {/* 사용자 요청으로 "클립아트 자동 삽입" 선택 UI 제거 — 항상 'auto' 고정. */}
 
         {/* Stage 4.4: 디자인 방식 선택 UI 제거 — 항상 ai_designed 로 고정. */}
 
