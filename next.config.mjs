@@ -29,26 +29,24 @@ const nextConfig = {
   //   MY Organization 하위 경로로 통합된다. 기존 링크·북마크·이메일·검색 결과
   //   호환성을 위해 302 permanent=false 로 매핑만 유지.
   //   앱 내부 링크는 이 redirect 에 의존하지 않고 처음부터 새 경로를 사용한다.
-  // /embed/* 라우트는 clipart.schoolp.co.kr (마케팅 사이트) 에서 iframe 으로
-  // 삽입한다. 다른 도메인의 clickjacking 은 CSP frame-ancestors 로 차단.
-  // 그 외 경로는 여전히 어떤 사이트도 iframe 삽입 금지 (기본 Same-Origin).
+  // iframe 임베드 정책:
+  //   - /embed/* 는 마케팅 사이트(clipart.schoolp.co.kr) + namo.site 계열에서 삽입.
+  //   - 그 외 경로도 파일럿 배포 사이트(namo.site) 에서 임베드할 수 있도록 허용.
+  //     X-Frame-Options 은 여러 도메인 whitelist 를 지원하지 않으므로 제거하고
+  //     CSP frame-ancestors 로만 통제한다 (현대 브라우저 표준).
   async headers() {
+    const embedAncestors = "frame-ancestors 'self' https://*.schoolp.co.kr https://*.namo.site";
     return [
       {
         source: '/embed/:path*',
         headers: [
-          {
-            key: 'Content-Security-Policy',
-            value:
-              "frame-ancestors 'self' https://clipart.schoolp.co.kr https://*.schoolp.co.kr",
-          },
+          { key: 'Content-Security-Policy', value: embedAncestors },
         ],
       },
       {
         source: '/((?!embed).*)',
         headers: [
-          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+          { key: 'Content-Security-Policy', value: embedAncestors },
         ],
       },
     ];
